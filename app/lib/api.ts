@@ -221,7 +221,7 @@ export const api = {
       ALL: { D: 5000, W: 1200, M: 240, Q: 80, Y: 20 },
     };
     const limit = rangeLimits[range]?.[period] || 110;
-    const years = range === "ALL" ? 20 : Math.max(1, Math.ceil(limit / ({ D: 240, W: 52, M: 12, Q: 4, Y: 1 }[period] || 240)) + 1);
+    const years = range === "ALL" ? 20 : Math.max(1, Math.ceil(limit / ({ D: 240, W: 52, M: 12, Q: 4, Y: 1 }[period] || 240)));
     const start = `${new Date().getFullYear() - years}0101`;
     const { data, httpMs } = await request<{ bars: Bar[]; period: string; as_of: DataDates; warnings: string[]; timings: Record<string, number>; cache_hit: boolean }>(
       `/bars/${encodeURIComponent(code)}?period=${periodMap[period] || period}&start=${start}&limit=${limit}`,

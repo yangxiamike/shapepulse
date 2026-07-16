@@ -6,11 +6,11 @@ import threading
 import time
 import tomllib
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import duckdb
 from zer0share.api import LocalPro
 
 
@@ -71,6 +71,8 @@ class LocalMarketRepository:
         # from another working directory can never redirect it to a wrong `data/`.
         self.pro = LocalPro(self.data_dir)
         self._lock = threading.RLock()
+        self._query_lock = threading.RLock()
+        self._duck = duckdb.connect()
         self._cache: dict[str, tuple[object, Any]] = {}
 
     def _read_data_dir(self) -> Path:
@@ -176,6 +178,57 @@ class LocalMarketRepository:
             ),
         )
 
+    def daily_snapshot(self) -> tuple[str | None, pd.DataFrame]:
+        date = self.latest_partition("daily_kline")
+        if date is None:
+            return None, pd.DataFrame()
+        path = self.data_dir / "stock" / "daily_kline" / f"date={date}" / "data.parquet"
+        return date, self._cached(
+            "daily_snapshot",
+            (date, path.stat().st_mtime_ns),
+            lambda: pd.read_parquet(path),
+        )
+
+    def _daily_with_factors(
+        self, code: str, start_date: str, end_date: str, include_factors: bool
+    ) -> pd.DataFrame:
+        latest_daily = self.latest_partition("daily_kline")
+        latest_adj = self.latest_partition("adj_factor")
+        token = (latest_daily, latest_adj)
+        key = f"daily-source:{code}:{start_date}:{end_date}:{include_factors}"
+        with self._lock:
+            hit = self._cache.get(key)
+            if hit is not None and hit[0] == token:
+                return hit[1].copy()
+        daily_source = str(
+            self.data_dir / "stock" / "daily_kline" / "date=*" / "data.parquet"
+        )
+        columns = (
+            "d.ts_code,d.trade_date,d.open,d.high,d.low,d.close,"
+            "d.pre_close,d.vol,d.amount"
+        )
+        params: list[object] = [daily_source]
+        if include_factors:
+            adj_source = str(
+                self.data_dir / "stock" / "adj_factor" / "date=*" / "data.parquet"
+            )
+            sql = (
+                f"SELECT {columns},a.adj_factor "
+                "FROM read_parquet(?, hive_partitioning=true) d "
+                "LEFT JOIN read_parquet(?, hive_partitioning=true) a "
+                "USING(ts_code,trade_date) "
+            )
+            params.append(adj_source)
+        else:
+            sql = f"SELECT {columns} FROM read_parquet(?, hive_partitioning=true) d "
+        sql += "WHERE d.ts_code=? AND d.trade_date>=? AND d.trade_date<=? ORDER BY d.trade_date"
+        params.extend([code, start_date, end_date])
+        with self._query_lock:
+            frame = self._duck.execute(sql, params).fetchdf()
+        with self._lock:
+            self._cache[key] = (token, frame.copy())
+        return frame
+
     def resolve_code(self, raw: str) -> str | None:
         query = raw.strip().upper()
         basic = self.basic()
@@ -235,13 +288,12 @@ class LocalMarketRepository:
         st_date, st = self.st_snapshot()
         industry = self.industries()
         industry_row = industry[industry["ts_code"].eq(code)] if not industry.empty else industry
-        daily_end = self.latest_partition("daily_kline")
+        daily_end, latest_quotes = self.daily_snapshot()
         quote = None
         if daily_end:
-            start = (datetime.strptime(daily_end, "%Y%m%d") - timedelta(days=370)).strftime("%Y%m%d")
-            bars = self.pro.daily(ts_code=code, start_date=start, end_date=daily_end)
-            if not bars.empty:
-                quote = row_dict(bars.iloc[-1])
+            quote_row = latest_quotes[latest_quotes["ts_code"].eq(code)]
+            if not quote_row.empty:
+                quote = row_dict(quote_row.iloc[-1])
         payload = row_dict(basic_row)
         payload["code"] = code
         payload["valuation"] = None if value_row.empty else row_dict(value_row.iloc[0])
@@ -305,26 +357,19 @@ class LocalMarketRepository:
                 }
                 return payload
         query_started = time.perf_counter()
-        daily = self.pro.daily(ts_code=code, start_date=start_date, end_date=effective_end)
+        daily = self._daily_with_factors(
+            code, start_date, effective_end, adjust in {"qfq", "hfq"}
+        )
         query_ms = (time.perf_counter() - query_started) * 1000
         warnings: list[str] = []
         used_adjust = adjust
         adjust_started = time.perf_counter()
         if adjust in {"qfq", "hfq"} and not daily.empty:
             factor_end = min(effective_end, adj_as_of) if adj_as_of else None
-            if factor_end:
-                factors = self.pro.adj_factor(
-                    ts_code=code, start_date=start_date, end_date=factor_end
-                )
-            else:
-                factors = pd.DataFrame()
-            if factors.empty:
+            if not factor_end or "adj_factor" not in daily or daily["adj_factor"].notna().sum() == 0:
                 used_adjust = "raw"
                 warnings.append("复权因子不可用，已返回未复权行情")
             else:
-                daily = daily.merge(
-                    factors[["trade_date", "adj_factor"]], on="trade_date", how="left"
-                ).sort_values("trade_date")
                 daily["adj_factor"] = daily["adj_factor"].ffill().bfill()
                 if effective_end > factor_end:
                     warnings.append(f"复权因子截至 {factor_end}，尾端沿用最近已知因子")
