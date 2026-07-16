@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "screen": {
+    "default_board": "主板",
+    "default_market_cap_operator": "gte",
+    "default_market_cap_yi": 50,
+    "default_exclude_st": true,
+    "default_top_k": 50,
+    "max_top_k": 200,
+    "lookback_bars": 120,
+    "minimum_bars": 60
+  },
+  "breakout": {
+    "label": "突破启动",
+    "minimum_bars": 60,
+    "minimum_score": 42,
+    "momentum_20_target": 0.16,
+    "breakout_target": 0.05,
+    "volume_ratio_target": 1.55,
+    "maximum_extension_from_ma20": 0.22,
+    "weights": {
+      "momentum": 30,
+      "breakout": 30,
+      "volume": 18,
+      "trend_fit": 12,
+      "first_wave": 10
+    }
+  },
+  "pullback": {
+    "label": "上升趋势回调",
+    "minimum_bars": 80,
+    "minimum_score": 40,
+    "minimum_trend_return_60": 0.12,
+    "shallow_drawdown_min": 0.025,
+    "shallow_drawdown_max": 0.18,
+    "maximum_ma20_distance": 0.10,
+    "maximum_retracement_ratio": 0.62,
+    "maximum_consolidation_volatility": 0.035,
+    "weights": {
+      "trend": 28,
+      "drawdown": 24,
+      "ma_support": 18,
+      "retracement": 14,
+      "consolidation": 8,
+      "trend_fit": 8
+    }
+  },
+  "range_bounce": {
+    "label": "区间下沿反弹",
+    "minimum_bars": 100,
+    "minimum_score": 38,
+    "range_window": 80,
+    "maximum_range_position": 0.32,
+    "minimum_range_width": 0.15,
+    "minimum_bounce_5": 0.015,
+    "maximum_trend_abs_return": 0.25,
+    "weights": {
+      "lower_position": 36,
+      "bounce": 24,
+      "range_width": 14,
+      "sideways_fit": 14,
+      "support_touches": 12
+    }
+  }
+}

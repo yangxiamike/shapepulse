@@ -1,0 +1,13 @@
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true
+onlyBuiltDependencies:
+  - "@cloudflare/workerd-windows-64"
+  - "@img/sharp-win32-x64"
+  - "@next/swc-win32-x64-msvc"
+  - esbuild
+  - sharp
+  - unrs-resolver
+  - workerd
