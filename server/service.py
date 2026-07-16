@@ -311,7 +311,14 @@ class MarketService:
             if result["status"] == "matched":
                 scored.append({**common, **{k: v for k, v in result.items() if k != "matches"}})
                 for match in result["matches"]:
-                    category_scored[match["category"]].append({**common, **match})
+                    category_scored[match["category"]].append(
+                        {
+                            **common,
+                            "close": result.get("close"),
+                            "pct_chg": result.get("pct_chg"),
+                            **match,
+                        }
+                    )
             if position == 1 or position % 100 == 0 or position == total_groups:
                 progress("计算三类形态", position, total_groups)
         evaluated_codes = {item["ts_code"] for item in evaluations}

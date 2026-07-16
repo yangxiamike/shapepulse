@@ -11,6 +11,7 @@ export default defineConfig({
     baseURL: "http://localhost:3000",
     channel: "chrome",
     headless: true,
+    launchOptions: { args: ["--disable-gpu"] },
     locale: "zh-CN",
     colorScheme: "light",
     screenshot: "only-on-failure",

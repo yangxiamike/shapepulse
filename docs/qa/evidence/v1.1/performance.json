@@ -1,0 +1,129 @@
+{
+  "captured_at": "2026-07-16T15:54:47.613Z",
+  "viewport": "1600x1000",
+  "groups": {
+    "first": {
+      "frontend_ms": 1444.2,
+      "detail_requests": 1,
+      "breakdown": {
+        "text": "总 927ms · HTTP 1294ms · 查询 866ms · 绘制 22ms",
+        "frontend_ms": 927,
+        "http_ms": 1294,
+        "backend_query_ms": 866,
+        "chart_redraw_ms": 22,
+        "cache_hit": false
+      },
+      "bars": {
+        "url": "http://127.0.0.1:8765/api/bars/600519?period=1d&start=20250101&limit=110",
+        "cache_hit": false,
+        "timings": {
+          "query_ms": 814.3,
+          "adjust_ms": 1.8,
+          "aggregate_ms": 0.1,
+          "serialize_ms": 2.8,
+          "total_ms": 866.3
+        },
+        "bar_count": 110
+      }
+    },
+    "repeat": {
+      "frontend_ms": 55.8,
+      "client_cache_hit": true,
+      "breakdown": {
+        "text": "总 6ms · HTTP 0ms · 查询 52ms · 绘制 20ms · 缓存",
+        "frontend_ms": 6,
+        "http_ms": 0,
+        "backend_query_ms": 52,
+        "chart_redraw_ms": 20,
+        "cache_hit": true
+      }
+    },
+    "same_stock": {
+      "first_weekly_ms": 150.9,
+      "detail_requests": 1,
+      "weekly_count": 27,
+      "breakdown": {
+        "text": "总 101ms · HTTP 60ms · 查询 52ms · 绘制 33ms",
+        "frontend_ms": 101,
+        "http_ms": 60,
+        "backend_query_ms": 52,
+        "chart_redraw_ms": 33,
+        "cache_hit": false
+      }
+    },
+    "switched_stock": {
+      "search_ms": 242.4,
+      "switch_ms": 906,
+      "total_detail_requests": 2,
+      "breakdown": {
+        "text": "总 548ms · HTTP 574ms · 查询 517ms · 绘制 13ms",
+        "frontend_ms": 548,
+        "http_ms": 574,
+        "backend_query_ms": 517,
+        "chart_redraw_ms": 13,
+        "cache_hit": false
+      }
+    },
+    "screening": {
+      "button_feedback_ms": 75.9,
+      "first_filter_ms": 2426.8,
+      "progress_seen": true,
+      "repeated_button_feedback_ms": 49.5,
+      "repeated_filter_ms": 858.9
+    },
+    "board_to_market": {
+      "frontend_ms": 125.4,
+      "code": "002728"
+    }
+  },
+  "raw_bars_responses": [
+    {
+      "url": "http://127.0.0.1:8765/api/bars/600519?period=1d&start=20250101&limit=110",
+      "cache_hit": false,
+      "timings": {
+        "query_ms": 814.3,
+        "adjust_ms": 1.8,
+        "aggregate_ms": 0.1,
+        "serialize_ms": 2.8,
+        "total_ms": 866.3
+      },
+      "bar_count": 110
+    },
+    {
+      "url": "http://127.0.0.1:8765/api/bars/600519?period=1w&start=20250101&limit=27",
+      "cache_hit": false,
+      "timings": {
+        "query_ms": 16.8,
+        "adjust_ms": 2.1,
+        "aggregate_ms": 4.4,
+        "serialize_ms": 0.7,
+        "total_ms": 52.2
+      },
+      "bar_count": 27
+    },
+    {
+      "url": "http://127.0.0.1:8765/api/bars/000858?period=1d&start=20250101&limit=110",
+      "cache_hit": false,
+      "timings": {
+        "query_ms": 483.1,
+        "adjust_ms": 1.8,
+        "aggregate_ms": 0.1,
+        "serialize_ms": 2.7,
+        "total_ms": 517.3
+      },
+      "bar_count": 110
+    },
+    {
+      "url": "http://127.0.0.1:8765/api/bars/002728?period=1d&start=20250101&limit=110",
+      "cache_hit": true,
+      "timings": {
+        "total_ms": 46.8,
+        "query_ms": 0,
+        "adjust_ms": 0,
+        "aggregate_ms": 0,
+        "serialize_ms": 0
+      },
+      "bar_count": 110
+    }
+  ]
+}

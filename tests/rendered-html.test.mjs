@@ -18,7 +18,10 @@ test("server-renders the selection board", async () => {
   assert.match(html, /<title>综合选股看板 \| 手动跟踪市场<\/title>/i);
   assert.match(html, /选股看板/);
   assert.match(html, /运行筛选/);
-  assert.match(html, /今日候选/);
+  assert.match(html, /综合榜/);
+  assert.match(html, /突破启动/);
+  assert.match(html, /上升趋势回调/);
+  assert.match(html, /区间下沿反弹/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
