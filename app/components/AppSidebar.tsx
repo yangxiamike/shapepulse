@@ -3,7 +3,6 @@
 import {
   BarChart3,
   CircleHelp,
-  Gauge,
   LayoutDashboard,
   LineChart,
   LogOut,
@@ -21,7 +20,6 @@ export function AppSidebar({ active }: { active: "screen" | "market" }) {
         <span className="brand-name">{market ? "本地行情" : "LC"}</span>
       </div>
       <nav className="primary-nav" aria-label="主导航">
-        {!market && <Link className="nav-item" href="/market"><Gauge /><span>市场跟踪</span></Link>}
         <Link className={`nav-item ${active === "screen" ? "active" : ""}`} href="/"><LayoutDashboard /><span>选股看板</span></Link>
         <Link className={`nav-item ${active === "market" ? "active" : ""}`} href="/market"><LineChart /><span>本地行情</span></Link>
         {market && <button className="nav-item icon-only" aria-label="自选"><Star /></button>}

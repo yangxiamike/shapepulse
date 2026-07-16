@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import math
 import threading
 import time
@@ -135,15 +136,17 @@ class LocalMarketRepository:
         date = self.latest_partition("daily_basic")
         if date is None:
             return None, pd.DataFrame()
+        path = self.data_dir / "stock" / "daily_basic" / f"date={date}" / "data.parquet"
         return date, self._cached(
             "daily_basic_latest",
-            date,
-            lambda: self.pro.daily_basic(
-                trade_date=date,
-                fields=(
-                    "ts_code,trade_date,close,turnover_rate,turnover_rate_f,volume_ratio,"
-                    "pe,pe_ttm,pb,total_mv,circ_mv"
-                ),
+            (date, path.stat().st_mtime_ns),
+            lambda: pd.read_parquet(
+                path,
+                columns=[
+                    "ts_code", "trade_date", "close", "turnover_rate",
+                    "turnover_rate_f", "volume_ratio", "pe", "pe_ttm",
+                    "pb", "total_mv", "circ_mv",
+                ],
             ),
         )
 
@@ -151,14 +154,26 @@ class LocalMarketRepository:
         date = self.latest_partition("stock_st")
         if date is None:
             return None, pd.DataFrame(columns=["ts_code", "name", "trade_date", "type", "type_name"])
+        path = self.data_dir / "stock" / "stock_st" / f"date={date}" / "data.parquet"
         return date, self._cached(
-            "stock_st_latest", date, lambda: self.pro.stock_st(trade_date=date)
+            "stock_st_latest",
+            (date, path.stat().st_mtime_ns),
+            lambda: pd.read_parquet(path),
         )
 
     def recent_daily(self, start_date: str, end_date: str) -> pd.DataFrame:
         token = (start_date, end_date, self.latest_partition("daily_kline"))
         return self._cached(
-            "recent_daily", token, lambda: self.pro.daily(start_date=start_date, end_date=end_date)
+            "recent_daily",
+            token,
+            lambda: self.pro.daily(
+                start_date=start_date,
+                end_date=end_date,
+                fields=(
+                    "ts_code,trade_date,open,high,low,close,pre_close,"
+                    "pct_chg,vol,amount"
+                ),
+            ),
         )
 
     def resolve_code(self, raw: str) -> str | None:
@@ -236,11 +251,24 @@ class LocalMarketRepository:
             "name": json_value(industry_row.iloc[0]["l1_name"]),
         }
         payload["is_st"] = bool(not st.empty and st["ts_code"].eq(code).any())
+        adj_date = self.latest_partition("adj_factor")
         payload["as_of"] = {
             "quote": None if quote is None else quote.get("trade_date"),
             "valuation": basic_date,
             "st": st_date,
+            "adj_factor": adj_date,
         }
+        warnings = []
+        quote_date = payload["as_of"]["quote"]
+        if quote_date and basic_date != quote_date:
+            warnings.append(f"行情截至 {quote_date}，估值截至 {basic_date}")
+        if quote_date and st_date != quote_date:
+            warnings.append(f"ST 名单截至 {st_date}，与行情日期不同")
+        if quote_date and adj_date != quote_date:
+            warnings.append(f"复权因子截至 {adj_date}，与行情日期不同")
+        if payload["valuation"] is None:
+            warnings.append("当前股票缺少最新估值数据")
+        payload["warnings"] = warnings
         return payload
 
     def bars(
@@ -252,6 +280,7 @@ class LocalMarketRepository:
         period: str,
         limit: int | None,
     ) -> dict[str, Any] | None:
+        started = time.perf_counter()
         code = self.resolve_code(raw_code)
         if code is None:
             return None
@@ -259,10 +288,28 @@ class LocalMarketRepository:
         if latest_daily is None:
             raise FileNotFoundError("daily_kline data not found")
         effective_end = min(end_date or latest_daily, latest_daily)
+        adj_as_of = self.latest_partition("adj_factor")
+        token = (latest_daily, adj_as_of)
+        cache_key = f"bars:{code}:{start_date}:{effective_end}:{adjust}:{period}:{limit}"
+        with self._lock:
+            hit = self._cache.get(cache_key)
+            if hit is not None and hit[0] == token:
+                payload = copy.deepcopy(hit[1])
+                payload["cache_hit"] = True
+                payload["timings"] = {
+                    "total_ms": round((time.perf_counter() - started) * 1000, 1),
+                    "query_ms": 0.0,
+                    "adjust_ms": 0.0,
+                    "aggregate_ms": 0.0,
+                    "serialize_ms": 0.0,
+                }
+                return payload
+        query_started = time.perf_counter()
         daily = self.pro.daily(ts_code=code, start_date=start_date, end_date=effective_end)
+        query_ms = (time.perf_counter() - query_started) * 1000
         warnings: list[str] = []
         used_adjust = adjust
-        adj_as_of = self.latest_partition("adj_factor")
+        adjust_started = time.perf_counter()
         if adjust in {"qfq", "hfq"} and not daily.empty:
             factor_end = min(effective_end, adj_as_of) if adj_as_of else None
             if factor_end:
@@ -290,10 +337,14 @@ class LocalMarketRepository:
                 daily["change"] = (daily["close"] - daily["pre_close"]).round(2)
                 daily["pct_chg"] = (daily["change"] / daily["pre_close"] * 100).round(2)
                 daily = daily.drop(columns=["adj_factor"])
+        adjust_ms = (time.perf_counter() - adjust_started) * 1000
+        aggregate_started = time.perf_counter()
         if period != "1d" and not daily.empty:
             daily = self._resample(daily, period)
         if limit is not None and limit > 0:
             daily = daily.tail(limit)
+        aggregate_ms = (time.perf_counter() - aggregate_started) * 1000
+        serialize_started = time.perf_counter()
         records = []
         for _, row in daily.iterrows():
             trade_date = str(row["trade_date"])
@@ -312,7 +363,8 @@ class LocalMarketRepository:
                     "amount": json_value(row.get("amount")),
                 }
             )
-        return {
+        serialize_ms = (time.perf_counter() - serialize_started) * 1000
+        payload = {
             "code": code,
             "period": period,
             "adjust": used_adjust,
@@ -320,11 +372,23 @@ class LocalMarketRepository:
             "as_of": {"daily": latest_daily, "adj_factor": adj_as_of},
             "bars": records,
             "warnings": warnings,
+            "cache_hit": False,
+            "timings": {
+                "query_ms": round(query_ms, 1),
+                "adjust_ms": round(adjust_ms, 1),
+                "aggregate_ms": round(aggregate_ms, 1),
+                "serialize_ms": round(serialize_ms, 1),
+                "total_ms": round((time.perf_counter() - started) * 1000, 1),
+            },
         }
+        with self._lock:
+            self._cache[cache_key] = (token, copy.deepcopy(payload))
+        return payload
 
     @staticmethod
     def _resample(frame: pd.DataFrame, period: str) -> pd.DataFrame:
-        rule = "W-FRI" if period == "1w" else "ME"
+        rules = {"1w": "W-FRI", "1m": "ME", "1q": "QE-DEC", "1y": "YE-DEC"}
+        rule = rules[period]
         work = frame.copy()
         work["_date"] = pd.to_datetime(work["trade_date"], format="%Y%m%d")
         work = work.set_index("_date")

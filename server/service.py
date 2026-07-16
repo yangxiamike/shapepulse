@@ -3,8 +3,9 @@ from __future__ import annotations
 import copy
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -68,10 +69,14 @@ class MarketService:
         if adjust not in {"raw", "qfq", "hfq"}:
             raise ValueError("adjust must be raw, qfq, or hfq")
         period = period.lower()
-        aliases = {"d": "1d", "day": "1d", "w": "1w", "week": "1w", "m": "1m", "month": "1m"}
+        aliases = {
+            "d": "1d", "day": "1d", "w": "1w", "week": "1w",
+            "m": "1m", "month": "1m", "q": "1q", "quarter": "1q",
+            "y": "1y", "year": "1y",
+        }
         period = aliases.get(period, period)
-        if period not in {"1d", "1w", "1m"}:
-            raise ValueError("period must be 1d, 1w, or 1m")
+        if period not in {"1d", "1w", "1m", "1q", "1y"}:
+            raise ValueError("period must be 1d, 1w, 1m, 1q, or 1y")
         self._validate_date(start_date, "start")
         if end_date:
             self._validate_date(end_date, "end")
@@ -86,8 +91,15 @@ class MarketService:
         except ValueError as exc:
             raise ValueError(f"{label} must use YYYYMMDD") from exc
 
-    def screen(self, options: dict[str, Any] | None = None, save_history: bool = False) -> dict[str, Any]:
+    def screen(
+        self,
+        options: dict[str, Any] | None = None,
+        save_history: bool = False,
+        progress: Callable[[str, int, int], None] | None = None,
+    ) -> dict[str, Any]:
         started = time.perf_counter()
+        notify = progress or (lambda _stage, _completed, _total: None)
+        notify("准备本地数据", 0, 1)
         threshold_mtime = self.settings.thresholds_path.stat().st_mtime_ns
         if threshold_mtime != self._threshold_mtime:
             with self._screen_lock:
@@ -111,7 +123,7 @@ class MarketService:
         with self._screen_lock:
             cached = self._screen_cache.get(cache_key)
         if cached is None:
-            payload = self._run_screen(filters, snapshots)
+            payload = self._run_screen(filters, snapshots, notify)
             with self._screen_lock:
                 if len(self._screen_cache) >= 8:
                     self._screen_cache.pop(next(iter(self._screen_cache)))
@@ -119,6 +131,28 @@ class MarketService:
         else:
             payload = copy.deepcopy(cached)
             payload["cache_hit"] = True
+            payload["timings"] = {
+                "reference_ms": 0.0,
+                "daily_query_ms": 0.0,
+                "scoring_ms": 0.0,
+                "assembly_ms": 0.0,
+            }
+            notify("命中筛选缓存", 1, 1)
+        evaluations = payload.pop("_evaluations", [])
+        previous = self.state_store.previous_category_counts(
+            filters, payload["as_of"]["daily"]
+        )
+        if previous is None:
+            payload["comparison_as_of"] = None
+            payload["category_deltas"] = {category: None for category in CATEGORY_ORDER}
+        else:
+            previous_date, previous_counts = previous
+            payload["comparison_as_of"] = previous_date
+            payload["category_deltas"] = {
+                category: payload["counts"]["by_category"].get(category, 0)
+                - int(previous_counts.get(category, 0))
+                for category in CATEGORY_ORDER
+            }
         if save_history:
             history_results = payload["results"]
             if filters["mode"] == "per_category":
@@ -126,9 +160,16 @@ class MarketService:
                     item for category in CATEGORY_ORDER for item in payload["categories"][category]
                 ]
             payload["history_run_id"] = self.state_store.record_screen(
-                payload["as_of"]["daily"], filters, history_results
+                payload["as_of"]["daily"],
+                filters,
+                history_results,
+                evaluations=evaluations,
+                category_counts=payload["counts"]["by_category"],
+                warnings=payload["warnings"],
             )
         payload["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
+        payload["timings"]["total_ms"] = payload["elapsed_ms"]
+        notify("筛选完成", 1, 1)
         return payload
 
     def _normalize_filters(self, source: dict[str, Any]) -> dict[str, Any]:
@@ -167,12 +208,26 @@ class MarketService:
             "mode": mode,
         }
 
-    def _run_screen(self, filters: dict[str, Any], snapshots) -> dict[str, Any]:
+    def _run_screen(
+        self,
+        filters: dict[str, Any],
+        snapshots,
+        progress: Callable[[str, int, int], None],
+    ) -> dict[str, Any]:
         if snapshots.daily_kline is None or snapshots.daily_basic is None:
             raise FileNotFoundError("daily_kline and daily_basic are required for screening")
-        basic = self.repository.basic()
-        valuation_date, valuation = self.repository.daily_basic_snapshot()
-        st_date, st = self.repository.st_snapshot()
+        reference_started = time.perf_counter()
+        progress("读取股票、估值和 ST 快照", 0, 3)
+        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="market-ref") as pool:
+            basic_future = pool.submit(self.repository.basic)
+            valuation_future = pool.submit(self.repository.daily_basic_snapshot)
+            st_future = pool.submit(self.repository.st_snapshot)
+            basic = basic_future.result()
+            progress("读取股票、估值和 ST 快照", 1, 3)
+            valuation_date, valuation = valuation_future.result()
+            progress("读取股票、估值和 ST 快照", 2, 3)
+            st_date, st = st_future.result()
+        progress("读取股票、估值和 ST 快照", 3, 3)
         pool = basic[basic["market"].isin(filters["boards"])].merge(
             valuation, on="ts_code", how="left", suffixes=("", "_daily")
         )
@@ -191,51 +246,97 @@ class MarketService:
         eligible["is_st"] = eligible["ts_code"].isin(st_codes)
         if filters["exclude_st"]:
             eligible = eligible[~eligible["is_st"]]
+        reference_ms = (time.perf_counter() - reference_started) * 1000
 
         end = datetime.strptime(snapshots.daily_kline, "%Y%m%d")
         start = (end - timedelta(days=220)).strftime("%Y%m%d")
+        query_started = time.perf_counter()
+        progress("读取近 220 天本地日线", 0, 1)
         recent = self.repository.recent_daily(start, snapshots.daily_kline)
         recent = recent[recent["ts_code"].isin(set(eligible["ts_code"]))]
+        recent = recent.sort_values(["ts_code", "trade_date"])
+        daily_query_ms = (time.perf_counter() - query_started) * 1000
+        progress("读取近 220 天本地日线", 1, 1)
         meta = eligible.set_index("ts_code").to_dict("index")
-        scored = []
-        for code, frame in recent.groupby("ts_code", sort=False):
-            result = score_stock(frame, self.thresholds)
-            if result is None:
-                continue
+        scored: list[dict[str, Any]] = []
+        category_scored: dict[str, list[dict[str, Any]]] = {
+            category: [] for category in CATEGORY_ORDER
+        }
+        evaluations: list[dict[str, Any]] = []
+        scoring_started = time.perf_counter()
+        grouped = recent.groupby("ts_code", sort=False)
+        total_groups = grouped.ngroups
+        for position, (code, frame) in enumerate(grouped, 1):
+            result = score_stock(frame, self.thresholds, assume_sorted=True)
             details = meta[str(code)]
-            latest_row = frame.sort_values("trade_date").iloc[-1]
-            sparkline = [round(float(value), 3) for value in frame.sort_values("trade_date").tail(8)["close"].tolist()]
-            result.update(
+            latest_row = frame.iloc[-1]
+            sparkline = [
+                round(float(value), 3) for value in frame.tail(8)["close"].tolist()
+            ]
+            common = {
+                "code": str(code),
+                "ts_code": str(code),
+                "symbol": json_value(details.get("symbol")),
+                "name": json_value(details.get("name")),
+                "market": json_value(details.get("market")),
+                "exchange": json_value(details.get("exchange")),
+                "total_mv_yi": round(float(details["total_mv_yi"]), 2),
+                "circ_mv_yi": None
+                if pd.isna(details.get("circ_mv"))
+                else round(float(details["circ_mv"]) / 10000.0, 2),
+                "is_st": bool(details["is_st"]),
+                "open": json_value(latest_row.get("open")),
+                "high": json_value(latest_row.get("high")),
+                "low": json_value(latest_row.get("low")),
+                "pre_close": json_value(latest_row.get("pre_close")),
+                "volume": json_value(latest_row.get("vol")),
+                "amount": json_value(latest_row.get("amount")),
+                "turnover_rate": json_value(details.get("turnover_rate")),
+                "total_mv": json_value(details.get("total_mv")),
+                "circ_mv": json_value(details.get("circ_mv")),
+                "sparkline": sparkline,
+                "trade_date": result.get("trade_date"),
+                "history_bars": result.get("history_bars", len(frame)),
+            }
+            evaluations.append(
                 {
-                    "code": str(code),
                     "ts_code": str(code),
-                    "symbol": json_value(details.get("symbol")),
-                    "name": json_value(details.get("name")),
-                    "market": json_value(details.get("market")),
-                    "exchange": json_value(details.get("exchange")),
-                    "total_mv_yi": round(float(details["total_mv_yi"]), 2),
-                    "circ_mv_yi": None
-                    if pd.isna(details.get("circ_mv"))
-                    else round(float(details["circ_mv"]) / 10000.0, 2),
-                    "is_st": bool(details["is_st"]),
-                    "open": json_value(latest_row.get("open")),
-                    "high": json_value(latest_row.get("high")),
-                    "low": json_value(latest_row.get("low")),
-                    "pre_close": json_value(latest_row.get("pre_close")),
-                    "volume": json_value(latest_row.get("vol")),
-                    "amount": json_value(latest_row.get("amount")),
-                    "turnover_rate": json_value(details.get("turnover_rate")),
-                    "total_mv": json_value(details.get("total_mv")),
-                    "circ_mv": json_value(details.get("circ_mv")),
-                    "sparkline": sparkline,
+                    "status": result["status"],
+                    "matches": result.get("matches", []),
+                    "trade_date": result.get("trade_date"),
+                    "history_bars": result.get("history_bars", len(frame)),
+                    "warning": result.get("warning"),
                 }
             )
-            scored.append(result)
+            if result["status"] == "matched":
+                scored.append({**common, **{k: v for k, v in result.items() if k != "matches"}})
+                for match in result["matches"]:
+                    category_scored[match["category"]].append({**common, **match})
+            if position == 1 or position % 100 == 0 or position == total_groups:
+                progress("计算三类形态", position, total_groups)
+        evaluated_codes = {item["ts_code"] for item in evaluations}
+        for code in eligible["ts_code"].astype(str):
+            if code not in evaluated_codes:
+                evaluations.append(
+                    {
+                        "ts_code": code,
+                        "status": "not_calculated",
+                        "matches": [],
+                        "history_bars": 0,
+                        "warning": "本地日线不足，尚未完成形态计算",
+                    }
+                )
+        scoring_ms = (time.perf_counter() - scoring_started) * 1000
+        assembly_started = time.perf_counter()
         scored.sort(key=lambda item: (-item["score"], item["ts_code"]))
         categories: dict[str, list[dict]] = {}
         for category in CATEGORY_ORDER:
-            items = [copy.deepcopy(item) for item in scored if item["category"] == category][
-                : filters["top_k"]
+            category_scored[category].sort(
+                key=lambda item: (-item["score"], item["ts_code"])
+            )
+            items = [
+                copy.deepcopy(item)
+                for item in category_scored[category][: filters["top_k"]]
             ]
             for index, item in enumerate(items, 1):
                 item["rank"] = index
@@ -255,14 +356,20 @@ class MarketService:
             warnings.append(f"行情截至 {snapshots.daily_kline}，估值截至 {valuation_date}")
         if filters["exclude_st"] and st_date != snapshots.daily_kline:
             warnings.append(f"ST 名单截至 {st_date}，与行情日期不同")
+        if snapshots.adj_factor != snapshots.daily_kline:
+            warnings.append(
+                f"复权因子截至 {snapshots.adj_factor}，与行情日期不同"
+            )
         missing_valuation = int((~valid_valuation).sum())
         if missing_valuation:
             warnings.append(f"{missing_valuation} 只股票缺少最新市值，未进入筛选")
+        assembly_ms = (time.perf_counter() - assembly_started) * 1000
         return {
             "as_of": {
                 "daily": snapshots.daily_kline,
                 "valuation": valuation_date,
                 "st": st_date,
+                "adj_factor": snapshots.adj_factor,
             },
             "filters": filters,
             "counts": {
@@ -270,7 +377,7 @@ class MarketService:
                 "eligible": int(len(eligible)),
                 "scored": int(len(scored)),
                 "by_category": {
-                    category: sum(1 for item in scored if item["category"] == category)
+                    category: len(category_scored[category])
                     for category in CATEGORY_ORDER
                 },
             },
@@ -280,6 +387,13 @@ class MarketService:
             "categories": categories,
             "warnings": warnings,
             "cache_hit": False,
+            "timings": {
+                "reference_ms": round(reference_ms, 1),
+                "daily_query_ms": round(daily_query_ms, 1),
+                "scoring_ms": round(scoring_ms, 1),
+                "assembly_ms": round(assembly_ms, 1),
+            },
+            "_evaluations": evaluations,
         }
 
     def state(self, history_limit: int = 20) -> dict[str, Any]:
@@ -315,3 +429,20 @@ class MarketService:
         if resolved is None:
             raise LookupError(f"stock not found: {code}")
         return self.state_store.update(resolved, action)
+
+    def pattern(self, code: str, history_limit: int = 10) -> dict[str, Any] | None:
+        resolved = self.repository.resolve_code(code)
+        if resolved is None:
+            return None
+        payload = self.state_store.pattern_for_code(resolved, history_limit)
+        payload["rule_version"] = self.thresholds.get("version")
+        payload["rules"] = {
+            category: {
+                key: value
+                for key, value in self.thresholds[category].items()
+                if key not in {"weights"}
+            }
+            for category in CATEGORY_ORDER
+        }
+        payload["as_of"] = self.repository.snapshots().as_dict()
+        return payload

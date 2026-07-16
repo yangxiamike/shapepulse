@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -33,9 +35,67 @@ def _screen_options(query: dict[str, list[str]]) -> dict[str, Any]:
     }
 
 
+class ScreenJobManager:
+    def __init__(self, service: MarketService):
+        self.service = service
+        self._lock = threading.RLock()
+        self._jobs: dict[str, dict[str, Any]] = {}
+
+    def start(self, options: dict[str, Any], save_history: bool) -> dict[str, Any]:
+        job_id = uuid.uuid4().hex
+        with self._lock:
+            if len(self._jobs) >= 24:
+                oldest = next(iter(self._jobs))
+                self._jobs.pop(oldest, None)
+            self._jobs[job_id] = {
+                "job_id": job_id,
+                "status": "running",
+                "stage": "准备本地数据",
+                "completed": 0,
+                "total": 1,
+                "result": None,
+                "error": None,
+            }
+
+        def update(stage: str, completed: int, total: int) -> None:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is not None:
+                    job.update(stage=stage, completed=completed, total=max(total, 1))
+
+        def work() -> None:
+            try:
+                result = self.service.screen(options, save_history, update)
+                with self._lock:
+                    self._jobs[job_id].update(
+                        status="complete",
+                        stage="筛选完成",
+                        completed=1,
+                        total=1,
+                        result=result,
+                    )
+            except Exception as exc:
+                with self._lock:
+                    self._jobs[job_id].update(
+                        status="error",
+                        stage="筛选失败",
+                        error={"type": type(exc).__name__, "message": str(exc)},
+                    )
+
+        threading.Thread(target=work, name=f"screen-{job_id[:8]}", daemon=True).start()
+        return self.get(job_id) or {"job_id": job_id, "status": "running"}
+
+    def get(self, job_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            return None if job is None else dict(job)
+
+
 def make_handler(service: MarketService):
+    jobs = ScreenJobManager(service)
+
     class MarketRequestHandler(BaseHTTPRequestHandler):
-        server_version = "ManualMarket/1.0"
+        server_version = "ManualMarket/1.1"
 
         def log_message(self, fmt: str, *args) -> None:
             print(f"{self.address_string()} - {fmt % args}")
@@ -49,6 +109,14 @@ def make_handler(service: MarketService):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            timings = payload.get("timings") if isinstance(payload, dict) else None
+            if isinstance(timings, dict):
+                entries = []
+                for name, value in timings.items():
+                    if name.endswith("_ms") and isinstance(value, (int, float)):
+                        entries.append(f'{name.removesuffix("_ms")};dur={float(value):.1f}')
+                if entries:
+                    self.send_header("Server-Timing", ", ".join(entries))
             self.end_headers()
             self.wfile.write(body)
 
@@ -86,6 +154,15 @@ def make_handler(service: MarketService):
                         self._send(HTTPStatus.NOT_FOUND, {"error": "stock_not_found", "code": code})
                     else:
                         self._send(HTTPStatus.OK, result)
+                elif path.startswith("/api/pattern/"):
+                    code = unquote(path.removeprefix("/api/pattern/"))
+                    result = service.pattern(
+                        code, int(_first(query, "history_limit", "10"))
+                    )
+                    if result is None:
+                        self._send(HTTPStatus.NOT_FOUND, {"error": "stock_not_found", "code": code})
+                    else:
+                        self._send(HTTPStatus.OK, result)
                 elif path.startswith("/api/bars/"):
                     code = unquote(path.removeprefix("/api/bars/"))
                     limit_raw = _first(query, "limit")
@@ -103,6 +180,13 @@ def make_handler(service: MarketService):
                         self._send(HTTPStatus.OK, result)
                 elif path == "/api/screen":
                     self._send(HTTPStatus.OK, service.screen(_screen_options(query), False))
+                elif path.startswith("/api/screen/jobs/"):
+                    job_id = unquote(path.removeprefix("/api/screen/jobs/"))
+                    result = jobs.get(job_id)
+                    if result is None:
+                        self._send(HTTPStatus.NOT_FOUND, {"error": "job_not_found"})
+                    else:
+                        self._send(HTTPStatus.OK, result)
                 elif path == "/api/state":
                     self._send(
                         HTTPStatus.OK,
@@ -121,6 +205,9 @@ def make_handler(service: MarketService):
                 if path == "/api/screen":
                     save_history = bool(body.pop("save_history", True))
                     self._send(HTTPStatus.OK, service.screen(body, save_history))
+                elif path == "/api/screen/start":
+                    save_history = bool(body.pop("save_history", True))
+                    self._send(HTTPStatus.ACCEPTED, jobs.start(body, save_history))
                 elif path == "/api/state":
                     code = str(body.get("code", body.get("ts_code", ""))).strip()
                     action = str(body.get("action", "")).strip().lower()

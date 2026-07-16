@@ -58,6 +58,8 @@ class StateStore:
                     snapshot_date TEXT NOT NULL,
                     filters_json TEXT NOT NULL,
                     result_count INTEGER NOT NULL,
+                    category_counts_json TEXT NOT NULL DEFAULT '{}',
+                    warnings_json TEXT NOT NULL DEFAULT '[]',
                     created_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS recommendation_history (
@@ -74,8 +76,33 @@ class StateStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_history_run ON recommendation_history(run_id, rank);
                 CREATE INDEX IF NOT EXISTS idx_history_code ON recommendation_history(ts_code, created_at);
+                CREATE TABLE IF NOT EXISTS pattern_evaluations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL REFERENCES screen_runs(run_id) ON DELETE CASCADE,
+                    ts_code TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    matches_json TEXT NOT NULL,
+                    trade_date TEXT,
+                    history_bars INTEGER NOT NULL DEFAULT 0,
+                    warning TEXT,
+                    snapshot_date TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_pattern_code
+                    ON pattern_evaluations(ts_code, created_at DESC);
                 """
             )
+            run_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(screen_runs)")
+            }
+            if "category_counts_json" not in run_columns:
+                connection.execute(
+                    "ALTER TABLE screen_runs ADD COLUMN category_counts_json TEXT NOT NULL DEFAULT '{}'"
+                )
+            if "warnings_json" not in run_columns:
+                connection.execute(
+                    "ALTER TABLE screen_runs ADD COLUMN warnings_json TEXT NOT NULL DEFAULT '[]'"
+                )
             columns = {row[1] for row in connection.execute("PRAGMA table_info(stock_state)")}
             if "watchlist" not in columns:
                 connection.execute("ALTER TABLE stock_state ADD COLUMN watchlist INTEGER NOT NULL DEFAULT 0")
@@ -132,13 +159,34 @@ class StateStore:
         item["watchlist"] = bool(item.get("watchlist", 0))
         return item
 
-    def record_screen(self, snapshot_date: str, filters: dict, results: list[dict]) -> str:
+    def record_screen(
+        self,
+        snapshot_date: str,
+        filters: dict,
+        results: list[dict],
+        evaluations: list[dict] | None = None,
+        category_counts: dict[str, int] | None = None,
+        warnings: list[str] | None = None,
+    ) -> str:
         run_id = uuid.uuid4().hex
         timestamp = now_iso()
         with self._lock, self._connection() as connection:
             connection.execute(
-                "INSERT INTO screen_runs VALUES (?, ?, ?, ?, ?)",
-                (run_id, snapshot_date, json.dumps(filters, ensure_ascii=False), len(results), timestamp),
+                """
+                INSERT INTO screen_runs(
+                    run_id, snapshot_date, filters_json, result_count,
+                    category_counts_json, warnings_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    snapshot_date,
+                    json.dumps(filters, ensure_ascii=False, sort_keys=True),
+                    len(results),
+                    json.dumps(category_counts or {}, ensure_ascii=False),
+                    json.dumps(warnings or [], ensure_ascii=False),
+                    timestamp,
+                ),
             )
             connection.executemany(
                 """
@@ -162,7 +210,97 @@ class StateStore:
                     for item in results
                 ],
             )
+            if evaluations:
+                connection.executemany(
+                    """
+                    INSERT INTO pattern_evaluations(
+                        run_id, ts_code, status, matches_json, trade_date,
+                        history_bars, warning, snapshot_date, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            run_id,
+                            item["ts_code"],
+                            item.get("status", "not_calculated"),
+                            json.dumps(item.get("matches", []), ensure_ascii=False),
+                            item.get("trade_date"),
+                            int(item.get("history_bars", 0)),
+                            item.get("warning"),
+                            snapshot_date,
+                            timestamp,
+                        )
+                        for item in evaluations
+                    ],
+                )
         return run_id
+
+    def previous_category_counts(
+        self, filters: dict, before_snapshot: str
+    ) -> tuple[str, dict[str, int]] | None:
+        canonical = json.dumps(filters, ensure_ascii=False, sort_keys=True)
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT snapshot_date, category_counts_json
+                FROM screen_runs
+                WHERE filters_json=? AND snapshot_date < ?
+                ORDER BY snapshot_date DESC, created_at DESC
+                LIMIT 1
+                """,
+                (canonical, before_snapshot),
+            ).fetchone()
+        if row is None:
+            return None
+        return str(row["snapshot_date"]), json.loads(row["category_counts_json"] or "{}")
+
+    def pattern_for_code(self, ts_code: str, history_limit: int = 10) -> dict[str, Any]:
+        with self._connection() as connection:
+            rows = [
+                dict(row)
+                for row in connection.execute(
+                    """
+                    SELECT pe.*, sr.filters_json, sr.warnings_json
+                    FROM pattern_evaluations pe
+                    JOIN screen_runs sr ON sr.run_id=pe.run_id
+                    WHERE pe.ts_code=?
+                    ORDER BY pe.snapshot_date DESC, pe.created_at DESC, pe.id DESC
+                    LIMIT ?
+                    """,
+                    (ts_code, max(1, min(50, int(history_limit)))),
+                ).fetchall()
+            ]
+        history = []
+        for row in rows:
+            row["matches"] = json.loads(row.pop("matches_json"))
+            row["filters"] = json.loads(row.pop("filters_json"))
+            row["run_warnings"] = json.loads(row.pop("warnings_json") or "[]")
+            history.append(row)
+        if not history:
+            return {
+                "ts_code": ts_code,
+                "calculation_state": "not_calculated",
+                "message": "尚未对这只股票运行形态计算",
+                "current": None,
+                "history": [],
+            }
+        current = history[0]
+        if current["status"] == "not_calculated":
+            state = "not_calculated"
+            message = current.get("warning") or "尚未完成形态计算"
+        elif current["status"] == "no_match":
+            state = "calculated_no_match"
+            message = "已计算，但当前未匹配三类形态"
+        else:
+            state = "matched"
+            message = "已匹配形态"
+        return {
+            "ts_code": ts_code,
+            "calculation_state": state,
+            "message": message,
+            "current": current,
+            "history": history,
+        }
 
     def snapshot(self, history_limit: int = 20) -> dict[str, Any]:
         with self._connection() as connection:
@@ -182,6 +320,8 @@ class StateStore:
             ).fetchall()]
         for run in runs:
             run["filters"] = json.loads(run.pop("filters_json"))
+            run["category_counts"] = json.loads(run.pop("category_counts_json", "{}") or "{}")
+            run["warnings"] = json.loads(run.pop("warnings_json", "[]") or "[]")
         for item in recommendations:
             item["reasons"] = json.loads(item.pop("reasons_json"))
         viewed, saved, pending, watchlist = [], [], [], []
