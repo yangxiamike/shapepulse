@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-17T05:39:15.892Z",
+  "captured_at": "2026-07-17T06:33:18.967Z",
   "results": [
     {
       "gate": "G2-G3",
@@ -90,14 +90,14 @@
           "from": 2709,
           "to": 2782,
           "right_padding": 8,
-          "right_gap_px": 100.9
+          "right_gap_px": 99.1
         },
         "after_switch": {
           "bars": 66,
           "from": 3078,
           "to": 3151,
           "right_padding": 8,
-          "right_gap_px": 100.9
+          "right_gap_px": 99.1
         },
         "panned_then_reset": true
       },

@@ -178,6 +178,12 @@ class LocalMarketRepository:
             ),
         )
 
+    def pattern_daily(self, code: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """Reuse the current screening snapshot for one on-demand pattern evaluation."""
+        recent = self.recent_daily(start_date, end_date)
+        frame = recent[recent["ts_code"].astype(str).eq(code)].copy()
+        return self._normalize_daily(frame)
+
     def daily_snapshot(self) -> tuple[str | None, pd.DataFrame]:
         date = self.latest_partition("daily_kline")
         if date is None:

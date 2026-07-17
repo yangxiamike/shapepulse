@@ -50,7 +50,7 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
         await page.getByRole("button", { name: "打开右侧面板" }).click();
         await page.getByRole("button", { name: "形态", exact: true }).click();
         await expect(page.getByTestId("pattern-group-select")).toBeVisible();
-        await expect(page.getByRole("heading", { name: /特一药业 · 形态事实|尚未计算|已计算但无匹配/ })).toBeVisible();
+        await expect(page.getByRole("heading", { name: /特一药业 · 形态事实|计算未完成|三类形态均不符合/ })).toBeVisible();
         await settleForScreenshot(page, page.locator(".market-rightbar"));
         await captureScreenshot(page, { path: `${screenshotDir}/market-1024-right-drawer.png`, animations: "disabled", caret: "hide" });
       }
@@ -176,7 +176,7 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
     }
     await page.getByRole("button", { name: "形态", exact: true }).click();
     await expect(page.getByTestId("pattern-group-select")).toBeVisible();
-    await expect(page.getByRole("heading", { name: /尚未计算|已计算但无匹配|形态事实/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /计算未完成|三类形态均不符合|形态事实/ })).toBeVisible();
 
     await page.setViewportSize({ width: 1024, height: 800 });
     await page.goto("/market?code=002728");
@@ -184,7 +184,7 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
     await page.getByRole("button", { name: "打开右侧面板" }).click();
     await page.getByRole("button", { name: "形态", exact: true }).click();
     await expect(page.getByTestId("pattern-group-select")).toBeVisible();
-    await expect(page.getByRole("heading", { name: /特一药业 · 形态事实|尚未计算|已计算但无匹配/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /特一药业 · 形态事实|计算未完成|三类形态均不符合/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "到选股看板查看该股记录" })).toBeVisible();
     browserEvidence.push({ scenario: "interactions", periods: counts, drawings: ["line", "horizontal", "text", "measure", "clear"], state_persistence: true, mobile_pattern_panel: true, result: "pass" });
     expect(audit.consoleErrors).toEqual([]);

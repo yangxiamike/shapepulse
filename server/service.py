@@ -654,7 +654,43 @@ class MarketService:
         resolved = self.repository.resolve_code(code)
         if resolved is None:
             return None
-        payload = self.state_store.pattern_for_code(resolved, history_limit)
+        snapshots = self.repository.snapshots()
+        if snapshots.daily_kline is None:
+            raise FileNotFoundError("daily_kline data not found; cannot calculate current pattern facts")
+        end = datetime.strptime(snapshots.daily_kline, "%Y%m%d")
+        start = (end - timedelta(days=220)).strftime("%Y%m%d")
+        frame = self.repository.pattern_daily(resolved, start, snapshots.daily_kline)
+        result = score_stock(frame, self.thresholds, assume_sorted=True)
+        stored = self.state_store.pattern_for_code(resolved, history_limit)
+        current = {
+            "run_id": f"current-local-{snapshots.daily_kline}",
+            "status": result["status"],
+            "matches": result.get("matches", []),
+            "trade_date": result.get("trade_date"),
+            "history_bars": result.get("history_bars", len(frame)),
+            "warning": result.get("warning"),
+            "snapshot_date": snapshots.daily_kline,
+            "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "filters": {"source": "current_local_snapshot"},
+            "run_warnings": [],
+        }
+        if result["status"] == "matched":
+            state = "matched"
+            message = "按最新本地数据计算，已匹配形态"
+        elif result["status"] == "no_match":
+            state = "calculated_no_match"
+            message = "按最新本地数据计算，三类形态均不符合"
+        else:
+            state = "not_calculated"
+            message = result.get("warning") or "最新本地数据不足，未能完成形态计算"
+        payload = {
+            "ts_code": resolved,
+            "calculation_state": state,
+            "message": message,
+            "current": current,
+            "history": stored.get("history", []),
+            "source": "current_local_snapshot",
+        }
         payload["rule_version"] = self.thresholds.get("version")
         payload["rules"] = {
             category: {
@@ -664,5 +700,5 @@ class MarketService:
             }
             for category in CATEGORY_ORDER
         }
-        payload["as_of"] = self.repository.snapshots().as_dict()
+        payload["as_of"] = snapshots.as_dict()
         return payload

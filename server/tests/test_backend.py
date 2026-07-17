@@ -11,7 +11,7 @@ import pandas as pd
 
 from server.config import PROJECT_ROOT, load_settings, load_thresholds
 from server.patterns import _breakout, _pullback, _range_bounce, score_stock
-from server.repository import LocalMarketRepository
+from server.repository import LocalMarketRepository, SnapshotDates
 from server.service import MarketService
 from server.state import StateStore
 
@@ -187,6 +187,56 @@ class ScreenSemanticsTests(unittest.TestCase):
         self.assertEqual(result["source"], "current_calculation")
         self.assertEqual(result["total"], 2)
         self.assertEqual([item["ts_code"] for item in result["items"]], ["600001.SH", "600002.SH"])
+
+    def test_pattern_calculates_current_stock_without_saved_history(self):
+        dates = [f"2026{month:02d}{day:02d}" for month in range(1, 7) for day in range(1, 21)]
+        frame = pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ"] * len(dates),
+                "trade_date": dates,
+                "open": np.linspace(10.0, 10.8, len(dates)),
+                "high": np.linspace(10.1, 10.9, len(dates)),
+                "low": np.linspace(9.9, 10.7, len(dates)),
+                "close": np.linspace(10.0, 10.8, len(dates)),
+                "vol": np.full(len(dates), 1000.0),
+            }
+        )
+        snapshots = SnapshotDates(
+            daily_kline="20260620",
+            daily_basic="20260620",
+            adj_factor="20260620",
+            stock_st="20260620",
+            suspend_d="20260619",
+            stk_limit="20260620",
+            universe="20260619",
+        )
+        self.service.repository = type(
+            "Repository",
+            (),
+            {
+                "resolve_code": lambda _self, _code: "000001.SZ",
+                "snapshots": lambda _self: snapshots,
+                "pattern_daily": lambda _self, _code, _start, _end: frame,
+            },
+        )()
+        self.service.state_store = type(
+            "StateStore",
+            (),
+            {
+                "pattern_for_code": lambda _self, _code, _limit: {
+                    "calculation_state": "not_calculated",
+                    "history": [],
+                }
+            },
+        )()
+
+        result = self.service.pattern("000001")
+
+        self.assertEqual(result["source"], "current_local_snapshot")
+        self.assertNotEqual(result["calculation_state"], "not_calculated")
+        self.assertEqual(result["current"]["trade_date"], "20260620")
+        self.assertEqual(result["current"]["history_bars"], 120)
+        self.assertEqual(result["as_of"]["daily_kline"], "20260620")
 
 
 class LocalDataIntegrationTests(unittest.TestCase):

@@ -1,0 +1,85 @@
+{
+  "captured_at": "2026-07-17T06:32:48.370Z",
+  "results": [
+    {
+      "gate": "chart-default-and-price-scale",
+      "initial": {
+        "from": 3076.667,
+        "to": 3292,
+        "rightPadding": 10,
+        "rightGap": 118,
+        "priceFrom": 9.99,
+        "priceTo": 11.608,
+        "priceSpan": 1.618,
+        "priceMode": "auto"
+      },
+      "freely_scaled": {
+        "from": 3076.667,
+        "to": 3292,
+        "rightPadding": 10,
+        "rightGap": 118,
+        "priceFrom": 9.6804,
+        "priceTo": 11.9176,
+        "priceSpan": 2.2373,
+        "priceMode": "free"
+      },
+      "locked": {
+        "from": 3076.667,
+        "to": 3292,
+        "rightPadding": 10,
+        "rightGap": 118,
+        "priceFrom": 9.6804,
+        "priceTo": 11.9176,
+        "priceSpan": 2.2373,
+        "priceMode": "locked"
+      },
+      "reset": {
+        "from": 3076.667,
+        "to": 3292,
+        "rightPadding": 10,
+        "rightGap": 118,
+        "priceFrom": 9.99,
+        "priceTo": 11.608,
+        "priceSpan": 1.618,
+        "priceMode": "auto"
+      },
+      "switched": {
+        "from": 2487.667,
+        "to": 2703,
+        "rightPadding": 10,
+        "rightGap": 118,
+        "priceFrom": 19.21,
+        "priceTo": 49,
+        "priceSpan": 29.79,
+        "priceMode": "auto"
+      },
+      "result": "pass"
+    },
+    {
+      "gate": "pattern-current-facts-and-navigation",
+      "snapshot": "20260716",
+      "ping_an_bank": "calculated_no_match",
+      "splitter": {
+        "before_pool": 480.046875,
+        "after_up_pool": 390.046875,
+        "before_facts": 398.953125,
+        "after_up_facts": 488.953125
+      },
+      "wheel": "scroll_only",
+      "keyboard": "stock_switch",
+      "result": "pass"
+    },
+    {
+      "gate": "board-3m-and-responsive",
+      "board_bars": 66,
+      "board_padding": 8,
+      "viewport": [
+        1024,
+        800
+      ],
+      "font": "large",
+      "overflow": false,
+      "result": "pass"
+    }
+  ]
+}

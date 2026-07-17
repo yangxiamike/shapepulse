@@ -175,8 +175,8 @@ export function MarketClient() {
     const index = patternPool.findIndex(item => item.code === code);
     if (index >= 0) patternCursorRef.current = index;
     setPatternPendingCode(code);
-    void loadStock(code, period, range, true);
-  }, [loadStock, patternPool, period, range]);
+    void loadStock(code, "D", "6M", true);
+  }, [loadStock, patternPool]);
 
   const stepPatternStock = useCallback((direction: -1 | 1) => {
     if (!patternPool.length) return false;
@@ -190,9 +190,9 @@ export function MarketClient() {
     patternCursorRef.current = nextIndex;
     const code = patternPool[nextIndex].code;
     setPatternPendingCode(code);
-    void loadStock(code, period, range, true);
+    void loadStock(code, "D", "6M", true);
     return true;
-  }, [loadStock, patternPendingCode, patternPool, period, range, stock?.code]);
+  }, [loadStock, patternPendingCode, patternPool, stock?.code]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -558,7 +558,7 @@ export function MarketClient() {
             <DrawingButton label="清除画线（全部）" active={drawings.length > 0} onClick={() => { setDrawings([]); setSelectedDrawing(null); setDrawingMode(null); }}><Trash2 /></DrawingButton>
           </div>
         </div>
-        <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} fibonacciLevels={drawingMode === "fibonacci-extension" ? fibonacciDefaults["fibonacci-extension"] : fibonacciDefaults.fibonacci} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onDrawingDoubleClick={openFibonacciSettings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
+        <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart key={`${stock?.code || "none"}-${period}-${range}-${index}`} ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} rightPaddingBars={10} enablePriceScaleMenu onResetDefault={() => void changeBars("D", "6M")} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} fibonacciLevels={drawingMode === "fibonacci-extension" ? fibonacciDefaults["fibonacci-extension"] : fibonacciDefaults.fibonacci} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onDrawingDoubleClick={openFibonacciSettings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
         <div className="range-toolbar">{ranges.map(([label, value]) => <button className={range === value ? "active" : ""} key={value} onClick={() => void changeBars(period, value)}>{label}</button>)}<b>{bars[0]?.time || "—"} 至 {bars.at(-1)?.time || "—"}　<CalendarDays /></b></div>
       </section>
     </main>
@@ -587,7 +587,7 @@ export function MarketClient() {
         <div className="watch-header"><span>名称/代码</span><span>最新价</span><span>涨跌幅</span></div>
         <div className="watch-list">{watchlist.length ? watchlist.map(item => <button key={item.code} className={item.code === stock?.code ? "active" : ""} onClick={() => void loadStock(item.code, "D", "6M")}><span><b>{item.name}</b><em>{item.code}</em></span><strong>{fmtNumber(item.close)}</strong><i className={item.pct_chg >= 0 ? "up" : "down"}>{signed(item.pct_chg)}%</i></button>) : <PanelEmpty title="暂无自选" text="添加后会保存在本项目的本地数据库中。" />}</div>
         <button className={`add-watch ${watched ? "remove" : ""}`} onClick={() => void toggleWatchlist()} disabled={!stock}>{watched ? <X /> : <Plus />}{watched ? "移出自选" : "添加自选"}</button>
-      </> : rightTab === "详情" ? <DetailPanel stock={stock} /> : rightTab === "形态" ? <PatternWorkspace activeCode={patternPendingCode || stock?.code || null} category={patternCategory} pool={patternPool} poolLoading={poolLoading} onCategory={changePatternCategory} onChoose={choosePatternStock} onStep={stepPatternStock}><PatternPanel stock={stock} data={pattern} loading={patternLoading} error={patternError} onRetry={() => stock && void loadPattern(stock.code)} /></PatternWorkspace> : <UnavailablePanel tab={rightTab} />}
+      </> : rightTab === "详情" ? <DetailPanel stock={stock} /> : rightTab === "形态" ? <PatternWorkspace activeCode={patternPendingCode || stock?.code || null} category={patternCategory} pool={patternPool} poolLoading={poolLoading} onCategory={changePatternCategory} onChoose={choosePatternStock}><PatternPanel stock={stock} data={pattern} loading={patternLoading} error={patternError} onRetry={() => stock && void loadPattern(stock.code)} /></PatternWorkspace> : <UnavailablePanel tab={rightTab} />}
     </aside>
 
     <footer className="market-statusbar"><span><i className={stock ? "connected" : ""} />{stock ? "已连接" : "未连接"}</span><span><Clock3 />{clock}</span><span className="status-center">本地数据　{status}</span><span><CircleDot />zer0share 日线快照</span><span>CN</span></footer>
@@ -626,36 +626,82 @@ function DetailPanel({ stock }: { stock: Stock | null }) {
   return <div className="detail-panel"><div className="panel-title"><Layers3 /><div><h3>{stock.name}</h3><p>{stock.ts_code}</p></div></div><dl><dt>市场</dt><dd>{stock.market || "—"}</dd><dt>行业</dt><dd>{stock.industry || "—"}</dd><dt>总市值</dt><dd>{fmtMarketValue(stock.total_mv)}</dd><dt>市盈率 TTM</dt><dd>{fmtNumber(stock.pe_ttm)}</dd><dt>市净率</dt><dd>{fmtNumber(stock.pb)}</dd><dt>ST 状态</dt><dd>{stock.is_st ? "是" : "否"}</dd></dl><div className="panel-dates"><b>数据表日期</b><span>行情 {formatDate(stock.as_of?.quote)}</span><span>估值 {formatDate(stock.as_of?.valuation)}</span><span>ST {formatDate(stock.as_of?.st)}</span><span>复权 {formatDate(stock.as_of?.adj_factor)}</span></div>{stock.warnings?.map(item => <p className="panel-warning" key={item}>{item}</p>)}</div>;
 }
 
-function PatternWorkspace({ activeCode, category, pool, poolLoading, onCategory, onChoose, onStep, children }: { activeCode: string | null; category: PatternKey; pool: Stock[]; poolLoading: boolean; onCategory: (category: PatternKey) => void; onChoose: (code: string) => void; onStep: (direction: -1 | 1) => boolean; children: React.ReactNode }) {
+function PatternWorkspace({ activeCode, category, pool, poolLoading, onCategory, onChoose, children }: { activeCode: string | null; category: PatternKey; pool: Stock[]; poolLoading: boolean; onCategory: (category: PatternKey) => void; onChoose: (code: string) => void; children: React.ReactNode }) {
   const activeButtonRef = useRef<HTMLButtonElement>(null);
-  const poolRef = useRef<HTMLDivElement>(null);
-  const lastWheelAt = useRef(0);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const resizing = useRef(false);
+  const [poolHeight, setPoolHeight] = useState<number | null>(null);
 
   useEffect(() => {
     activeButtonRef.current?.scrollIntoView({ block: "nearest" });
   }, [activeCode]);
 
-  useEffect(() => {
-    const list = poolRef.current;
-    if (!list) return;
-    const wheelNavigate = (event: WheelEvent) => {
-      if (Math.abs(event.deltaY) < 4 || poolLoading) return;
-      event.preventDefault();
-      const now = performance.now();
-      if (now - lastWheelAt.current < 90) return;
-      lastWheelAt.current = now;
-      onStep(event.deltaY > 0 ? 1 : -1);
-    };
-    list.addEventListener("wheel", wheelNavigate, { passive: false });
-    return () => list.removeEventListener("wheel", wheelNavigate);
-  }, [onStep, poolLoading]);
+  const splitBounds = useCallback(() => {
+    const height = workspaceRef.current?.clientHeight || 0;
+    const minArea = Math.max(120, Math.min(210, (height - 10) * 0.35));
+    return { min: minArea, max: Math.max(minArea, height - 10 - minArea) };
+  }, []);
 
-  return <div className="pattern-workspace">
+  const resizeAt = useCallback((clientY: number) => {
+    const bounds = workspaceRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const limits = splitBounds();
+    setPoolHeight(Math.max(limits.min, Math.min(limits.max, clientY - bounds.top)));
+  }, [splitBounds]);
+
+  function startSplitResize(event: React.PointerEvent<HTMLDivElement>) {
+    resizing.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeAt(event.clientY);
+  }
+
+  function moveSplitResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (resizing.current) resizeAt(event.clientY);
+  }
+
+  function stopSplitResize(event: React.PointerEvent<HTMLDivElement>) {
+    resizing.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  function splitKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown" && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    const limits = splitBounds();
+    setPoolHeight(current => event.key === "Home"
+      ? limits.min
+      : event.key === "End"
+        ? limits.max
+        : Math.max(limits.min, Math.min(limits.max, (current ?? (limits.min + limits.max) / 2) + (event.key === "ArrowDown" ? 24 : -24))));
+  }
+
+  return <div
+    ref={workspaceRef}
+    className="pattern-workspace"
+    style={{ "--pattern-pool-height": poolHeight == null ? "54%" : `${poolHeight}px` } as React.CSSProperties}
+    data-pattern-pool-height={poolHeight == null ? "default" : Math.round(poolHeight)}
+  >
     <section className="pattern-pool-section" aria-labelledby="pattern-pool-title">
-      <div className="panel-section-heading"><b id="pattern-pool-title">形态股票列表</b><span>{pool.length} 只 · ↑↓ / 滚轮切换</span></div>
+      <div className="panel-section-heading"><b id="pattern-pool-title">形态股票列表</b><span>{pool.length} 只 · ↑↓切换 · 滚轮滚动</span></div>
       <label className="pattern-group"><span>形态分组</span><select data-testid="pattern-group-select" value={category} onChange={event => onCategory(event.target.value as PatternKey)}>{(Object.keys(patternNames) as PatternKey[]).map(key => <option key={key} value={key}>{patternNames[key]}</option>)}</select></label>
-      <div ref={poolRef} className="pattern-pool" data-testid="pattern-pool" data-wheel-navigation="enabled">{poolLoading ? <p>正在加载股票池…</p> : pool.length ? pool.map((item, index) => <button ref={item.code === activeCode ? activeButtonRef : undefined} key={item.code} aria-current={item.code === activeCode ? "true" : undefined} className={item.code === activeCode ? "active" : ""} onClick={() => onChoose(item.code)}><b>{index + 1}</b><span><strong>{item.name}</strong><small>{item.code}</small></span><em>{Math.round(item.score || 0)}分</em></button>) : <p>该分类当前没有可用股票</p>}</div>
+      <div className="pattern-pool" data-testid="pattern-pool" data-wheel-behavior="scroll-only">{poolLoading ? <p>正在加载股票池…</p> : pool.length ? pool.map((item, index) => <button ref={item.code === activeCode ? activeButtonRef : undefined} key={item.code} aria-current={item.code === activeCode ? "true" : undefined} className={item.code === activeCode ? "active" : ""} onClick={() => onChoose(item.code)}><b>{index + 1}</b><span><strong>{item.name}</strong><small>{item.code}</small></span><em>{Math.round(item.score || 0)}分</em></button>) : <p>该分类当前没有可用股票</p>}</div>
     </section>
+    <div
+      className="pattern-splitter"
+      data-testid="pattern-splitter"
+      role="separator"
+      aria-label="调整形态列表与当前个股形态事实高度"
+      aria-orientation="horizontal"
+      aria-valuemin={120}
+      aria-valuemax={1000}
+      aria-valuenow={Math.round(poolHeight ?? 320)}
+      tabIndex={0}
+      onPointerDown={startSplitResize}
+      onPointerMove={moveSplitResize}
+      onPointerUp={stopSplitResize}
+      onPointerCancel={stopSplitResize}
+      onKeyDown={splitKeyDown}
+    ><span /></div>
     <section className="pattern-facts-section" aria-labelledby="pattern-facts-title">
       <div className="panel-section-heading"><b id="pattern-facts-title">当前个股形态事实</b><span>{activeCode || "未选择"}</span></div>
       <div className="pattern-facts">{children}</div>
@@ -665,15 +711,15 @@ function PatternWorkspace({ activeCode, category, pool, poolLoading, onCategory,
 
 function PatternPanel({ stock, data, loading, error, onRetry }: { stock: Stock | null; data: PatternResponse | null; loading: boolean; error: string; onRetry: () => void }) {
   if (!stock) return <PanelEmpty title="尚未选择股票" text="形态标签只展示当前股票的事实。" />;
-  if (loading) return <PanelEmpty title="读取形态事实" text="正在查询本地筛选历史…" />;
+  if (loading) return <PanelEmpty title="计算形态事实" text="正在按最新本地快照计算三类形态…" />;
   if (error) return <div className="panel-error"><p>{error}</p><button onClick={onRetry}>重试</button></div>;
-  if (!data || data.calculation_state === "not_calculated") return <div className="pattern-empty"><CircleDot /><h3>尚未计算</h3><p>{data?.message || "请先在选股看板运行筛选。"}</p><Link href={`/?code=${stock.code}`}>到选股看板查看该股记录</Link></div>;
-  if (data.calculation_state === "calculated_no_match") return <div className="pattern-empty"><CircleDot /><h3>已计算但无匹配</h3><p>{data.message}</p><PatternDates data={data} /><Link href={`/?code=${stock.code}`}>到选股看板查看该股记录</Link></div>;
+  if (!data || data.calculation_state === "not_calculated") return <div className="pattern-empty"><CircleDot /><h3>计算未完成</h3><p>{data?.message || "最新本地数据不足，未能完成形态计算。"}</p><PatternDates data={data} /><button onClick={onRetry}>重新计算</button></div>;
+  if (data.calculation_state === "calculated_no_match") return <div className="pattern-empty"><CircleDot /><h3>三类形态均不符合</h3><p>{data.message}</p><PatternDates data={data} /><Link href={`/?code=${stock.code}`}>到选股看板查看当前快照</Link></div>;
   const current = data.current!;
   return <div className="pattern-panel"><div className="pattern-panel-head"><div><small>规则版本 v{data.rule_version}</small><h3>{stock.name} · 形态事实</h3></div><span>{formatDate(current.trade_date)}</span></div>{current.matches.map(match => <article key={match.category}><div><span>{patternNames[match.category]}</span><b>{match.score.toFixed(1)} 分</b></div><p>匹配 · 阈值 {match.minimum_score ?? data.rules[match.category]?.minimum_score} 分</p><ul>{match.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul><dl>{Object.entries(match.metrics).slice(0, 6).map(([key, value]) => <span key={key}><dt>{metricLabel(key)}</dt><dd>{fmtMetric(key, value)}</dd></span>)}</dl></article>)}<PatternDates data={data} />{current.run_warnings.map(item => <p className="panel-warning" key={item}>{item}</p>)}<div className="pattern-history"><b>形态历史</b>{data.history.slice(0, 6).map(item => <span key={`${item.run_id}-${item.created_at}`}><em>{formatDate(item.trade_date)}</em><strong>{item.status === "matched" ? item.matches.map(match => patternNames[match.category]).join("、") : item.status === "no_match" ? "无匹配" : "未计算"}</strong></span>)}</div><Link className="pattern-link" href={`/?code=${stock.code}`}>到选股看板查看该股记录</Link></div>;
 }
 
-function PatternDates({ data }: { data: PatternResponse }) { return <div className="panel-dates"><b>数据表日期</b><span>行情 {formatDate(data.as_of.daily_kline || data.as_of.daily)}</span><span>估值 {formatDate(data.as_of.daily_basic || data.as_of.valuation)}</span><span>ST {formatDate(data.as_of.stock_st || data.as_of.st)}</span><span>复权 {formatDate(data.as_of.adj_factor)}</span></div>; }
+function PatternDates({ data }: { data?: PatternResponse | null }) { return data ? <div className="panel-dates"><b>本机最新可用快照</b><span>行情 {formatDate(data.as_of.daily_kline || data.as_of.daily)}</span><span>估值 {formatDate(data.as_of.daily_basic || data.as_of.valuation)}</span><span>ST {formatDate(data.as_of.stock_st || data.as_of.st)}</span><span>复权 {formatDate(data.as_of.adj_factor)}</span></div> : null; }
 function UnavailablePanel({ tab }: { tab: RightTab }) { return <PanelEmpty title={`${tab} · 暂不可用`} text={`${tab}能力尚未实现，本版本只保留禁用入口。`} />; }
 function PanelEmpty({ title, text }: { title: string; text: string }) { return <div className="right-placeholder"><CircleDot /><h3>{title}</h3><p>{text}</p></div>; }
 function QuoteFact({ label, value }: { label: string; value: string }) { return <span><small>{label}</small><b>{value}</b></span>; }

@@ -72,9 +72,12 @@ export type ChartDrawing = {
 export type MarketChartHandle = {
   resize: () => void;
   fitContent: () => void;
+  resetDefault: () => void;
   getChart: () => IChartApi | null;
   deleteSelectedDrawing: () => void;
 };
+
+type PriceScaleMode = "auto" | "locked" | "free";
 
 type Props = {
   bars: Bar[];
@@ -105,6 +108,9 @@ type Props = {
   rightPaddingBars?: number;
   /** Disable only when a parent intentionally manages the logical range itself. */
   fitContentOnDataChange?: boolean;
+  /** The main terminal supplies this to restore its canonical D/6M parent state. */
+  onResetDefault?: () => void;
+  enablePriceScaleMenu?: boolean;
 };
 
 export type NormalizedChartBar = {
@@ -471,6 +477,8 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   visibleCount,
   rightPaddingBars,
   fitContentOnDataChange = true,
+  onResetDefault,
+  enablePriceScaleMenu = false,
 }, forwardedRef) {
   const host = useRef<HTMLDivElement>(null);
   const overlay = useRef<HTMLCanvasElement>(null);
@@ -495,6 +503,8 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   const previousTimeline = useRef<string[]>([]);
   const fontAdjustmentRef = useRef(0);
   const [internalSelected, setInternalSelected] = useState<number | null>(null);
+  const [priceScaleMode, setPriceScaleMode] = useState<PriceScaleMode>("auto");
+  const [priceMenu, setPriceMenu] = useState<{ left: number; top: number } | null>(null);
   const activeSelected = selectedDrawingIndex === undefined ? internalSelected : selectedDrawingIndex;
   const normalizedBars = useMemo(() => normalizeChartBars(bars), [bars]);
 
@@ -546,12 +556,89 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     selectDrawing(null);
   }, [onDrawingDelete, onDrawingsChange, selectDrawing]);
 
+  const syncPriceGeometry = useCallback(() => {
+    const container = host.current;
+    const chart = chartRef.current;
+    if (!container || !chart) return;
+    const range = chart.priceScale("right").getVisibleRange();
+    if (range) {
+      container.dataset.priceFrom = range.from.toFixed(4);
+      container.dataset.priceTo = range.to.toFixed(4);
+      container.dataset.priceSpan = Math.abs(range.to - range.from).toFixed(4);
+    }
+  }, []);
+
+  const resetDefault = useCallback(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    setPriceScaleMode("auto");
+    chart.applyOptions({
+      handleScale: {
+        mouseWheel: true,
+        pinch: true,
+        axisPressedMouseMove: { time: true, price: true },
+        axisDoubleClickReset: { time: true, price: true },
+      },
+    });
+    chart.priceScale("right").setAutoScale(true);
+    const count = visibleCount == null ? normalizedBars.length : Math.max(1, Math.floor(visibleCount));
+    const padding = Math.max(0, Math.floor(rightPaddingBars || 0));
+    if (normalizedBars.length > 0 && (count < normalizedBars.length || padding > 0)) {
+      chart.timeScale().setVisibleLogicalRange({
+        from: Math.max(0, normalizedBars.length - count),
+        to: normalizedBars.length - 1 + padding,
+      });
+    } else {
+      chart.timeScale().fitContent();
+    }
+    requestAnimationFrame(syncPriceGeometry);
+  }, [normalizedBars.length, rightPaddingBars, syncPriceGeometry, visibleCount]);
+
+  const changePriceScaleMode = useCallback((mode: PriceScaleMode) => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (mode === "auto") {
+      resetDefault();
+      onResetDefault?.();
+    } else {
+      chart.priceScale("right").setAutoScale(false);
+      chart.applyOptions({
+        handleScale: {
+          mouseWheel: true,
+          pinch: true,
+          axisPressedMouseMove: { time: true, price: mode === "free" },
+          axisDoubleClickReset: { time: true, price: mode === "free" },
+        },
+      });
+      setPriceScaleMode(mode);
+      requestAnimationFrame(syncPriceGeometry);
+    }
+    setPriceMenu(null);
+  }, [onResetDefault, resetDefault, syncPriceGeometry]);
+
   useImperativeHandle(forwardedRef, () => ({
     resize,
     fitContent: () => chartRef.current?.timeScale().fitContent(),
+    resetDefault,
     getChart: () => chartRef.current,
     deleteSelectedDrawing,
-  }), [deleteSelectedDrawing, resize]);
+  }), [deleteSelectedDrawing, resetDefault, resize]);
+
+  useEffect(() => {
+    if (!priceMenu) return;
+    const close = () => setPriceMenu(null);
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("blur", close);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [priceMenu]);
 
   useEffect(() => {
     if (!host.current) return;
@@ -602,6 +689,11 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       onNeedOlderRef.current?.(earliest);
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(visibleRangeChanged);
+    const updateGeometryAfterGesture = () => {
+      requestAnimationFrame(() => requestAnimationFrame(syncPriceGeometry));
+    };
+    container.addEventListener("pointerup", updateGeometryAfterGesture, true);
+    container.addEventListener("wheel", updateGeometryAfterGesture, true);
 
     const observer = new ResizeObserver(resize);
     observer.observe(container);
@@ -613,6 +705,8 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       observer.disconnect();
       window.removeEventListener("resize", resize);
       document.removeEventListener("fullscreenchange", resize);
+      container.removeEventListener("pointerup", updateGeometryAfterGesture, true);
+      container.removeEventListener("wheel", updateGeometryAfterGesture, true);
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(visibleRangeChanged);
       chart.remove();
       chartRef.current = null;
@@ -622,7 +716,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       ma10Ref.current = null;
       ma20Ref.current = null;
     };
-  }, [resize]);
+  }, [resize, syncPriceGeometry]);
 
   useEffect(() => {
     const syncFontSize = () => {
@@ -663,19 +757,24 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       } else {
         chartRef.current?.timeScale().fitContent();
       }
+      setPriceScaleMode("auto");
+      chartRef.current?.priceScale("right").setAutoScale(true);
     }
     if (timeline[0] !== previous[0]) earliestRequestRef.current = null;
-    requestAnimationFrame(() => requestAnimationFrame(() => onRendered?.(performance.now() - started)));
-  }, [fitContentOnDataChange, normalizedBars, onRendered, rightPaddingBars, visibleCount]);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      syncPriceGeometry();
+      onRendered?.(performance.now() - started);
+    }));
+  }, [fitContentOnDataChange, normalizedBars, onRendered, rightPaddingBars, syncPriceGeometry, visibleCount]);
 
   useEffect(() => {
     chartRef.current?.applyOptions({
       crosshair: { mode: crosshairEnabled ? CrosshairMode.Normal : CrosshairMode.Hidden },
-      rightPriceScale: { autoScale: true, scaleMargins: compact ? { top: 0.1, bottom: 0.28 } : { top: 0.08, bottom: 0.28 } },
+      rightPriceScale: { autoScale: priceScaleMode === "auto", scaleMargins: compact ? { top: 0.1, bottom: 0.28 } : { top: 0.08, bottom: 0.28 } },
       timeScale: { barSpacing: compact ? 7 : 6 },
     });
     resize();
-  }, [compact, crosshairEnabled, resize]);
+  }, [compact, crosshairEnabled, priceScaleMode, resize]);
 
   useEffect(() => {
     drawingsRef.current = drawings;
@@ -904,6 +1003,22 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     }
   }
 
+  function openPriceScaleMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!enablePriceScaleMenu) return;
+    const chart = chartRef.current;
+    const container = host.current;
+    if (!chart || !container) return;
+    const bounds = container.getBoundingClientRect();
+    const priceScaleWidth = chart.priceScale("right").width();
+    if (event.clientX < bounds.right - priceScaleWidth - 2) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setPriceMenu({
+      left: Math.max(8, Math.min(event.clientX, window.innerWidth - 244)),
+      top: Math.max(8, Math.min(event.clientY, window.innerHeight - 220)),
+    });
+  }
+
   const normalizedCount = normalizedBars.length;
   const interactive = Boolean(drawingMode && (drawingMode !== "select" || drawings.length > 0));
   return <div
@@ -921,6 +1036,8 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     data-drawing-kinds={drawings.map(drawing => drawing.kind).join(",")}
     data-drawing-styles={drawings.map(drawing => `${drawing.color || "#111315"}:${drawing.lineWidth || 1.5}`).join(",")}
     data-selected-drawing={activeSelected ?? ""}
+    data-price-scale-mode={priceScaleMode}
+    onContextMenuCapture={openPriceScaleMenu}
   >
     <canvas
       ref={overlay}
@@ -935,5 +1052,23 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       onPointerLeave={pointerLeave}
       onDoubleClick={doubleClick}
     />
+    {enablePriceScaleMenu && priceMenu && <div
+      className="price-scale-menu"
+      role="menu"
+      aria-label="价格刻度设置"
+      style={{ left: priceMenu.left, top: priceMenu.top }}
+      onPointerDown={event => event.stopPropagation()}
+    >
+      <b>价格刻度</b>
+      <button role="menuitemradio" aria-checked={priceScaleMode === "auto"} onClick={() => changePriceScaleMode("auto")}>
+        <span>自动适配 / 恢复默认</span><small>6个月视窗、右侧留白、当前价格范围</small>
+      </button>
+      <button role="menuitemradio" aria-checked={priceScaleMode === "locked"} onClick={() => changePriceScaleMode("locked")}>
+        <span>锁定价格比例</span><small>保持纵向比例，可水平拖动时间轴</small>
+      </button>
+      <button role="menuitemradio" aria-checked={priceScaleMode === "free"} onClick={() => changePriceScaleMode("free")}>
+        <span>自由价格比例</span><small>可拖动右侧价格轴改变纵向范围</small>
+      </button>
+    </div>}
   </div>;
 });

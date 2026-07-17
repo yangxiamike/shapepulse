@@ -381,6 +381,13 @@ button.top-card { color: inherit; }
 .drawing-overlay.drawing { cursor: crosshair; }
 .drawing-overlay.selecting { cursor: default; }
 .drawing-overlay[data-drawing-phase="awaiting-second-point"] { cursor: crosshair; }
+.price-scale-menu { position: fixed; z-index: 180; width: min(236px,calc(100vw - 16px)); padding: 7px; color: var(--ink); background: rgba(255,254,251,.98); border: 1px solid #777a78; border-radius: 9px; box-shadow: 0 14px 36px rgba(5,8,10,.22); }
+.price-scale-menu > b { display: block; padding: 5px 8px 7px; color: var(--muted); font-size: calc(11px + var(--ui-font-adjust)); }
+.price-scale-menu button { width: 100%; min-height: 46px; padding: 6px 8px 6px 28px; position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; text-align: left; background: transparent; border: 0; border-radius: 6px; }
+.price-scale-menu button:hover, .price-scale-menu button[aria-checked="true"] { background: rgba(145,233,200,.28); }
+.price-scale-menu button[aria-checked="true"]::before { content: "✓"; position: absolute; left: 9px; top: 13px; color: var(--mint-deep); font-weight: 900; }
+.price-scale-menu button span { font-size: calc(12px + var(--ui-font-adjust)); font-weight: 750; }
+.price-scale-menu button small { color: var(--muted); font-size: calc(10px + var(--ui-font-adjust)); line-height: 1.35; }
 .chart-loading { position: absolute; top: 10px; left: 58px; z-index: 15; padding: 7px 11px; color: #fff; background: rgba(8,12,14,.82); border-radius: 6px; font-size: calc(12px + var(--ui-font-adjust)); }
 .chart-error { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); }
 .chart-error button { padding: 8px 16px; color: #fff; background: var(--ink); border: 0; border-radius: 7px; }
@@ -416,10 +423,14 @@ button.top-card { color: inherit; }
 .right-placeholder svg { width: 44px; height: 44px; stroke-width: 1.4; }
 .right-placeholder h3 { margin-bottom: 4px; color: var(--ink); }
 .right-placeholder p { max-width: 235px; font-size: calc(13px + var(--ui-font-adjust)); line-height: 1.7; }
-.pattern-workspace { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.pattern-workspace { min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .pattern-pool-section, .pattern-facts-section { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.pattern-pool-section { flex: 1.15 1 54%; min-height: 230px; border-bottom: 2px solid #b7b3aa; }
-.pattern-facts-section { flex: 1 1 46%; min-height: 210px; }
+.pattern-pool-section { height: var(--pattern-pool-height,54%); flex: 0 0 var(--pattern-pool-height,54%); }
+.pattern-facts-section { flex: 1 1 auto; }
+.pattern-splitter { position: relative; z-index: 3; height: 10px; flex: 0 0 10px; cursor: row-resize; touch-action: none; background: #eeebe4; border-top: 1px solid #c1bdb4; border-bottom: 1px solid #c1bdb4; }
+.pattern-splitter span { position: absolute; top: 3px; left: 50%; width: 34px; height: 3px; transform: translateX(-50%); background: #817e78; border-radius: 3px; }
+.pattern-splitter:hover, .pattern-splitter:focus-visible { background: rgba(40,92,245,.12); outline: 0; }
+.pattern-splitter:hover span, .pattern-splitter:focus-visible span { background: var(--blue); }
 .panel-section-heading { min-height: 40px; padding: 0 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #f4f1ea; border-bottom: 1px solid var(--line); }
 .panel-section-heading b { font-size: calc(13px + var(--ui-font-adjust)); }
 .panel-section-heading span { overflow: hidden; color: var(--muted); font-size: calc(11px + var(--ui-font-adjust)); white-space: nowrap; text-overflow: ellipsis; }
@@ -452,6 +463,7 @@ button.top-card { color: inherit; }
 .pattern-empty p { color: var(--muted); line-height: 1.7; }
 .pattern-empty .panel-dates { width: 100%; margin: 14px 0; text-align: left; }
 .pattern-empty a, .pattern-link { padding: 10px 12px; color: #fff; background: var(--ink); border-radius: 8px; font-size: calc(13px + var(--ui-font-adjust)); }
+.pattern-empty > button { padding: 9px 14px; color: #fff; background: var(--ink); border: 0; border-radius: 8px; }
 .panel-error button { padding: 8px 16px; color: #fff; background: var(--ink); border: 0; border-radius: 7px; }
 .pattern-panel-head { display: flex; justify-content: space-between; gap: 10px; }
 .pattern-panel-head small { color: var(--muted); }

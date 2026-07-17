@@ -155,7 +155,8 @@ test.describe.serial("v1.2.1 interaction acceptance", () => {
     await page.keyboard.press("ArrowDown");
     await expect.poll(() => activePoolCode(pool)).not.toBe(firstCode);
     const keyboardCode = await activePoolCode(pool);
-    await expect(page.getByRole("button", { name: "周K", exact: true })).toHaveClass(/active/);
+    await expect(page.getByRole("button", { name: "日K", exact: true })).toHaveClass(/active/);
+    await expect(page.getByRole("button", { name: "6个月", exact: true })).toHaveClass(/active/);
     await expect(page.locator(".chart-pane")).toHaveCount(2);
     await expect(page.getByTestId("pattern-group-select")).toHaveValue("pullback");
     await expect.poll(() => new URL(page.url()).searchParams.get("category")).toBe("pullback");
@@ -164,15 +165,11 @@ test.describe.serial("v1.2.1 interaction acceptance", () => {
     if (!poolBox) throw new Error("pattern pool is not visible");
     await page.mouse.move(poolBox.x + poolBox.width / 2, poolBox.y + poolBox.height / 2);
     const wheelStarted = performance.now();
+    const scrollBefore = await pool.evaluate(element => element.scrollTop);
     await page.mouse.wheel(0, 180);
-    await expect.poll(() => activePoolCode(pool)).not.toBe(keyboardCode);
+    await expect.poll(() => pool.evaluate(element => element.scrollTop)).toBeGreaterThan(scrollBefore);
+    await expect.poll(() => activePoolCode(pool)).toBe(keyboardCode);
     const wheelFeedbackMs = performance.now() - wheelStarted;
-    const activeButton = pool.locator("button[aria-current=true]");
-    expect(await activeButton.evaluate(button => {
-      const item = button.getBoundingClientRect();
-      const bounds = button.parentElement!.getBoundingClientRect();
-      return item.top >= bounds.top - 1 && item.bottom <= bounds.bottom + 1;
-    })).toBe(true);
 
     const divider = page.getByTestId("market-right-resizer");
     await expect(divider).toBeVisible();
@@ -216,7 +213,7 @@ test.describe.serial("v1.2.1 interaction acceptance", () => {
     expect(collapseFeedbackMs).toBeLessThanOrEqual(100);
     expect(rightResizeFeedbackMs).toBeLessThanOrEqual(250);
     expect(errors).toEqual([]);
-    evidence.push({ gate: "G3-G5", keyboard_code: keyboardCode, wheel_feedback_ms: round(wheelFeedbackMs), collapse_feedback_ms: round(collapseFeedbackMs), rightbar_resize: { before: beforeWidth, after: Number(await divider.getAttribute("aria-valuenow")), feedback_ms: round(rightResizeFeedbackMs) }, context: { period: "W", layout: 2, category: "pullback" }, result: "pass" });
+    evidence.push({ gate: "G3-G5", keyboard_code: keyboardCode, wheel_scroll_only: true, wheel_feedback_ms: round(wheelFeedbackMs), collapse_feedback_ms: round(collapseFeedbackMs), rightbar_resize: { before: beforeWidth, after: Number(await divider.getAttribute("aria-valuenow")), feedback_ms: round(rightResizeFeedbackMs) }, context: { period: "D", range: "6M", layout: 2, category: "pullback" }, result: "pass" });
   });
 
   test("board readability, complete Top K semantics and both responsive layouts", async ({ page }) => {

@@ -216,6 +216,7 @@ export type PatternResponse = {
   ts_code: string;
   calculation_state: "not_calculated" | "calculated_no_match" | "matched";
   message: string;
+  source?: "current_local_snapshot" | string;
   current: PatternEvaluation | null;
   history: PatternEvaluation[];
   rule_version: number;
