@@ -7,8 +7,11 @@ TOP_N = 100
 LOOKBACK_TRADING_DAYS = 120
 SAMPLE_EVERY = 5
 SAMPLE_COUNT = 24
-DEFAULT_VISIBLE_INDUSTRIES = 16
+DEFAULT_VISIBLE_INDUSTRIES = 12
+RECENT_WINDOW_POINTS = 4
+MIN_DIRECTIONAL_SLOTS = 4
 RAPID_START_DELTA = 3
+SLOPE_EPSILON = 0.25
 
 
 def fixed_sample_dates(trade_dates: list[str]) -> list[str]:
@@ -16,6 +19,11 @@ def fixed_sample_dates(trade_dates: list[str]) -> list[str]:
     dates = sorted(dict.fromkeys(str(value) for value in trade_dates if value))
     window = dates[-LOOKBACK_TRADING_DAYS:]
     return window[4::SAMPLE_EVERY]
+
+
+def latest_first(values: list[Any]) -> list[Any]:
+    """Return a copy ordered newest-to-oldest for the heatmap reading direction."""
+    return list(reversed(values))
 
 
 def heat_level(percent: float) -> int:
@@ -33,51 +41,139 @@ def heat_level(percent: float) -> int:
     return 5
 
 
-def industry_status(counts: list[int], current_rank: int) -> str:
+def recent_slope(counts: list[int]) -> float:
+    """Return the least-squares slope of the latest four sample points."""
+    values = [float(value) for value in counts[-RECENT_WINDOW_POINTS:]]
+    if len(values) < 2:
+        return 0.0
+    x_mean = (len(values) - 1) / 2
+    denominator = sum((index - x_mean) ** 2 for index in range(len(values)))
+    if denominator == 0:
+        return 0.0
+    y_mean = sum(values) / len(values)
+    slope = sum(
+        (index - x_mean) * (value - y_mean)
+        for index, value in enumerate(values)
+    ) / denominator
+    return round(slope, 2)
+
+
+def recent_persistence(counts: list[int], slope: float | None = None) -> float:
+    """Share of recent intervals moving in the same direction as the slope."""
+    values = counts[-RECENT_WINDOW_POINTS:]
+    if len(values) < 2:
+        return 0.0
+    resolved_slope = recent_slope(values) if slope is None else slope
+    if abs(resolved_slope) < SLOPE_EPSILON:
+        return 0.0
+    deltas = [current - previous for previous, current in zip(values, values[1:])]
+    matching = sum(
+        delta > 0 if resolved_slope > 0 else delta < 0
+        for delta in deltas
+    )
+    return round(matching / len(deltas), 2)
+
+
+def _latest_effective_count(row: dict[str, Any]) -> int:
+    return next(
+        (
+            int(value)
+            for value in reversed(row["counts"][-RECENT_WINDOW_POINTS:])
+            if int(value) > 0
+        ),
+        0,
+    )
+
+
+def rotation_observation_key(row: dict[str, Any]) -> tuple[Any, ...]:
+    """Stable activity order: speed, persistence, effective level, then code."""
+    return (
+        -abs(float(row["recent_slope"])),
+        -float(row["recent_persistence"]),
+        -_latest_effective_count(row),
+        str(row["code"]),
+    )
+
+
+def select_active_industries(
+    rows: list[dict[str, Any]],
+    limit: int = DEFAULT_VISIBLE_INDUSTRIES,
+) -> list[dict[str, Any]]:
+    """Choose active rows while reserving both rising and falling observations."""
+    eligible = [
+        row
+        for row in rows
+        if any(int(value) != 0 for value in row["counts"][-RECENT_WINDOW_POINTS:])
+    ]
+    rising = sorted(
+        (row for row in eligible if row["recent_slope"] >= SLOPE_EPSILON),
+        key=rotation_observation_key,
+    )
+    falling = sorted(
+        (row for row in eligible if row["recent_slope"] <= -SLOPE_EPSILON),
+        key=rotation_observation_key,
+    )
+    selected: list[dict[str, Any]] = []
+    selected_codes: set[str] = set()
+
+    def append(row: dict[str, Any]) -> None:
+        if row["code"] not in selected_codes and len(selected) < limit:
+            selected.append(row)
+            selected_codes.add(row["code"])
+
+    for row in rising[:MIN_DIRECTIONAL_SLOTS]:
+        append(row)
+    for row in falling[:MIN_DIRECTIONAL_SLOTS]:
+        append(row)
+    for row in sorted(eligible, key=rotation_observation_key):
+        append(row)
+
+    return sorted(
+        selected,
+        key=lambda row: (
+            -float(row["recent_slope"]),
+            -float(row["recent_persistence"]),
+            -_latest_effective_count(row),
+            str(row["code"]),
+        ),
+    )
+
+
+def industry_status(
+    counts: list[int],
+    current_rank: int,
+    slope: float | None = None,
+    persistence: float | None = None,
+) -> str:
     if not counts:
         return "暂无数据"
     current = counts[-1]
     previous = counts[-2] if len(counts) > 1 else 0
-    if previous == 0 and current >= RAPID_START_DELTA:
-        return "新进入行业"
-    if len(counts) >= 4 and counts[-4] < counts[-3] < counts[-2] < counts[-1]:
-        return "持续增强"
-    if len(counts) >= 3 and counts[-3] < counts[-2] < counts[-1]:
-        return "正在增强"
-    if current - previous >= RAPID_START_DELTA:
-        return "快速启动"
+    resolved_slope = recent_slope(counts) if slope is None else slope
+    resolved_persistence = (
+        recent_persistence(counts, resolved_slope)
+        if persistence is None
+        else persistence
+    )
+    if (
+        resolved_slope >= SLOPE_EPSILON
+        and previous <= 1
+        and current - previous >= RAPID_START_DELTA
+    ):
+        return "↗ 快速启动"
+    if resolved_slope >= SLOPE_EPSILON and resolved_persistence >= 0.66:
+        return "↑ 持续增强"
+    if resolved_slope >= SLOPE_EPSILON:
+        return "↑ 正在增强"
     if (
         current_rank <= 5
-        and len(counts) >= 3
-        and counts[-3] > counts[-2] > counts[-1]
+        and resolved_slope <= -SLOPE_EPSILON
+        and max(counts[-RECENT_WINDOW_POINTS:]) > current
     ):
-        return "高位退潮"
-    if len(counts) >= 3 and counts[-3] > counts[-2] > counts[-1]:
-        return "正在走弱"
-    return "相对稳定"
-
-
-def _forced_visible_codes(
-    ordered_rows: list[dict[str, Any]], current_top_codes: list[str]
-) -> list[str]:
-    visible = [row["code"] for row in ordered_rows[:DEFAULT_VISIBLE_INDUSTRIES]]
-    protected = set(current_top_codes)
-    for code in current_top_codes:
-        if code in visible:
-            continue
-        replacement = next(
-            (
-                candidate
-                for candidate in reversed(visible)
-                if candidate not in protected
-            ),
-            None,
-        )
-        if replacement is None:
-            break
-        visible[visible.index(replacement)] = code
-    order = {row["code"]: index for index, row in enumerate(ordered_rows)}
-    return sorted(dict.fromkeys(visible), key=lambda code: order[code])
+        return "⇣ 高位退潮"
+    if resolved_slope <= -SLOPE_EPSILON:
+        return "↓ 正在走弱"
+    return "→ 变化不大"
 
 
 def build_industry_strength(
@@ -128,7 +224,11 @@ def build_industry_strength(
     rows: list[dict[str, Any]] = []
     latest_date = sample_dates[-1]
     previous_date = sample_dates[-2] if len(sample_dates) > 1 else latest_date
-    four_back_date = sample_dates[-5] if len(sample_dates) >= 5 else sample_dates[0]
+    recent_start_date = (
+        sample_dates[-RECENT_WINDOW_POINTS]
+        if len(sample_dates) >= RECENT_WINDOW_POINTS
+        else sample_dates[0]
+    )
     for code, item in catalog.items():
         points = []
         counts: list[int] = []
@@ -150,17 +250,26 @@ def build_industry_strength(
                     "stocks": stocks,
                 }
             )
+        slope = recent_slope(counts)
+        persistence = recent_persistence(counts, slope)
+        current_count = len(by_industry[code][latest_date])
+        recent_change = current_count - len(by_industry[code][recent_start_date])
         rows.append(
             {
                 **item,
                 "points": points,
                 "counts": counts,
-                "current_count": len(by_industry[code][latest_date]),
-                "current_percent": float(len(by_industry[code][latest_date])),
-                "change_previous": len(by_industry[code][latest_date])
+                "current_count": current_count,
+                "current_percent": float(current_count),
+                "change_previous": current_count
                 - len(by_industry[code][previous_date]),
-                "change_four_samples": len(by_industry[code][latest_date])
-                - len(by_industry[code][four_back_date]),
+                "change_four_samples": recent_change,
+                "recent_change": recent_change,
+                "recent_slope": slope,
+                "recent_persistence": persistence,
+                "latest_effective_percent": float(
+                    next((value for value in reversed(counts[-RECENT_WINDOW_POINTS:]) if value > 0), 0)
+                ),
                 "cumulative_count": sum(counts),
                 "stocks": by_industry[code][latest_date],
             }
@@ -174,30 +283,44 @@ def build_industry_strength(
             row["code"],
         ),
     )
-    for rank, row in enumerate(current_sorted, 1):
-        row["rank"] = rank
-        row["status"] = industry_status(row["counts"], rank)
+    for current_rank, row in enumerate(current_sorted, 1):
+        row["rank"] = current_rank
+        row["current_rank"] = current_rank
+        row["status"] = industry_status(
+            row["counts"],
+            current_rank,
+            row["recent_slope"],
+            row["recent_persistence"],
+        )
+        row["status_detail"] = (
+            f"{row['recent_slope']:+.2f} 只/采样点 · "
+            f"{round(row['recent_persistence'] * 3):.0f}/3 个间隔同向"
+        )
 
-    heatmap_rows = sorted(
+    rotation_ranking = sorted(rows, key=rotation_observation_key)
+    for rotation_rank, row in enumerate(rotation_ranking, 1):
+        row["rotation_rank"] = rotation_rank
+
+    all_heatmap_rows = sorted(
         rows,
-        key=lambda row: (-row["cumulative_count"], -row["current_count"], row["code"]),
+        key=lambda row: (
+            -float(row["recent_slope"]),
+            -float(row["recent_persistence"]),
+            -_latest_effective_count(row),
+            str(row["code"]),
+        ),
     )
-    current_top_codes = [row["code"] for row in current_sorted[:10]]
-    default_visible_codes = _forced_visible_codes(heatmap_rows, current_top_codes)
+    selected_rows = select_active_industries(rows)
+    default_visible_codes = [row["code"] for row in selected_rows]
     visible_set = set(default_visible_codes)
-    folded_rows = [row for row in heatmap_rows if row["code"] not in visible_set]
-    folded_current_count = sum(row["current_count"] for row in folded_rows)
+    hidden_rows = [row for row in rows if row["code"] not in visible_set]
 
     active = [row for row in current_sorted if row["current_count"] > 0]
     strongest = active[0] if active else None
-    strongest_gain = max(
-        active, key=lambda row: (row["change_four_samples"], row["current_count"])
-    ) if active else None
-    weakening = [row for row in rows if row["change_four_samples"] < 0]
-    strongest_loss = min(
-        weakening,
-        key=lambda row: (row["change_four_samples"], -row["current_count"]),
-    ) if weakening else None
+    rising = [row for row in rows if row["recent_slope"] >= SLOPE_EPSILON]
+    falling = [row for row in rows if row["recent_slope"] <= -SLOPE_EPSILON]
+    strongest_gain = min(rising, key=rotation_observation_key) if rising else None
+    strongest_loss = min(falling, key=rotation_observation_key) if falling else None
     top_three_share = float(sum(row["current_count"] for row in current_sorted[:3]))
     previous_order = sorted(
         rows,
@@ -210,14 +333,18 @@ def build_industry_strength(
     new_top_ten = [
         row for row in current_sorted[:10] if row["code"] not in previous_top_ten
     ]
-    four_back_top_three = sorted(
+    recent_start_top_three = sorted(
         (
-            next(point["count"] for point in row["points"] if point["date"] == four_back_date)
+            next(
+                point["count"]
+                for point in row["points"]
+                if point["date"] == recent_start_date
+            )
             for row in rows
         ),
         reverse=True,
     )[:3]
-    concentration_delta = top_three_share - float(sum(four_back_top_three))
+    concentration_delta = top_three_share - float(sum(recent_start_top_three))
     concentration_state = (
         "集中"
         if concentration_delta >= 5
@@ -227,34 +354,40 @@ def build_industry_strength(
     )
 
     summary: list[str] = []
-    if strongest:
+    if strongest_gain:
         summary.append(
-            f"当前最强为{strongest['name']}，占 Top 100 的 {strongest['current_percent']:.0f}%."
+            f"{strongest_gain['name']}上升最快，近 4 个节点斜率"
+            f" {strongest_gain['recent_slope']:+.2f} 只/采样点，"
+            f"合计变化 {strongest_gain['recent_change']:+d} 只。"
         )
-    persistent = [row for row in current_sorted if row["status"] == "持续增强"]
+    if strongest_loss:
+        summary.append(
+            f"{strongest_loss['name']}下降最快，近 4 个节点斜率"
+            f" {strongest_loss['recent_slope']:+.2f} 只/采样点，"
+            f"合计变化 {strongest_loss['recent_change']:+d} 只。"
+        )
+    persistent = [row for row in rows if row["status"] == "↑ 持续增强"]
     if persistent:
         summary.append(
-            f"{'、'.join(row['name'] for row in persistent[:3])}连续 3 个采样间隔上升，处于持续增强。"
+            f"{'、'.join(row['name'] for row in sorted(persistent, key=rotation_observation_key)[:3])}"
+            f"近 3 个间隔至少 2 次同向上升，共 {len(persistent)} 个行业持续增强。"
         )
-    rapid = [
-        row
-        for row in current_sorted
-        if row["change_previous"] >= RAPID_START_DELTA
-        or row["status"] == "新进入行业"
-    ]
+    rapid = [row for row in rows if row["status"] == "↗ 快速启动"]
     if rapid:
         summary.append(
-            f"{'、'.join(row['name'] for row in rapid[:3])}单次增加至少 {RAPID_START_DELTA} 只，属于快速启动。"
-        )
-    retreat = [row for row in current_sorted if row["status"] == "高位退潮"]
-    if retreat:
-        summary.append(
-            f"{'、'.join(row['name'] for row in retreat[:3])}仍居前五但连续回落，呈现高位退潮。"
+            f"{'、'.join(row['name'] for row in sorted(rapid, key=rotation_observation_key)[:3])}"
+            f"从低位单次增加至少 {RAPID_START_DELTA} 只，属于刚启动。"
         )
     summary.append(
-        f"前三行业合计 {top_three_share:.0f}%，较 4 个采样点前"
-        f"{abs(concentration_delta):.0f} 个百分点，行业分布{concentration_state}。"
+        f"近 4 个节点有 {len(rising)} 个行业上升、{len(falling)} 个行业下降；"
+        f"前三行业合计 {top_three_share:.0f}%，较窗口起点"
+        f"{concentration_delta:+.0f} 个百分点，行业分布{concentration_state}。"
     )
+    if strongest:
+        summary.append(
+            f"绝对水平次要参考：当前数量最多的是{strongest['name']}，"
+            f"占 Top 100 的 {strongest['current_percent']:.0f}%。"
+        )
 
     output_warnings = list(warnings or [])
     incomplete_dates = [
@@ -303,13 +436,24 @@ def build_industry_strength(
             else strongest_gain["name"],
             "fastest_strengthening_change": 0
             if not strongest_gain
-            else strongest_gain["change_four_samples"],
+            else strongest_gain["recent_change"],
+            "fastest_strengthening_speed": 0
+            if not strongest_gain
+            else strongest_gain["recent_slope"],
             "fastest_weakening": None
             if not strongest_loss
             else strongest_loss["name"],
             "fastest_weakening_change": 0
             if not strongest_loss
-            else strongest_loss["change_four_samples"],
+            else strongest_loss["recent_change"],
+            "fastest_weakening_speed": 0
+            if not strongest_loss
+            else strongest_loss["recent_slope"],
+            "just_started_industry": None if not rapid else rapid[0]["name"],
+            "just_started_count": len(rapid),
+            "persistent_strengthening_count": len(persistent),
+            "rising_industry_count": len(rising),
+            "falling_industry_count": len(falling),
             "top_three_percent": top_three_share,
             "new_top_ten_count": len(new_top_ten),
             "concentration_state": concentration_state,
@@ -318,18 +462,24 @@ def build_industry_strength(
         "analysis": summary,
         "rules": {
             "rapid_start_delta": RAPID_START_DELTA,
-            "rapid_start_explanation": "单个 5 交易日采样间隔增加至少 3 只（3 个百分点）",
+            "rapid_start_explanation": "从低位单个 5 交易日采样间隔增加至少 3 只（3 个百分点）",
             "high_rank_cutoff": 5,
+            "recent_window_points": RECENT_WINDOW_POINTS,
+            "slope_explanation": "最近 4 个采样点做线性回归；斜率单位为只/采样点，正数上升、负数下降",
+            "stable_sort_explanation": "同速时依次按方向持续性、最新有效占比、行业代码排序",
+            "directional_slots": MIN_DIRECTIONAL_SLOTS,
         },
         "display": {
-            "default_visible_count": min(DEFAULT_VISIBLE_INDUSTRIES, len(rows)),
+            "default_visible_count": len(default_visible_codes),
             "default_visible_codes": default_visible_codes,
-            "folded_count": len(folded_rows),
-            "folded_current_count": folded_current_count,
-            "folded_current_percent": float(folded_current_count),
+            "latest_first_dates": latest_first(sample_dates),
+            "hidden_count": len(hidden_rows),
+            "folded_count": 0,
+            "folded_current_count": 0,
+            "folded_current_percent": 0.0,
         },
-        "industries": heatmap_rows,
-        "ranking": current_sorted,
+        "industries": all_heatmap_rows,
+        "ranking": rotation_ranking,
         "actual_top_by_date": actual_top_by_date,
         "missing_industry_by_date": missing_industry_by_date,
         "warnings": output_warnings,

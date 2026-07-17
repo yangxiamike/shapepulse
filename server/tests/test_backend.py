@@ -15,6 +15,11 @@ from server.industry_strength import (
     fixed_sample_dates,
     heat_level,
     industry_status,
+    latest_first,
+    recent_persistence,
+    recent_slope,
+    rotation_observation_key,
+    select_active_industries,
 )
 from server.patterns import (
     _breakout,
@@ -165,12 +170,72 @@ class IndustryStrengthTests(unittest.TestCase):
         self.assertEqual([heat_level(value) for value in [0, 1, 3, 5, 8, 10, 17]], [0, 1, 2, 3, 4, 4, 5])
         self.assertEqual(17.0, float(17))
 
+    def test_recent_four_point_slope_and_persistence_are_linear_and_stable(self):
+        self.assertEqual(recent_slope([99, 0, 1, 2, 3]), 1.0)
+        self.assertEqual(recent_slope([8, 6, 4, 2]), -2.0)
+        self.assertEqual(recent_slope([4, 4, 4, 4]), 0.0)
+        self.assertEqual(recent_persistence([0, 1, 2, 3]), 1.0)
+        self.assertEqual(recent_persistence([0, 2, 1, 3]), 0.67)
+
+    def test_latest_first_order_is_a_copy(self):
+        dates = ["20260101", "20260102", "20260103"]
+        self.assertEqual(latest_first(dates), list(reversed(dates)))
+        self.assertEqual(dates, ["20260101", "20260102", "20260103"])
+
+    def test_active_selection_excludes_zero_and_reserves_both_directions(self):
+        rows: list[dict[str, object]] = []
+        for index in range(6):
+            counts = [0, index + 1, (index + 1) * 2, (index + 1) * 3]
+            slope = recent_slope(counts)
+            rows.append({
+                "code": f"U{index}",
+                "counts": counts,
+                "recent_slope": slope,
+                "recent_persistence": recent_persistence(counts, slope),
+            })
+        for index in range(8):
+            value = index + 1
+            counts = [value * 3, value * 2, value, 0]
+            slope = recent_slope(counts)
+            rows.append({
+                "code": f"D{index}",
+                "counts": counts,
+                "recent_slope": slope,
+                "recent_persistence": recent_persistence(counts, slope),
+            })
+        rows.append({
+            "code": "ZERO",
+            "counts": [0, 0, 0, 0],
+            "recent_slope": 0.0,
+            "recent_persistence": 0.0,
+        })
+        selected = select_active_industries(rows)
+        self.assertEqual(len(selected), 12)
+        self.assertNotIn("ZERO", {row["code"] for row in selected})
+        self.assertGreaterEqual(sum(row["recent_slope"] > 0 for row in selected), 4)
+        self.assertGreaterEqual(sum(row["recent_slope"] < 0 for row in selected), 4)
+        self.assertEqual(
+            [row["recent_slope"] for row in selected],
+            sorted((row["recent_slope"] for row in selected), reverse=True),
+        )
+
+    def test_same_speed_observation_sort_uses_persistence_level_then_code(self):
+        rows = [
+            {"code": "B", "counts": [0, 1, 2, 3], "recent_slope": 1.0, "recent_persistence": 1.0},
+            {"code": "A", "counts": [0, 1, 2, 3], "recent_slope": 1.0, "recent_persistence": 1.0},
+            {"code": "C", "counts": [2, 1, 2, 3], "recent_slope": 1.0, "recent_persistence": 0.67},
+        ]
+        self.assertEqual(
+            [row["code"] for row in sorted(rows, key=rotation_observation_key)],
+            ["A", "B", "C"],
+        )
+
     def test_status_boundaries_are_stable(self):
-        self.assertEqual(industry_status([0, 0, 3], 12), "新进入行业")
-        self.assertEqual(industry_status([0, 0, 2], 12), "相对稳定")
-        self.assertEqual(industry_status([1, 2, 3, 4], 8), "持续增强")
-        self.assertEqual(industry_status([6, 5, 4], 3), "高位退潮")
-        self.assertEqual(industry_status([6, 5, 4], 8), "正在走弱")
+        self.assertEqual(industry_status([0, 0, 0, 3], 12), "↗ 快速启动")
+        self.assertEqual(industry_status([1, 1, 1, 1], 12), "→ 变化不大")
+        self.assertEqual(industry_status([1, 2, 3, 4], 8), "↑ 持续增强")
+        self.assertEqual(industry_status([7, 6, 5, 4], 3), "⇣ 高位退潮")
+        self.assertEqual(industry_status([7, 6, 5, 4], 8), "↓ 正在走弱")
 
     def test_top100_percent_sorting_clip_and_current_top10_promotion(self):
         dates = [f"2026{index:04d}" for index in range(5, 121, 5)]
@@ -206,15 +271,19 @@ class IndustryStrengthTests(unittest.TestCase):
         self.assertEqual(result["sampling"]["sample_count"], 24)
         self.assertEqual(result["scope"]["industry_count"], 31)
         self.assertEqual(result["actual_top_by_date"][dates[-1]], 100)
-        self.assertEqual(result["display"]["default_visible_count"], 16)
-        self.assertEqual(result["display"]["folded_count"], 15)
+        self.assertEqual(result["display"]["default_visible_count"], 12)
+        self.assertEqual(result["display"]["folded_count"], 0)
         self.assertIn("I30", result["display"]["default_visible_codes"])
         current_total = sum(row["current_count"] for row in result["ranking"])
         self.assertEqual(current_total, 100)
         self.assertTrue(all(row["current_percent"] == float(row["current_count"]) for row in result["ranking"]))
         self.assertEqual(
-            [row["rank"] for row in result["ranking"]],
+            sorted(row["rank"] for row in result["ranking"]),
             list(range(1, 32)),
+        )
+        self.assertEqual(
+            result["display"]["latest_first_dates"],
+            list(reversed(dates)),
         )
 
     def test_incomplete_top_and_missing_industry_are_explicit(self):

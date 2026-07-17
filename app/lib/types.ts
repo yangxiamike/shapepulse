@@ -263,9 +263,16 @@ export type IndustryStrengthRow = {
   current_percent: number;
   change_previous: number;
   change_four_samples: number;
+  recent_change: number;
+  recent_slope: number;
+  recent_persistence: number;
+  latest_effective_percent: number;
   cumulative_count: number;
   rank: number;
+  current_rank: number;
+  rotation_rank: number;
   status: string;
+  status_detail: string;
   stocks: IndustryStrengthStock[];
 };
 
@@ -295,8 +302,15 @@ export type IndustryStrengthResponse = {
     strongest_count: number;
     fastest_strengthening: string | null;
     fastest_strengthening_change: number;
+    fastest_strengthening_speed: number;
     fastest_weakening: string | null;
     fastest_weakening_change: number;
+    fastest_weakening_speed: number;
+    just_started_industry: string | null;
+    just_started_count: number;
+    persistent_strengthening_count: number;
+    rising_industry_count: number;
+    falling_industry_count: number;
     top_three_percent: number;
     new_top_ten_count: number;
     concentration_state: string;
@@ -307,10 +321,16 @@ export type IndustryStrengthResponse = {
     rapid_start_delta: number;
     rapid_start_explanation: string;
     high_rank_cutoff: number;
+    recent_window_points: number;
+    slope_explanation: string;
+    stable_sort_explanation: string;
+    directional_slots: number;
   };
   display: {
     default_visible_count: number;
     default_visible_codes: string[];
+    latest_first_dates: string[];
+    hidden_count: number;
     folded_count: number;
     folded_current_count: number;
     folded_current_percent: number;

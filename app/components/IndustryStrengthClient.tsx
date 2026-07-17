@@ -1,11 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type WheelEvent,
+} from "react";
 import {
   Activity,
   CalendarDays,
-  ChevronDown,
-  ChevronUp,
   LoaderCircle,
   RefreshCw,
   TriangleAlert,
@@ -25,14 +32,18 @@ const patternOptions: Array<{ value: PatternKey; label: string }> = [
   { value: "range_bounce", label: "区间下沿反弹" },
 ];
 
-const lineColors = ["#1ca87a", "#285cf5", "#8554e8", "#d28b00", "#ed3f43"];
+const lineColors = ["#0057b8", "#d97706", "#7c3aed", "#0891b2", "#4b5563"];
 
 function inputDate(value: string) {
   return value ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}` : "";
 }
 
-function signed(value: number, suffix = "") {
-  return `${value > 0 ? "+" : ""}${value}${suffix}`;
+function signed(value: number, digits = 0, suffix = "") {
+  return `${value > 0 ? "+" : ""}${value.toFixed(digits)}${suffix}`;
+}
+
+function movementClass(value: number) {
+  return value > 0 ? "rotation-positive" : value < 0 ? "rotation-negative" : "";
 }
 
 export function IndustryStrengthClient() {
@@ -41,20 +52,20 @@ export function IndustryStrengthClient() {
   const [data, setData] = useState<IndustryStrengthResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [expanded, setExpanded] = useState(false);
   const [selectedIndustry, setSelectedIndustry] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
-  const heatScrollRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (nextPattern: PatternKey, nextEndDate?: string) => {
     setLoading(true);
     setError("");
     try {
       const result = await api.industryStrength(nextPattern, nextEndDate);
+      const initialIndustry = result.display.default_visible_codes[0]
+        || result.ranking[0]?.code
+        || "";
       setData(result);
       setEndDate(inputDate(result.resolved_end_date));
-      setExpanded(false);
-      setSelectedIndustry(result.ranking[0]?.code || "");
+      setSelectedIndustry(initialIndustry);
       setSelectedDate(result.resolved_end_date);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "行业强弱数据加载失败");
@@ -68,42 +79,42 @@ export function IndustryStrengthClient() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const visibleRows = useMemo(() => {
-    if (!data) return [];
-    if (expanded) return data.industries;
-    const visible = new Set(data.display.default_visible_codes);
-    return data.industries.filter(row => visible.has(row.code));
-  }, [data, expanded]);
-
-  const selectedRow = useMemo(
-    () => data?.ranking.find(row => row.code === selectedIndustry) || data?.ranking[0] || null,
-    [data, selectedIndustry],
+  const allRowsByCode = useMemo(
+    () => new Map(data?.ranking.map(row => [row.code, row]) || []),
+    [data],
   );
-  const selectedPoint = useMemo(
-    () => selectedRow?.points.find(point => point.date === selectedDate)
-      || selectedRow?.points.at(-1)
-      || null,
-    [selectedDate, selectedRow],
+  const visibleRows = useMemo(
+    () => data?.display.default_visible_codes
+      .map(code => allRowsByCode.get(code))
+      .filter((row): row is IndustryStrengthRow => Boolean(row)) || [],
+    [allRowsByCode, data],
   );
+  const latestFirstDates = useMemo(
+    () => data?.display.latest_first_dates?.length
+      ? data.display.latest_first_dates
+      : [...(data?.sampling.dates || [])].reverse(),
+    [data],
+  );
+  const selectedRow = allRowsByCode.get(selectedIndustry) || data?.ranking[0] || null;
+  const selectedPoint = selectedRow?.points.find(point => point.date === selectedDate)
+    || selectedRow?.points.at(-1)
+    || null;
   const trendRows = useMemo(() => {
     if (!data) return [];
-    const rows = selectedRow ? [selectedRow] : [];
-    for (const row of data.ranking) {
-      if (rows.some(item => item.code === row.code)) continue;
-      rows.push(row);
-      if (rows.length === 5) break;
-    }
-    return rows;
-  }, [data, selectedRow]);
+    const codes = [
+      selectedIndustry,
+      ...data.display.default_visible_codes,
+    ].filter(Boolean);
+    return [...new Set(codes)]
+      .map(code => allRowsByCode.get(code))
+      .filter((row): row is IndustryStrengthRow => Boolean(row))
+      .slice(0, 5);
+  }, [allRowsByCode, data, selectedIndustry]);
 
-  useEffect(() => {
-    const node = heatScrollRef.current;
-    if (!node || !data) return;
-    const frame = window.requestAnimationFrame(() => {
-      node.scrollLeft = node.scrollWidth - node.clientWidth;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [data, expanded]);
+  const selectPreview = useCallback((industryCode: string, date: string) => {
+    setSelectedIndustry(industryCode);
+    setSelectedDate(date);
+  }, []);
 
   return (
     <div className="app-shell industry-shell">
@@ -111,9 +122,9 @@ export function IndustryStrengthClient() {
       <main className="industry-main">
         <header className="industry-page-head">
           <div>
-            <span className="eyebrow"><Activity /> 市场结构</span>
+            <span className="eyebrow"><Activity /> 行业轮动</span>
             <h1>行业强弱</h1>
-            <p>观察指定形态在申万一级行业中的集中、扩散与轮动。</p>
+            <p>先看变化速度，再看绝对水平：快速识别加速、退潮与刚启动。</p>
           </div>
           <div className="industry-filter-bar">
             <label>
@@ -182,19 +193,47 @@ export function IndustryStrengthClient() {
               </div>
             ) : null}
 
-            <section className="industry-metrics" aria-label="行业强弱概览">
-              <Metric label="当前覆盖行业数" value={`${data.metrics.covered_industries}/${data.scope.industry_count}`} />
-              <Metric label="最强行业" value={data.metrics.strongest_industry || "—"} note={`${data.metrics.strongest_count}%`} />
-              <Metric label="近期增强最快" value={data.metrics.fastest_strengthening || "—"} note={signed(data.metrics.fastest_strengthening_change, " 只")} tone="up" />
-              <Metric label="近期走弱最快" value={data.metrics.fastest_weakening || "—"} note={signed(data.metrics.fastest_weakening_change, " 只")} tone="down" />
-              <Metric label="前三行业合计" value={`${data.metrics.top_three_percent.toFixed(0)}%`} note={data.metrics.concentration_state} />
-              <Metric label="新进入前十" value={`${data.metrics.new_top_ten_count} 个`} note="较上一节点" />
+            <section className="industry-metrics" aria-label="行业轮动概览">
+              <Metric
+                label="上升最快"
+                value={data.metrics.fastest_strengthening || "—"}
+                note={`${signed(data.metrics.fastest_strengthening_speed, 2)} 只/点 · ${signed(data.metrics.fastest_strengthening_change)} 只`}
+                tone="rise"
+              />
+              <Metric
+                label="下降最快"
+                value={data.metrics.fastest_weakening || "—"}
+                note={`${signed(data.metrics.fastest_weakening_speed, 2)} 只/点 · ${signed(data.metrics.fastest_weakening_change)} 只`}
+                tone="fall"
+              />
+              <Metric
+                label="刚启动"
+                value={data.metrics.just_started_industry || "暂无"}
+                note={`${data.metrics.just_started_count} 个行业符合`}
+                tone="rise"
+              />
+              <Metric
+                label="持续增强"
+                value={`${data.metrics.persistent_strengthening_count} 个`}
+                note="近 3 个间隔至少 2 次上升"
+              />
+              <Metric
+                label="轮动广度"
+                value={`↑ ${data.metrics.rising_industry_count} / ↓ ${data.metrics.falling_industry_count}`}
+                note="上升行业 / 下降行业"
+              />
+              <Metric
+                label="绝对水平参考"
+                value={data.metrics.strongest_industry || "—"}
+                note={`当前 ${data.metrics.strongest_count}% · 次要指标`}
+                tone="secondary"
+              />
             </section>
 
             <section className="industry-card analysis-card">
               <div className="industry-section-head">
-                <div><span>自动分析</span><h2>{data.pattern_label} · {formatDate(data.resolved_end_date, "-")}</h2></div>
-                <small>{data.rules.rapid_start_explanation}</small>
+                <div><span>近期轮动摘要</span><h2>{data.pattern_label} · {formatDate(data.resolved_end_date, "-")}</h2></div>
+                <small title={data.rules.stable_sort_explanation}>{data.rules.slope_explanation}</small>
               </div>
               <div className="analysis-sentences">
                 {data.analysis.map(item => <p key={item}>{item}</p>)}
@@ -203,85 +242,93 @@ export function IndustryStrengthClient() {
 
             <section className="industry-card heatmap-card">
               <div className="industry-section-head">
-                <div><span>一级行业历史热力图</span><h2>24 个固定采样节点</h2></div>
-                <div className="heat-legend" aria-label="占比颜色图例">
+                <div>
+                  <span>轮动速度热力带 · 活跃 12 行</span>
+                  <h2>最新在左，向右回看 24 个节点</h2>
+                </div>
+                <div className="heat-legend" aria-label="占比颜色图例，蓝色低值到橙黄色高值">
                   {["0", "1–2%", "3–4%", "5–7%", "8–10%", "10%以上"].map((label, index) => (
                     <span key={label}><i className={`heat-${index}`} />{label}</span>
                   ))}
                 </div>
               </div>
-              <div className="industry-heat-scroll" ref={heatScrollRef}>
-                <div className="industry-heat-grid">
-                  <span className="heat-corner">行业 / 日期</span>
-                  {data.sampling.dates.map(date => <time key={date}>{formatDate(date).slice(5)}</time>)}
-                  {visibleRows.map(row => (
-                    <HeatmapRow
-                      key={row.code}
-                      row={row}
-                      selectedIndustry={selectedIndustry}
-                      selectedDate={selectedDate}
-                      onSelect={(industryCode, date) => {
-                        setSelectedIndustry(industryCode);
-                        setSelectedDate(date);
-                      }}
-                    />
-                  ))}
+              <p className="heatmap-reading-note">
+                近 4 点线性斜率决定顺序；同速按持续性、最新有效占比、行业代码稳定排序。蓝—浅色—橙黄只表示占比档位，箭头与数值表示方向。
+              </p>
+              <div className="industry-heat-scroll">
+                <div className="industry-heat-canvas">
+                  <HeatTimeAxis dates={latestFirstDates} />
+                  <div className="industry-heat-grid" role="grid" aria-label="行业轮动热力图，最新日期在最左侧">
+                    {visibleRows.map(row => (
+                      <HeatmapRow
+                        key={row.code}
+                        row={row}
+                        dates={latestFirstDates}
+                        selectedIndustry={selectedIndustry}
+                        selectedDate={selectedDate}
+                        onPreview={selectPreview}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
-              <button
-                className="industry-fold-toggle"
-                type="button"
-                aria-expanded={expanded}
-                onClick={() => setExpanded(value => !value)}
-              >
-                {expanded ? <ChevronUp /> : <ChevronDown />}
-                {expanded
-                  ? "收起为默认 16 个行业"
-                  : `已折叠 ${data.display.folded_count} 个行业，本期合计占 Top 100 的 ${data.display.folded_current_percent.toFixed(0)}%，点击展开`}
-              </button>
-              {selectedRow && selectedPoint ? (
-                <PointDetail row={selectedRow} point={selectedPoint} />
-              ) : null}
+              {selectedRow && selectedPoint ? <PointDetail row={selectedRow} point={selectedPoint} /> : null}
             </section>
 
             <section className="industry-card trend-card">
               <div className="industry-section-head">
-                <div><span>当前前 5 行业时间序列</span><h2>入选数量 / Top 100 占比</h2></div>
-                <small>点击热力格可将行业加入对比焦点</small>
+                <div><span>完整 24 节点趋势</span><h2>悬停线条直接识别行业与数值</h2></div>
+                <small>线条高亮后，其他行业自动淡化；右侧可查看全部一级行业</small>
               </div>
-              <TrendChart rows={trendRows} dates={data.sampling.dates} />
+              <TrendChart
+                key={selectedIndustry}
+                rows={trendRows}
+                allRows={data.ranking}
+                dates={data.sampling.dates}
+                selectedCode={selectedIndustry}
+                onSelect={code => selectPreview(code, data.resolved_end_date)}
+              />
             </section>
 
             <section className="industry-card ranking-card">
               <div className="industry-section-head">
-                <div><span>当前行业排名</span><h2>{formatDate(data.resolved_end_date, "-")} 收盘截面</h2></div>
-                <small>数量与百分比一一对应，分母固定为 100</small>
+                <div><span>近期轮动速度排名 · 前 15</span><h2>{formatDate(data.resolved_end_date, "-")} 收盘截面</h2></div>
+                <small title={data.rules.slope_explanation}>按速度绝对值、持续性、最新有效占比排序；分母固定为 100</small>
               </div>
               <div className="industry-table-wrap">
                 <table className="industry-ranking-table">
                   <thead>
                     <tr>
-                      <th>排名</th><th>行业</th><th>入选数量</th><th>占比</th>
-                      <th>较上一节点</th><th>近 4 个节点</th><th>状态</th><th>入选股票明细</th>
+                      <th>观察序号</th><th>行业</th><th>近期速度</th><th>当前数量</th><th>占比</th>
+                      <th>较上一节点</th><th>近 4 节点变化</th><th>状态</th><th>股票明细</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.ranking.map(row => (
+                    {data.ranking.slice(0, 15).map(row => (
                       <tr key={row.code} className={selectedIndustry === row.code ? "selected" : ""}>
-                        <td><b className={row.rank <= 3 ? "top-rank rank" : "rank"}>{row.rank}</b></td>
-                        <td><button type="button" onClick={() => {
-                          setSelectedIndustry(row.code);
-                          setSelectedDate(data.resolved_end_date);
-                        }}>{row.name}<small>{row.code}</small></button></td>
+                        <td><b className={row.rotation_rank <= 3 ? "top-rank rank" : "rank"}>{row.rotation_rank}</b></td>
+                        <td>
+                          <button type="button" onClick={() => selectPreview(row.code, data.resolved_end_date)}>
+                            {row.name}<small>当前绝对排名 {row.current_rank}</small>
+                          </button>
+                        </td>
+                        <td className={movementClass(row.recent_slope)}>
+                          <strong>{signed(row.recent_slope, 2)}</strong> 只/点
+                        </td>
                         <td><strong>{row.current_count}</strong> 只</td>
                         <td>{row.current_percent.toFixed(0)}%</td>
-                        <td className={row.change_previous > 0 ? "up" : row.change_previous < 0 ? "down" : ""}>{signed(row.change_previous)}</td>
-                        <td className={row.change_four_samples > 0 ? "up" : row.change_four_samples < 0 ? "down" : ""}>{signed(row.change_four_samples)}</td>
-                        <td><span className={`industry-status status-${row.status}`}>{row.status}</span></td>
-                        <td><button className="stock-detail-button" type="button" onClick={() => {
-                          setSelectedIndustry(row.code);
-                          setSelectedDate(data.resolved_end_date);
-                        }}>查看 {row.current_count} 只</button></td>
+                        <td className={movementClass(row.change_previous)}>{signed(row.change_previous)}</td>
+                        <td className={movementClass(row.recent_change)}>{signed(row.recent_change)}</td>
+                        <td>
+                          <span className="industry-status" title={`${row.status_detail}；${data.rules.slope_explanation}`}>
+                            {row.status}<small>{signed(row.recent_slope, 2)} 只/点</small>
+                          </span>
+                        </td>
+                        <td>
+                          <button className="stock-detail-button" type="button" onClick={() => selectPreview(row.code, data.resolved_end_date)}>
+                            查看 {row.current_count} 只
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -290,7 +337,7 @@ export function IndustryStrengthClient() {
               {selectedRow ? (
                 <div className="industry-stock-detail" data-testid="industry-stock-detail">
                   <div>
-                    <span>入选股票明细</span>
+                    <span>当前截面入选股票</span>
                     <b>{selectedRow.name} · {selectedRow.current_count} 只</b>
                   </div>
                   <div>
@@ -307,6 +354,7 @@ export function IndustryStrengthClient() {
             <footer className="industry-data-foot">
               <span>真实行业数：{data.scope.industry_count}</span>
               <span>采样节点：{data.sampling.sample_count}</span>
+              <span>展示筛选：12 个活跃行业（不改变底层 31 行业）</span>
               <span>行情截止：{formatDate(data.as_of.daily)}</span>
               <span>本次计算：{(data.elapsed_ms / 1000).toFixed(1)} 秒{data.cache_hit ? " · 已命中缓存" : ""}</span>
             </footer>
@@ -317,98 +365,328 @@ export function IndustryStrengthClient() {
   );
 }
 
-function Metric({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: "up" | "down" }) {
-  return <article><span>{label}</span><strong>{value}</strong>{note ? <small className={tone}>{note}</small> : null}</article>;
+function Metric({
+  label,
+  value,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  tone?: "rise" | "fall" | "secondary";
+}) {
+  return <article className={tone ? `metric-${tone}` : ""}><span>{label}</span><strong>{value}</strong>{note ? <small>{note}</small> : null}</article>;
+}
+
+function HeatTimeAxis({ dates }: { dates: string[] }) {
+  const labels = new Set([0, 5, 10, 15, 20, Math.max(0, dates.length - 1)]);
+  return (
+    <div className="heat-time-axis" aria-label="热力图时间轴">
+      <span className="heat-axis-title">行业 · 近期速度</span>
+      {dates.map((date, index) => labels.has(index) ? (
+        <time key={date} style={{ gridColumn: index + 2 }}>
+          {index === 0 ? "最新 " : ""}{formatDate(date).slice(5)}
+        </time>
+      ) : null)}
+    </div>
+  );
 }
 
 function HeatmapRow({
   row,
+  dates,
   selectedIndustry,
   selectedDate,
-  onSelect,
+  onPreview,
 }: {
   row: IndustryStrengthRow;
+  dates: string[];
   selectedIndustry: string;
   selectedDate: string;
-  onSelect: (industryCode: string, date: string) => void;
+  onPreview: (industryCode: string, date: string) => void;
 }) {
+  const pointsByDate = new Map(row.points.map(point => [point.date, point]));
+  const latestDate = row.points.at(-1)?.date || "";
+  const previewLatest = () => onPreview(row.code, latestDate);
   return (
     <>
       <button
         className={`heat-row-label ${selectedIndustry === row.code ? "selected" : ""}`}
         type="button"
-        onClick={() => onSelect(row.code, row.points.at(-1)?.date || "")}
+        onMouseEnter={previewLatest}
+        onFocus={previewLatest}
+        onClick={previewLatest}
+        aria-label={`${row.name} ${row.status} 近期速度${signed(row.recent_slope, 2)}只每采样点`}
       >
-        <b>{row.name}</b><small>累计 {row.cumulative_count}</small>
+        <span><b>{row.name}</b><small>{row.status}</small></span>
+        <em className={movementClass(row.recent_slope)}>{signed(row.recent_slope, 2)}</em>
       </button>
-      {row.points.map(point => (
-        <button
-          key={point.date}
-          type="button"
-          className={`heat-cell heat-${point.heat_level} ${selectedIndustry === row.code && selectedDate === point.date ? "selected" : ""}`}
-          aria-label={`${row.name} ${formatDate(point.date, "-")} ${point.count}只 ${point.percent.toFixed(0)}% 较上期${signed(point.change)}`}
-          title={`${row.name} · ${formatDate(point.date, "-")} · ${point.count}只 / ${point.percent.toFixed(0)}% · 较上期${signed(point.change)}`}
-          onClick={() => onSelect(row.code, point.date)}
-        >
-          {point.count}
-        </button>
-      ))}
+      {dates.map(date => {
+        const point = pointsByDate.get(date);
+        if (!point) return <span className="heat-cell heat-missing" key={date}>—</span>;
+        const preview = () => onPreview(row.code, point.date);
+        return (
+          <button
+            key={point.date}
+            type="button"
+            className={`heat-cell heat-${point.heat_level} ${selectedIndustry === row.code && selectedDate === point.date ? "selected" : ""}`}
+            aria-label={`${row.name} ${formatDate(point.date, "-")} ${point.count}只 ${point.percent.toFixed(0)}% 较上期${signed(point.change)}`}
+            title={`${row.name} · ${formatDate(point.date, "-")} · ${point.count}只 / ${point.percent.toFixed(0)}% · 较上期${signed(point.change)}`}
+            onMouseEnter={preview}
+            onFocus={preview}
+            onClick={preview}
+          >
+            {point.count}
+          </button>
+        );
+      })}
     </>
   );
 }
 
+function MiniTrend({ row }: { row: IndustryStrengthRow }) {
+  const width = 260;
+  const height = 66;
+  const max = Math.max(10, ...row.counts);
+  const x = (index: number) => 4 + index / Math.max(1, row.counts.length - 1) * (width - 8);
+  const y = (value: number) => 4 + (1 - value / max) * (height - 8);
+  return (
+    <div className="industry-mini-trend">
+      <span>完整 24 节点</span>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${row.name}完整24节点走势`}>
+        <polyline points={row.counts.map((value, index) => `${x(index)},${y(value)}`).join(" ")} />
+        <circle cx={x(row.counts.length - 1)} cy={y(row.current_count)} r="3.5" />
+      </svg>
+    </div>
+  );
+}
+
 function PointDetail({ row, point }: { row: IndustryStrengthRow; point: IndustryStrengthPoint }) {
+  const shownStocks = point.stocks.slice(0, 8);
   return (
     <div className="industry-point-detail" aria-live="polite" data-testid="industry-point-detail">
-      <div><span>当前查看</span><b>{row.name} · {formatDate(point.date, "-")}</b></div>
+      <div className="point-detail-title">
+        <span>悬停预览 · {formatDate(point.date, "-")}</span>
+        <b>{row.name}</b>
+        <em>{row.status} · {signed(row.recent_slope, 2)} 只/点</em>
+      </div>
+      <MiniTrend row={row} />
       <dl>
-        <div><dt>入选数量</dt><dd>{point.count} 只</dd></div>
-        <div><dt>占 Top 100</dt><dd>{point.percent.toFixed(0)}%</dd></div>
-        <div><dt>较上期</dt><dd className={point.change > 0 ? "up" : point.change < 0 ? "down" : ""}>{signed(point.change)} 只</dd></div>
+        <div><dt>当前数量 / 占比</dt><dd>{row.current_count} 只 / {row.current_percent.toFixed(0)}%</dd></div>
+        <div><dt>悬停日期</dt><dd>{point.count} 只 · 较上期 {signed(point.change)}</dd></div>
+        <div><dt>近 4 点变化</dt><dd className={movementClass(row.recent_change)}>{signed(row.recent_change)} 只</dd></div>
       </dl>
       <div className="point-stock-list">
-        {point.stocks.length
-          ? point.stocks.map(stock => <span key={stock.ts_code}>{stock.name} <small>{stock.code}</small></span>)
+        <strong>当日入选 {point.stocks.length} 只</strong>
+        {shownStocks.length
+          ? shownStocks.map(stock => <span key={stock.ts_code}>{stock.name} <small>{stock.code}</small></span>)
           : <span className="muted">当日无入选股票</span>}
+        {point.stocks.length > shownStocks.length ? <small>另有 {point.stocks.length - shownStocks.length} 只</small> : null}
       </div>
     </div>
   );
 }
 
-function TrendChart({ rows, dates }: { rows: IndustryStrengthRow[]; dates: string[] }) {
+function TrendChart({
+  rows,
+  allRows,
+  dates,
+  selectedCode,
+  onSelect,
+}: {
+  rows: IndustryStrengthRow[];
+  allRows: IndustryStrengthRow[];
+  dates: string[];
+  selectedCode: string;
+  onSelect: (code: string) => void;
+}) {
+  const [highlightedCode, setHighlightedCode] = useState(selectedCode);
+  const [hoveredIndex, setHoveredIndex] = useState(Math.max(0, dates.length - 1));
+
+  const highlightedRow = rows.find(row => row.code === highlightedCode) || rows[0];
   const max = Math.max(10, ...rows.flatMap(row => row.counts));
   const width = 920;
-  const height = 230;
+  const height = 250;
   const left = 42;
-  const right = 12;
-  const top = 14;
-  const bottom = 32;
+  const right = 14;
+  const top = 18;
+  const bottom = 34;
   const innerWidth = width - left - right;
   const innerHeight = height - top - bottom;
-  const x = (index: number) => left + (dates.length <= 1 ? 0 : index / (dates.length - 1) * innerWidth);
+  const x = (index: number) => left + index / Math.max(1, dates.length - 1) * innerWidth;
   const y = (value: number) => top + innerHeight - value / max * innerHeight;
+  const updateHoveredDate = (event: PointerEvent<SVGSVGElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const viewX = (event.clientX - bounds.left) / Math.max(1, bounds.width) * width;
+    const index = Math.round((viewX - left) / Math.max(1, innerWidth) * (dates.length - 1));
+    setHoveredIndex(Math.max(0, Math.min(dates.length - 1, index)));
+  };
+  const hoveredValue = highlightedRow?.counts[hoveredIndex] ?? 0;
+  const labelX = Math.min(width - 208, Math.max(left + 6, x(hoveredIndex) + 8));
+  const labelY = Math.max(4, Math.min(height - 58, y(hoveredValue) - 38));
+
   return (
-    <div className="trend-chart-wrap">
-      <div className="trend-legend">
-        {rows.map((row, index) => <span key={row.code}><i style={{ background: lineColors[index] }} />{row.name}</span>)}
+    <div className="trend-layout">
+      <div className="trend-chart-wrap">
+        <div className="trend-focus-summary" aria-live="polite">
+          <b>{highlightedRow?.name || "—"}</b>
+          <span>当前 {highlightedRow?.current_count || 0}</span>
+          <span>{formatDate(dates[hoveredIndex] || "", "-")} · {hoveredValue}</span>
+        </div>
+        <div className="trend-legend" aria-label="当前显示行业">
+          {rows.map((row, index) => (
+            <button
+              type="button"
+              key={row.code}
+              className={highlightedCode === row.code ? "active" : ""}
+              onMouseEnter={() => setHighlightedCode(row.code)}
+              onFocus={() => setHighlightedCode(row.code)}
+              onClick={() => onSelect(row.code)}
+            >
+              <i style={{ background: lineColors[index] }} />{row.name}<small>{row.current_count}</small>
+            </button>
+          ))}
+        </div>
+        <svg
+          className="industry-trend-chart"
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label="行业24个采样点趋势，悬停或聚焦线条可高亮"
+          onPointerMove={updateHoveredDate}
+          onPointerLeave={() => {
+            setHighlightedCode(selectedCode);
+            setHoveredIndex(Math.max(0, dates.length - 1));
+          }}
+        >
+          {[0, .25, .5, .75, 1].map(ratio => (
+            <g key={ratio}>
+              <line x1={left} x2={width - right} y1={top + innerHeight * ratio} y2={top + innerHeight * ratio} />
+              <text x={left - 7} y={top + innerHeight * ratio + 4}>{Math.round(max * (1 - ratio))}</text>
+            </g>
+          ))}
+          {rows.map((row, rowIndex) => {
+            const points = row.counts.map((value, index) => `${x(index)},${y(value)}`).join(" ");
+            const active = highlightedCode === row.code;
+            return (
+              <g
+                key={row.code}
+                className={`trend-series ${active ? "active" : "muted"}`}
+                style={{ color: lineColors[rowIndex] }}
+              >
+                <polyline className="trend-visible-line" points={points} />
+                <polyline
+                  className="trend-hit-line"
+                  points={points}
+                  tabIndex={0}
+                  aria-label={`${row.name}，当前${row.current_count}，近期速度${signed(row.recent_slope, 2)}`}
+                  onPointerEnter={() => setHighlightedCode(row.code)}
+                  onFocus={() => setHighlightedCode(row.code)}
+                  onKeyDown={event => {
+                    if (event.key === "Enter") onSelect(row.code);
+                  }}
+                />
+                {active ? row.counts.map((value, index) => (
+                  <circle key={dates[index]} cx={x(index)} cy={y(value)} r={index === hoveredIndex ? "4.4" : "2.8"} />
+                )) : null}
+              </g>
+            );
+          })}
+          {highlightedRow ? (
+            <g className="trend-direct-label" transform={`translate(${labelX} ${labelY})`}>
+              <rect width="200" height="32" rx="5" />
+              <text x="8" y="13">{highlightedRow.name} · 当前 {highlightedRow.current_count}</text>
+              <text x="8" y="25">{formatDate(dates[hoveredIndex] || "", "-")} · {hoveredValue}</text>
+            </g>
+          ) : null}
+          {dates.map((date, index) => index % 5 === 0 || index === dates.length - 1 ? (
+            <text key={date} className="trend-date" x={x(index)} y={height - 8}>{formatDate(date).slice(5)}</text>
+          ) : null)}
+        </svg>
       </div>
-      <svg className="industry-trend-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="当前前五行业24个采样点趋势">
-        {[0, .25, .5, .75, 1].map(ratio => (
-          <g key={ratio}>
-            <line x1={left} x2={width - right} y1={top + innerHeight * ratio} y2={top + innerHeight * ratio} />
-            <text x={left - 7} y={top + innerHeight * ratio + 4}>{Math.round(max * (1 - ratio))}</text>
-          </g>
-        ))}
-        {rows.map((row, rowIndex) => (
-          <g key={row.code} style={{ color: lineColors[rowIndex] }}>
-            <polyline points={row.counts.map((value, index) => `${x(index)},${y(value)}`).join(" ")} />
-            {row.counts.map((value, index) => <circle key={dates[index]} cx={x(index)} cy={y(value)} r="2.8" />)}
-          </g>
-        ))}
-        {dates.map((date, index) => index % 4 === 0 || index === dates.length - 1 ? (
-          <text key={date} className="trend-date" x={x(index)} y={height - 8}>{formatDate(date).slice(5)}</text>
-        ) : null)}
-      </svg>
+      <IndustrySelector rows={allRows} selectedCode={selectedCode} onSelect={onSelect} />
     </div>
+  );
+}
+
+function IndustrySelector({
+  rows,
+  selectedCode,
+  onSelect,
+}: {
+  rows: IndustryStrengthRow[];
+  selectedCode: string;
+  onSelect: (code: string) => void;
+}) {
+  const selectedIndex = Math.max(0, rows.findIndex(row => row.code === selectedCode));
+  const [cursor, setCursor] = useState(selectedIndex);
+  const cursorRef = useRef(selectedIndex);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const move = (delta: number, commit: boolean) => {
+    const next = Math.max(0, Math.min(rows.length - 1, cursorRef.current + delta));
+    cursorRef.current = next;
+    setCursor(next);
+    itemRefs.current[next]?.scrollIntoView({ block: "nearest" });
+    if (commit && rows[next]) onSelect(rows[next].code);
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      move(event.key === "ArrowDown" ? 1 : -1, false);
+    } else if (event.key === "Enter" && rows[cursorRef.current]) {
+      event.preventDefault();
+      onSelect(rows[cursorRef.current].code);
+    }
+  };
+  const onWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (event.deltaY === 0) return;
+    event.preventDefault();
+    const current = Math.max(0, rows.findIndex(row => row.code === selectedCode));
+    const next = Math.max(0, Math.min(rows.length - 1, current + (event.deltaY > 0 ? 1 : -1)));
+    cursorRef.current = next;
+    setCursor(next);
+    itemRefs.current[next]?.scrollIntoView({ block: "nearest" });
+    if (rows[next]) onSelect(rows[next].code);
+  };
+
+  return (
+    <aside className="industry-selector">
+      <div>
+        <span>全部一级行业</span>
+        <b>选择并聚焦</b>
+        <small>滚轮浏览 · ↑↓ 后按 Enter</small>
+      </div>
+      <div
+        className="industry-selector-list"
+        role="listbox"
+        aria-label="行业选择器"
+        data-cursor={cursor}
+        tabIndex={0}
+        aria-activedescendant={rows[cursor] ? `industry-option-${rows[cursor].code}` : undefined}
+        onKeyDown={onKeyDown}
+        onWheelCapture={onWheel}
+      >
+        {rows.map((row, index) => (
+          <button
+            id={`industry-option-${row.code}`}
+            ref={node => { itemRefs.current[index] = node; }}
+            role="option"
+            aria-selected={row.code === selectedCode}
+            type="button"
+            key={row.code}
+            className={`${row.code === selectedCode ? "selected" : ""} ${index === cursor ? "cursor" : ""}`}
+            onMouseEnter={() => {
+              cursorRef.current = index;
+              setCursor(index);
+            }}
+            onClick={() => onSelect(row.code)}
+          >
+            <span><b>{row.name}</b><small>{row.status}</small></span>
+            <em className={movementClass(row.recent_slope)}>{signed(row.recent_slope, 2)}</em>
+          </button>
+        ))}
+      </div>
+    </aside>
   );
 }

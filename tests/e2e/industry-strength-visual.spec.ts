@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
-const screenshotDir = "docs/qa/screenshots/industry-strength";
-const evidenceDir = "docs/qa/evidence/industry-strength";
+const screenshotDir = "docs/qa/screenshots/industry-strength-v2.2";
+const evidenceDir = "docs/qa/evidence/industry-strength-v2.2";
 const results: Array<Record<string, unknown>> = [];
 
 test.describe.serial("industry strength real-data visual acceptance", () => {
@@ -26,10 +26,12 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
       await page.setViewportSize(viewport);
       await page.goto("/industry-strength");
       await expect(page.getByRole("heading", { name: "行业强弱", exact: true })).toBeVisible({ timeout: 45_000 });
-      await expect(page.locator(".heat-row-label")).toHaveCount(16, { timeout: 45_000 });
+      await expect(page.locator(".heat-row-label")).toHaveCount(12, { timeout: 45_000 });
       await expect(page.locator(".industry-data-foot")).toContainText("真实行业数：31");
       await expect(page.locator(".industry-data-foot")).toContainText("采样节点：24");
-      await expect(page.getByRole("button", { name: /已折叠 15 个行业/ })).toBeVisible();
+      await expect(page.locator(".heat-time-axis time").first()).toContainText("最新");
+      await expect(page.locator(".industry-ranking-table tbody tr")).toHaveCount(15);
+      await expect(page.getByRole("listbox", { name: "行业选择器" })).toBeVisible();
 
       expect(await horizontalOverflow(page)).toBe(false);
       const sidebar = await page.locator(".app-sidebar").boundingBox();
@@ -42,12 +44,20 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
       expect(scrollState.scrollWidth).toBeGreaterThanOrEqual(scrollState.clientWidth);
 
       const firstCell = page.locator(".heat-cell").first();
-      await firstCell.click();
+      await firstCell.hover();
       await expect(page.getByTestId("industry-point-detail")).toBeVisible();
+      await firstCell.focus();
+      await expect(page.getByTestId("industry-point-detail")).toContainText("完整 24 节点");
+      await page.locator(".trend-hit-line").first().hover({ force: true });
+      await expect(page.locator(".trend-series.muted")).toHaveCount(4);
       await page.locator(".industry-ranking-table tbody tr").first().getByRole("button", { name: /查看/ }).click();
       await expect(page.getByTestId("industry-stock-detail")).toBeVisible();
       await page.locator(".industry-table-wrap").evaluate(element => { element.scrollLeft = 0; });
       expect(errors).toEqual([]);
+
+      const activeRows = await page.locator(".heat-row-label").evaluateAll(elements =>
+        elements.map(element => element.textContent?.replace(/\s+/g, " ").trim()),
+      );
 
       await page.screenshot({
         path: `${screenshotDir}/industry-strength-${viewport.width}.png`,
@@ -59,8 +69,12 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
         viewport,
         real_industries: 31,
         sample_nodes: 24,
-        default_visible: 16,
-        folded: 15,
+        default_visible: 12,
+        active_rows: activeRows,
+        latest_on_left: true,
+        ranking_rows: 15,
+        keyboard_preview: true,
+        trend_hover_focus: true,
         page_overflow: false,
         heatmap_internal_scroll: scrollState.scrollWidth > scrollState.clientWidth,
         console_errors: errors,
@@ -69,19 +83,21 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
     });
   }
 
-  test("expand, detail and trend linkage use the same real response", async ({ page }) => {
+  test("selector, detail and trend linkage use the same real response", async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1600, height: 1000 });
     await page.goto("/industry-strength");
-    await expect(page.locator(".heat-row-label")).toHaveCount(16, { timeout: 45_000 });
-    await page.getByRole("button", { name: /已折叠 15 个行业/ }).click();
-    await expect(page.locator(".heat-row-label")).toHaveCount(31);
-    const target = page.locator(".heat-row-label").nth(20);
+    await expect(page.locator(".heat-row-label")).toHaveCount(12, { timeout: 45_000 });
+    const target = page.getByRole("option").nth(20);
     const industry = (await target.locator("b").innerText()).trim();
     await target.click();
     await expect(page.getByTestId("industry-point-detail")).toContainText(industry);
     await expect(page.locator(".trend-legend")).toContainText(industry);
-    results.push({ scenario: "expand-detail-trend-linkage", industry, result: "pass" });
+    await page.getByRole("listbox", { name: "行业选择器" }).focus();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("listbox", { name: "行业选择器" }).locator('[aria-selected="true"]')).toHaveCount(1);
+    results.push({ scenario: "selector-detail-trend-linkage", industry, result: "pass" });
   });
 });
 

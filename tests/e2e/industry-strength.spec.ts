@@ -1,36 +1,78 @@
 import { expect, test } from "@playwright/test";
 
-test("industry strength navigation, clip, heat detail, trend and ranking stay linked", async ({ page }) => {
+function slope(values: number[]) {
+  const recent = values.slice(-4);
+  const mean = recent.reduce((sum, value) => sum + value, 0) / recent.length;
+  const xMean = 1.5;
+  return Number((
+    recent.reduce((sum, value, index) => sum + (index - xMean) * (value - mean), 0) / 5
+  ).toFixed(2));
+}
+
+test("industry rotation heatmap, preview, trend focus, selector and ranking stay linked", async ({ page }) => {
   const dates = Array.from({ length: 24 }, (_, index) => `202601${String(index + 1).padStart(2, "0")}`);
   const rows = Array.from({ length: 31 }, (_, industryIndex) => {
+    const counts = dates.map((_, dateIndex) => {
+      if (industryIndex === 30) return dateIndex < 23 ? 0 : 3;
+      if (industryIndex < 7) return Math.max(0, dateIndex - 19) * (7 - industryIndex);
+      if (industryIndex < 27) return Math.max(0, 24 - dateIndex) * Math.max(1, 5 - (industryIndex % 5));
+      return industryIndex - 27;
+    });
+    const recentSlope = slope(counts);
     const points = dates.map((date, dateIndex) => {
-      const count = industryIndex === 30 ? Math.max(0, dateIndex - 20) : Math.max(0, 20 - industryIndex + dateIndex % 3);
+      const count = counts[dateIndex];
       return {
         date,
         count,
         percent: count,
         heat_level: count === 0 ? 0 : count <= 2 ? 1 : count <= 4 ? 2 : count <= 7 ? 3 : count <= 10 ? 4 : 5,
-        change: dateIndex ? count - (industryIndex === 30 ? Math.max(0, dateIndex - 21) : Math.max(0, 20 - industryIndex + (dateIndex - 1) % 3)) : 0,
+        change: dateIndex ? count - counts[dateIndex - 1] : 0,
         stocks: count ? [{ ts_code: `${String(industryIndex).padStart(6, "0")}.SZ`, code: String(industryIndex).padStart(6, "0"), name: `股票${industryIndex}`, score: 80 }] : [],
       };
     });
+    const status = industryIndex === 30
+      ? "↗ 快速启动"
+      : recentSlope > 0
+        ? "↑ 持续增强"
+        : recentSlope < 0
+          ? "↓ 正在走弱"
+          : "→ 变化不大";
     return {
       code: `I${String(industryIndex).padStart(2, "0")}`,
       name: `行业${String(industryIndex).padStart(2, "0")}`,
       points,
-      counts: points.map(point => point.count),
-      current_count: points.at(-1)!.count,
-      current_percent: points.at(-1)!.count,
+      counts,
+      current_count: counts.at(-1)!,
+      current_percent: counts.at(-1)!,
       change_previous: points.at(-1)!.change,
-      change_four_samples: points.at(-1)!.count - points.at(-5)!.count,
-      cumulative_count: points.reduce((sum, point) => sum + point.count, 0),
+      change_four_samples: counts.at(-1)! - counts.at(-4)!,
+      recent_change: counts.at(-1)! - counts.at(-4)!,
+      recent_slope: recentSlope,
+      recent_persistence: recentSlope === 0 ? 0 : 1,
+      latest_effective_percent: [...counts.slice(-4)].reverse().find(Boolean) || 0,
+      cumulative_count: counts.reduce((sum, value) => sum + value, 0),
       rank: industryIndex + 1,
-      status: industryIndex === 30 ? "新进入行业" : "相对稳定",
+      current_rank: industryIndex + 1,
+      rotation_rank: 0,
+      status,
+      status_detail: `${recentSlope >= 0 ? "+" : ""}${recentSlope.toFixed(2)} 只/采样点 · 3/3 个间隔同向`,
       stocks: points.at(-1)!.stocks,
     };
   });
-  rows[30].rank = 8;
-  const defaultVisibleCodes = [...rows.slice(0, 15).map(row => row.code), rows[30].code];
+  const ranking = [...rows].sort((a, b) =>
+    Math.abs(b.recent_slope) - Math.abs(a.recent_slope) || a.code.localeCompare(b.code),
+  );
+  ranking.forEach((row, index) => { row.rotation_rank = index + 1; });
+  const rising = ranking.filter(row => row.recent_slope > 0).slice(0, 4);
+  const falling = ranking.filter(row => row.recent_slope < 0).slice(0, 4);
+  const selected = [...rising, ...falling];
+  for (const row of ranking) {
+    if (selected.length === 12) break;
+    if (!selected.includes(row) && row.counts.slice(-4).some(Boolean)) selected.push(row);
+  }
+  selected.sort((a, b) => b.recent_slope - a.recent_slope || a.code.localeCompare(b.code));
+  const defaultVisibleCodes = selected.map(row => row.code);
+
   await page.route("**/api/industry-strength?**", route => route.fulfill({
     contentType: "application/json",
     body: JSON.stringify({
@@ -41,16 +83,46 @@ test("industry strength navigation, clip, heat detail, trend and ranking stay li
       sampling: { top_n: 100, industry_level: 1, lookback_trading_days: 120, sample_every_trading_days: 5, sample_count: 24, dates, denominator: 100 },
       scope: { board: "主板", exclude_st: true, industry_count: 31, industry_source: "申万一级行业（本地 zer0share）" },
       metrics: {
-        covered_industries: 21, strongest_industry: "行业00", strongest_count: rows[0].current_count,
-        fastest_strengthening: "行业30", fastest_strengthening_change: 3,
-        fastest_weakening: "行业20", fastest_weakening_change: -2,
-        top_three_percent: 60, new_top_ten_count: 1, concentration_state: "集中", concentration_change: 6,
+        covered_industries: 28,
+        strongest_industry: "行业00",
+        strongest_count: rows[0].current_count,
+        fastest_strengthening: rising[0].name,
+        fastest_strengthening_change: rising[0].recent_change,
+        fastest_strengthening_speed: rising[0].recent_slope,
+        fastest_weakening: falling[0].name,
+        fastest_weakening_change: falling[0].recent_change,
+        fastest_weakening_speed: falling[0].recent_slope,
+        just_started_industry: "行业30",
+        just_started_count: 1,
+        persistent_strengthening_count: 7,
+        rising_industry_count: 8,
+        falling_industry_count: 20,
+        top_three_percent: 60,
+        new_top_ten_count: 1,
+        concentration_state: "集中",
+        concentration_change: 6,
       },
-      analysis: ["当前最强为行业00。", "行业30属于快速启动。", "行业分布集中。"],
-      rules: { rapid_start_delta: 3, rapid_start_explanation: "单个 5 交易日采样间隔增加至少 3 只（3 个百分点）", high_rank_cutoff: 5 },
-      display: { default_visible_count: 16, default_visible_codes: defaultVisibleCodes, folded_count: 15, folded_current_count: 12, folded_current_percent: 12 },
+      analysis: ["行业00上升最快。", "行业07下降最快。", "行业30属于刚启动。", "行业分布集中。"],
+      rules: {
+        rapid_start_delta: 3,
+        rapid_start_explanation: "从低位单个 5 交易日采样间隔增加至少 3 只（3 个百分点）",
+        high_rank_cutoff: 5,
+        recent_window_points: 4,
+        slope_explanation: "最近 4 个采样点做线性回归；斜率单位为只/采样点，正数上升、负数下降",
+        stable_sort_explanation: "同速时依次按方向持续性、最新有效占比、行业代码排序",
+        directional_slots: 4,
+      },
+      display: {
+        default_visible_count: 12,
+        default_visible_codes: defaultVisibleCodes,
+        latest_first_dates: [...dates].reverse(),
+        hidden_count: 19,
+        folded_count: 0,
+        folded_current_count: 0,
+        folded_current_percent: 0,
+      },
       industries: rows,
-      ranking: [...rows].sort((a, b) => a.rank - b.rank),
+      ranking,
       actual_top_by_date: Object.fromEntries(dates.map(date => [date, 100])),
       missing_industry_by_date: Object.fromEntries(dates.map(date => [date, 0])),
       warnings: [],
@@ -63,19 +135,43 @@ test("industry strength navigation, clip, heat detail, trend and ranking stay li
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/industry-strength");
   await expect(page.getByRole("heading", { name: "行业强弱", exact: true })).toBeVisible();
-  await expect(page.locator(".heat-row-label")).toHaveCount(16);
-  await expect(page.getByRole("button", { name: /已折叠 15 个行业/ })).toContainText("12%");
 
-  await page.getByRole("button", { name: /已折叠 15 个行业/ }).click();
-  await expect(page.locator(".heat-row-label")).toHaveCount(31);
+  await expect(page.locator(".heat-row-label")).toHaveCount(12);
+  await expect(page.locator(".heat-time-axis time").first()).toContainText("最新 01.24");
+  await expect(page.locator(".industry-fold-toggle")).toHaveCount(0);
+  await expect(page.locator(".industry-ranking-table tbody tr")).toHaveCount(15);
 
-  const target = page.getByRole("button", { name: /行业30 .* 3只 3%/ });
-  await target.click();
-  await expect(page.getByTestId("industry-point-detail")).toContainText("行业30");
-  await expect(page.getByTestId("industry-point-detail")).toContainText("3 只");
-  await expect(page.locator(".trend-legend")).toContainText("行业30");
+  const targetRow = selected[0];
+  const targetCell = page.locator(".heat-cell").first();
+  await targetCell.hover();
+  await expect(page.getByTestId("industry-point-detail")).toContainText(targetRow.name);
+  await expect(page.getByTestId("industry-point-detail")).toContainText("当日入选 1 只");
+  await targetCell.focus();
+  await expect(page.getByTestId("industry-point-detail")).toContainText("完整 24 节点");
 
-  await page.locator(".industry-ranking-table tbody tr").filter({ hasText: "行业30" }).getByRole("button", { name: /查看 3 只/ }).click();
-  await expect(page.getByTestId("industry-stock-detail")).toContainText("股票30");
+  const trendLine = page.locator(".trend-hit-line").first();
+  await trendLine.hover({ force: true });
+  await expect(page.locator(".trend-series.muted")).toHaveCount(4);
+  await expect(page.locator(".trend-focus-summary")).toContainText(rising[0].name);
+
+  const selector = page.getByRole("listbox", { name: "行业选择器" });
+  const arbitrary = ranking[10];
+  await page.getByRole("option", { name: new RegExp(arbitrary.name) }).click();
+  await expect(page.getByRole("option", { name: new RegExp(arbitrary.name) })).toHaveAttribute("aria-selected", "true");
+  await selector.focus();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  await expect(selector.locator('[aria-selected="true"]')).toHaveCount(1);
+
+  const beforeWheel = await selector.locator('[aria-selected="true"]').getAttribute("id");
+  const beforeCursor = await selector.getAttribute("data-cursor");
+  await selector.dispatchEvent("wheel", { deltaY: -120 });
+  await expect(selector).not.toHaveAttribute("data-cursor", beforeCursor || "");
+  const afterWheel = await selector.locator('[aria-selected="true"]').getAttribute("id");
+  expect(afterWheel).not.toBe(beforeWheel);
+
+  const linkedRow = page.locator(".industry-ranking-table tbody tr").first();
+  await linkedRow.getByRole("button", { name: /查看/ }).click();
+  await expect(page.getByTestId("industry-stock-detail")).toBeVisible();
   await expect(page.getByRole("link", { name: "行业强弱" })).toHaveAttribute("href", "/industry-strength");
 });
