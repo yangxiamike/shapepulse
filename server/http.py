@@ -20,6 +20,12 @@ def _screen_options(query: dict[str, list[str]]) -> dict[str, Any]:
     mapping = {
         "board": "board",
         "boards": "boards",
+        "industry": "industries",
+        "industries": "industries",
+        "market_cap_min": "market_cap_min_yi",
+        "market_cap_min_yi": "market_cap_min_yi",
+        "market_cap_max": "market_cap_max_yi",
+        "market_cap_max_yi": "market_cap_max_yi",
         "market_cap": "market_cap_yi",
         "market_cap_yi": "market_cap_yi",
         "operator": "market_cap_operator",
@@ -95,7 +101,7 @@ def make_handler(service: MarketService):
     jobs = ScreenJobManager(service)
 
     class MarketRequestHandler(BaseHTTPRequestHandler):
-        server_version = "ManualMarket/1.1"
+        server_version = "ManualMarket/1.2"
 
         def log_message(self, fmt: str, *args) -> None:
             print(f"{self.address_string()} - {fmt % args}")
@@ -138,7 +144,7 @@ def make_handler(service: MarketService):
         def do_GET(self) -> None:
             try:
                 parsed = urlparse(self.path)
-                query = parse_qs(parsed.query)
+                query = parse_qs(parsed.query, keep_blank_values=True)
                 path = parsed.path.rstrip("/") or "/"
                 if path == "/api/health":
                     self._send(HTTPStatus.OK, service.health())
@@ -146,6 +152,15 @@ def make_handler(service: MarketService):
                     term = _first(query, "q", "")
                     limit = int(_first(query, "limit", "20"))
                     self._send(HTTPStatus.OK, service.search(term, limit))
+                elif path == "/api/industries":
+                    self._send(HTTPStatus.OK, service.industries())
+                elif path == "/api/pattern/pool":
+                    self._send(
+                        HTTPStatus.OK,
+                        service.pattern_pool(
+                            _first(query, "category", ""), _first(query, "limit", "200")
+                        ),
+                    )
                 elif path.startswith("/api/stock/"):
                     code = unquote(path.removeprefix("/api/stock/"))
                     mark_viewed = _first(query, "mark_viewed", "0").lower() in {"1", "true", "yes"}
@@ -168,7 +183,7 @@ def make_handler(service: MarketService):
                     limit_raw = _first(query, "limit")
                     result = service.bars(
                         code,
-                        start_date=_first(query, "start", "20150101"),
+                        start_date=_first(query, "start"),
                         end_date=_first(query, "end"),
                         adjust=_first(query, "adjust", "qfq"),
                         period=_first(query, "period", "1d"),
@@ -180,6 +195,17 @@ def make_handler(service: MarketService):
                         self._send(HTTPStatus.OK, result)
                 elif path == "/api/screen":
                     self._send(HTTPStatus.OK, service.screen(_screen_options(query), False))
+                elif path == "/api/screen/snapshots":
+                    self._send(
+                        HTTPStatus.OK,
+                        service.saved_snapshots(
+                            int(_first(query, "page", "1")),
+                            int(_first(query, "page_size", "20")),
+                        ),
+                    )
+                elif path.startswith("/api/screen/snapshots/"):
+                    run_id = unquote(path.removeprefix("/api/screen/snapshots/"))
+                    self._send(HTTPStatus.OK, service.saved_snapshot(run_id))
                 elif path.startswith("/api/screen/jobs/"):
                     job_id = unquote(path.removeprefix("/api/screen/jobs/"))
                     result = jobs.get(job_id)
@@ -203,11 +229,24 @@ def make_handler(service: MarketService):
                 path = parsed.path.rstrip("/") or "/"
                 body = self._read_json()
                 if path == "/api/screen":
-                    save_history = bool(body.pop("save_history", True))
+                    save_history = bool(body.pop("save_history", False))
                     self._send(HTTPStatus.OK, service.screen(body, save_history))
                 elif path == "/api/screen/start":
-                    save_history = bool(body.pop("save_history", True))
+                    save_history = bool(body.pop("save_history", False))
                     self._send(HTTPStatus.ACCEPTED, jobs.start(body, save_history))
+                elif path == "/api/screen/snapshots":
+                    token = body.get("screen_token")
+                    filters = body.get("filters")
+                    if filters is not None and not isinstance(filters, dict):
+                        raise ValueError("filters must be an object")
+                    if token is None and filters is None:
+                        filters = body
+                    self._send(
+                        HTTPStatus.CREATED,
+                        service.save_screen_snapshot(
+                            None if token is None else str(token), filters
+                        ),
+                    )
                 elif path == "/api/state":
                     code = str(body.get("code", body.get("ts_code", ""))).strip()
                     action = str(body.get("action", "")).strip().lower()

@@ -16,6 +16,7 @@ import {
   LoaderCircle,
   Play,
   RefreshCw,
+  Save,
   Star,
   TrendingUp,
   TriangleAlert,
@@ -35,6 +36,9 @@ import {
 } from "../lib/api";
 import type {
   PatternKey,
+  SavedScreenPage,
+  SavedScreenSnapshot,
+  ScreenFilters,
   ScreenProgress,
   ScreenResponse,
   StateSnapshot,
@@ -56,9 +60,13 @@ const emptyState: StateSnapshot = {
 
 export function BoardClient() {
   const [board, setBoard] = useState("mainboard");
-  const [mvOperator, setMvOperator] = useState("gte");
-  const [mvValue, setMvValue] = useState(50);
+  const [industries, setIndustries] = useState<string[]>([]);
+  const [industryOptions, setIndustryOptions] = useState<string[]>([]);
+  const [industryOpen, setIndustryOpen] = useState(false);
+  const [mvMin, setMvMin] = useState("");
+  const [mvMax, setMvMax] = useState("");
   const [excludeSt, setExcludeSt] = useState(true);
+  const [topK, setTopK] = useState(50);
   const [data, setData] = useState<ScreenResponse | null>(null);
   const [activeView, setActiveView] = useState<ViewKey>("combined");
   const [expanded, setExpanded] = useState(false);
@@ -69,18 +77,33 @@ export function BoardClient() {
   const [feedback, setFeedback] = useState("");
   const [progress, setProgress] = useState<ScreenProgress | null>(null);
   const [drawer, setDrawer] = useState<"viewed" | "saved" | "pending" | "history" | null>(null);
+  const [snapshotDetail, setSnapshotDetail] = useState<SavedScreenSnapshot | null>(null);
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
+  const [historyPage, setHistoryPage] = useState<SavedScreenPage | null>(null);
 
-  const query = useMemo(() => new URLSearchParams({
+  const filters = useMemo<ScreenFilters>(() => ({
     board,
-    mv_operator: mvOperator,
-    mv_value: String(mvValue),
-    exclude_st: String(excludeSt),
-  }).toString(), [board, mvOperator, mvValue, excludeSt]);
+    industries,
+    market_cap_min_yi: mvMin === "" ? null : Number(mvMin),
+    market_cap_max_yi: mvMax === "" ? null : Number(mvMax),
+    exclude_st: excludeSt,
+    top_k: topK,
+    mode: "per_category",
+  }), [board, excludeSt, industries, mvMax, mvMin, topK]);
+
+  const filterError = useMemo(() => {
+    if (!Number.isInteger(topK) || topK <= 0) return "Top K 必须是正整数";
+    if (filters.market_cap_min_yi != null && (!Number.isFinite(filters.market_cap_min_yi) || filters.market_cap_min_yi < 0)) return "市值下限不能为负数";
+    if (filters.market_cap_max_yi != null && (!Number.isFinite(filters.market_cap_max_yi) || filters.market_cap_max_yi < 0)) return "市值上限不能为负数";
+    if (filters.market_cap_min_yi != null && filters.market_cap_max_yi != null && filters.market_cap_min_yi > filters.market_cap_max_yi) return "市值下限不能大于上限";
+    return "";
+  }, [filters, topK]);
 
   const activeItems = useMemo(() => {
     if (!data) return [];
-    return activeView === "combined" ? data.items : data.categories[activeView];
-  }, [activeView, data]);
+    const items = activeView === "combined" ? data.items : data.categories[activeView];
+    return items.slice(0, Math.min(topK, items.length));
+  }, [activeView, data, topK]);
   const visibleItems = expanded ? activeItems : activeItems.slice(0, 10);
 
   const hydrateStock = useCallback(async (base: Stock) => {
@@ -113,12 +136,13 @@ export function BoardClient() {
   }, [hydrateStock]);
 
   const runScreen = useCallback(async () => {
+    if (filterError) { setError(filterError); setFeedback(""); return; }
     setLoading(true);
     setError("");
     setProgress({ stage: "准备本地筛选", completed: 0, total: 1 });
     setFeedback("正在读取本地数据库…");
     try {
-      const response = await api.screen(query, setProgress);
+      const response = await api.screen(filters, setProgress);
       setData(response);
       setExpanded(false);
       const focusCode = new URLSearchParams(window.location.search).get("code");
@@ -135,12 +159,56 @@ export function BoardClient() {
       setLoading(false);
       setProgress(null);
     }
-  }, [hydrateStock, query]);
+  }, [filterError, filters, hydrateStock]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void runScreen(), 0);
+    void api.industries().then(result => setIndustryOptions(result.items)).catch(() => setIndustryOptions([]));
     return () => window.clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveCurrentSnapshot = useCallback(async () => {
+    if (!data || savingSnapshot) return;
+    setSavingSnapshot(true); setError("");
+    try {
+      const savedRun = await api.saveScreenSnapshot(data, filters);
+      setFeedback(`已保存本次筛选 · ${savedRun.result_count} 只 · ${new Date(savedRun.created_at).toLocaleString("zh-CN")}`);
+      setState(await api.state());
+    } catch (e) { setError(e instanceof Error ? e.message : "筛选快照保存失败"); }
+    finally { setSavingSnapshot(false); }
+  }, [data, filters, savingSnapshot]);
+
+  const openHistory = useCallback(async (page = 1) => {
+    setDrawer("history"); setSnapshotDetail(null);
+    try { setHistoryPage(await api.screenSnapshots(page, 20)); }
+    catch (e) { setError(e instanceof Error ? e.message : "历史快照加载失败"); }
+  }, []);
+
+  const applySnapshotFilters = useCallback((run: SavedScreenSnapshot) => {
+    const next = run.filters || {};
+    const boardValue = String(next.board || "mainboard");
+    const boardMap: Record<string, string> = { 主板: "mainboard", 创业板: "chinext", 科创板: "star" };
+    setBoard(boardMap[boardValue] || boardValue);
+    setIndustries(Array.isArray(next.industries) ? next.industries.map(String) : []);
+    setMvMin(next.market_cap_min_yi == null ? "" : String(next.market_cap_min_yi));
+    setMvMax(next.market_cap_max_yi == null ? "" : String(next.market_cap_max_yi));
+    setExcludeSt(next.exclude_st !== false);
+    const restoredTopK = Number(next.top_k || run.top_k || 50);
+    setTopK(Number.isInteger(restoredTopK) && restoredTopK > 0 ? restoredTopK : 50);
+    if (run.results?.length) {
+      const categories = { breakout: [], pullback: [], range_bounce: [] } as ScreenResponse["categories"];
+      run.results.forEach(item => { if (item.pattern) categories[item.pattern].push(item); });
+      setData(current => ({
+        ...(current || { total: run.result_count, filtered: run.result_count, scored: run.result_count, as_of: {}, warnings: [], timings: {}, cache_hit: true, counts: { breakout: 0, pullback: 0, range_bounce: 0 }, category_deltas: { breakout: null, pullback: null, range_bounce: null } }),
+        items: run.results || [], categories,
+        counts: { breakout: categories.breakout.length, pullback: categories.pullback.length, range_bounce: categories.range_bounce.length },
+        filters: next,
+      }));
+      setSelected(run.results[0] || null);
+    }
+    setDrawer(null); setSnapshotDetail(null);
+    setFeedback("已恢复该次筛选条件，可直接运行或查看保存名单");
+  }, []);
 
   function enterView(view: ViewKey) {
     setActiveView(view);
@@ -173,18 +241,25 @@ export function BoardClient() {
           <div className="filter-control date-control"><CalendarDays /><span>{formatDate(asOf)}</span></div>
           <div className="filter-control status-control"><Database /><div><b>{data ? "本地数据就绪" : "连接本地库"}</b><small>仅使用 zer0share 快照</small></div></div>
           <label className="filter-control select-control"><select value={board} onChange={e => setBoard(e.target.value)} aria-label="板块"><option value="mainboard">沪深主板</option><option value="chinext">创业板</option><option value="star">科创板</option></select><ChevronDown /></label>
-          <label className="filter-control market-value-control"><select value={mvOperator} onChange={e => setMvOperator(e.target.value)} aria-label="市值关系"><option value="gte">市值 ≥</option><option value="lte">市值 ≤</option></select><input type="number" value={mvValue} min="1" onChange={e => setMvValue(Number(e.target.value))} aria-label="市值亿元" /><span>亿</span></label>
+          <div className="industry-filter">
+            <button className="filter-control industry-trigger" type="button" aria-expanded={industryOpen} onClick={() => setIndustryOpen(value => !value)}><span>{industries.length ? `行业 ${industries.length} 项` : "全部行业"}</span><ChevronDown /></button>
+            {industryOpen && <div className="industry-popover" data-testid="industry-filter"><div><b>行业多选</b><button type="button" onClick={() => setIndustries([])}>清空</button></div><div className="industry-options">{industryOptions.map(item => <label key={item}><input type="checkbox" checked={industries.includes(item)} onChange={e => setIndustries(current => e.target.checked ? [...current, item] : current.filter(value => value !== item))} /><span>{item}</span></label>)}</div></div>}
+          </div>
+          <label className="filter-control market-range-control market-value-control"><span>市值</span><input type="number" min="0" value={mvMin} placeholder="下限" onChange={e => setMvMin(e.target.value)} aria-label="市值下限亿元" /><i>—</i><input type="number" min="0" value={mvMax} placeholder="上限" onChange={e => setMvMax(e.target.value)} aria-label="市值上限亿元" /><em>亿元</em></label>
           <button className={`filter-control toggle-control ${excludeSt ? "on" : ""}`} onClick={() => setExcludeSt(value => !value)} aria-pressed={excludeSt}><span>剔除 ST</span><i><b /></i></button>
-          <div className="filter-control fixed-top">每类 TOP 50</div>
-          <button className="run-button" onClick={() => void runScreen()} disabled={loading}>{loading ? <LoaderCircle className="spin" /> : <Play />}<span>{loading ? "筛选中" : "运行筛选"}</span></button>
+          <label className="filter-control top-k-control"><span>每类 Top</span><input type="number" min="1" step="1" value={topK} onChange={e => setTopK(Number(e.target.value))} aria-label="Top K" /></label>
+          <button className="save-screen-button" type="button" onClick={() => void saveCurrentSnapshot()} disabled={!data || loading || savingSnapshot}><Save />{savingSnapshot ? "保存中" : "保存本次筛选"}</button>
+          <button className="run-button" onClick={() => void runScreen()} disabled={loading || Boolean(filterError)} title={filterError || undefined}>{loading ? <LoaderCircle className="spin" /> : <Play />}<span>{loading ? "筛选中" : "运行筛选"}</span></button>
         </header>
+
+        {filterError && <div className="filter-error" role="alert">{filterError}</div>}
 
         {loading && progress && <div className="screen-progress" role="status" aria-live="polite"><span>{progress.stage}</span><i><b style={{ width: `${Math.max(4, progress.completed / progress.total * 100)}%` }} /></i><em>{progress.completed}/{progress.total}</em></div>}
 
         <section className="board-overview">
           <button className={`metric-card top-card ${activeView === "combined" ? "active" : ""}`} onClick={() => enterView("combined")}>
-            <span>综合榜</span><h1>TOP 50</h1>
-            <div className="progress-ring" style={{ "--progress": `${Math.min(100, ((data?.items.length || 0) / 50) * 100)}%` } as React.CSSProperties}><b>{data?.items.length || 0}</b><span>只</span></div>
+            <span>综合榜</span><h1>TOP {topK}</h1>
+            <div className="progress-ring" style={{ "--progress": `${Math.min(100, ((data?.items.length || 0) / Math.max(1, topK)) * 100)}%` } as React.CSSProperties}><b>{Math.min(data?.items.length || 0, topK)}</b><span>只</span></div>
             <p>股票池 <b>{data?.filtered || 0}</b> 只</p>
           </button>
           <div className="metric-card patterns-card">
@@ -215,7 +290,7 @@ export function BoardClient() {
             <div className="section-heading"><div><h2>{title}</h2><span>{feedback}</span></div><button onClick={() => void runScreen()} aria-label="刷新"><RefreshCw /></button></div>
             {error ? <ErrorState message={error} onRetry={runScreen} /> : <div className="table-wrap">
               <table className="candidate-table">
-                <thead><tr><th>排名</th><th>股票代码</th><th>股票名称</th><th>所属板块</th><th>形态</th><th>匹配理由</th><th>匹配度</th><th>总市值</th><th>涨跌幅</th><th>5日趋势</th></tr></thead>
+                <thead><tr><th>排名</th><th>股票代码</th><th>股票名称</th><th>所属行业</th><th>形态</th><th>匹配理由</th><th>匹配度</th><th>总市值</th><th>涨跌幅</th><th>5日趋势</th></tr></thead>
                 <tbody>{visibleItems.map((stock, index) => {
                   const meta = patternMeta[stock.pattern || "breakout"];
                   const rank = activeView === "combined" ? stock.rank : stock.category_rank || stock.rank;
@@ -237,12 +312,12 @@ export function BoardClient() {
           <article className="detail-card">
             {selected ? <>
               <div className="detail-chart-head"><b>日 K · 近 5 个月</b><span className="ma ma5">MA5</span><span className="ma ma10">MA10</span><span className="ma ma20">MA20</span></div>
-              <div className="detail-chart"><MarketChart bars={selected.bars || []} compact /></div>
+              <div className="detail-chart"><MarketChart bars={selected.bars || []} visibleCount={110} compact /></div>
               <div className="pattern-reading">
                 <div className="reading-head"><h3>形态解读</h3><span className={`pattern-tag ${patternMeta[selected.pattern || "breakout"].color}`}>{selected.pattern_name || patternMeta[selected.pattern || "breakout"].name}</span></div>
                 {selected.reasons?.length ? <ul>{selected.reasons.slice(0, 4).map(reason => <li key={reason}><Check />{reason}</li>)}</ul> : <p className="reading-empty">已计算，但没有可展示的匹配理由。</p>}
                 {selected.metrics && <div className="metric-facts">{Object.entries(selected.metrics).slice(0, 4).map(([key, value]) => <span key={key}><small>{metricLabel(key)}</small><b>{fmtMetric(key, value)}</b></span>)}</div>}
-                <div className="detail-actions"><button className={`secondary-action ${pending ? "active" : ""}`} onClick={() => void toggleState("pending")}><CircleHelp />{pending ? "移出待判断" : "待判断"}</button><Link className="open-market-button" href={`/market?code=${selected.code}`}>打开行情 <ExternalLink /></Link></div>
+                <div className="detail-actions"><button className={`secondary-action ${pending ? "active" : ""}`} onClick={() => void toggleState("pending")}><CircleHelp />{pending ? "移出待判断" : "待判断"}</button><Link className="open-market-button" href={`/market?code=${selected.code}${selected.pattern ? `&category=${selected.pattern}` : ""}`}>打开行情 <ExternalLink /></Link></div>
               </div>
             </> : <EmptyState text="选择一只候选股票查看详情" />}
           </article>
@@ -252,14 +327,14 @@ export function BoardClient() {
           <StateCard tone="mint" icon={<Eye />} label="已查看" count={state.viewed.length} onClick={() => setDrawer("viewed")} />
           <StateCard tone="blue" icon={<Bookmark />} label="已保存" count={state.saved.length} onClick={() => setDrawer("saved")} />
           <StateCard tone="yellow" icon={<CircleHelp />} label="待判断" count={state.pending.length} onClick={() => setDrawer("pending")} />
-          <StateCard tone="plain" icon={<Clock3 />} label="历史记录" count={state.history.runs.length} onClick={() => setDrawer("history")} />
+          <StateCard tone="plain" icon={<Clock3 />} label="历史记录" count={historyPage?.total ?? state.history.runs.length} onClick={() => void openHistory()} />
         </section>
       </main>
-      {drawer && <StateDrawer kind={drawer} state={state} onClose={() => setDrawer(null)} onChoose={async code => {
+      {drawer && <StateDrawer kind={drawer} state={state} historyPage={historyPage} snapshotDetail={snapshotDetail} onClose={() => { setDrawer(null); setSnapshotDetail(null); }} onChoose={async code => {
         const { item } = await api.stock(code);
         setDrawer(null);
         await chooseStock(item);
-      }} />}
+      }} onOpenSnapshot={async runId => setSnapshotDetail(runId ? await api.screenSnapshot(runId) : null)} onHistoryPage={page => void openHistory(page)} onApplySnapshot={applySnapshotFilters} />}
     </div>
   );
 }
@@ -272,14 +347,24 @@ function StateCard({ tone, icon, label, count, onClick }: { tone: string; icon: 
   return <button className={`state-card ${tone}`} onClick={onClick}><span className="state-icon">{icon}</span><span><small>{label}</small><b>{count}</b></span><ChevronRight className="state-arrow" /></button>;
 }
 
-function StateDrawer({ kind, state, onClose, onChoose }: { kind: "viewed" | "saved" | "pending" | "history"; state: StateSnapshot; onClose: () => void; onChoose: (code: string) => void }) {
-  const items = kind === "history" ? state.history.recommendations : state[kind];
-  return <div className="drawer-backdrop" onClick={onClose}><aside className="state-drawer" onClick={e => e.stopPropagation()} aria-label={drawerLabel(kind)}><button className="drawer-close" onClick={onClose} aria-label="关闭"><X /></button><h2>{drawerLabel(kind)}</h2><p>记录只保存在本项目的本地数据库中。</p><div className="drawer-list">{items.length ? items.slice(0, 100).map((item, index) => {
-    const code = item.code;
-    const label = "category_label" in item ? item.category_label : item.market || "本地记录";
-    return <button key={`${code}-${index}`} onClick={() => onChoose(code)}><span><b>{item.name || code}</b><small>{code} · {label}</small></span><ChevronRight /></button>;
-  }) : <EmptyState compact text="暂无记录" />}</div></aside></div>;
+function StateDrawer({ kind, state, historyPage, snapshotDetail, onClose, onChoose, onOpenSnapshot, onHistoryPage, onApplySnapshot }: {
+  kind: "viewed" | "saved" | "pending" | "history";
+  state: StateSnapshot;
+  historyPage: SavedScreenPage | null;
+  snapshotDetail: SavedScreenSnapshot | null;
+  onClose: () => void;
+  onChoose: (code: string) => void;
+  onOpenSnapshot: (runId: string) => void;
+  onHistoryPage: (page: number) => void;
+  onApplySnapshot: (run: SavedScreenSnapshot) => void;
+}) {
+  if (kind === "history") { const runs = historyPage?.items || state.history.runs; return <div className="drawer-backdrop" onClick={onClose}><aside className="state-drawer history-drawer" onClick={e => e.stopPropagation()} aria-label={drawerLabel(kind)}><button className="drawer-close" onClick={onClose} aria-label="关闭"><X /></button><h2>{snapshotDetail ? "筛选快照详情" : drawerLabel(kind)}</h2><p>每条记录代表用户主动保存的一次完整筛选。</p>{snapshotDetail ? <div className="snapshot-detail" data-run-id={snapshotDetail.run_id}><button className="drawer-back" onClick={() => onOpenSnapshot("")}>返回历史</button><dl>{Object.entries(snapshotDetail.filters || {}).map(([key, value]) => <span key={key}><dt>{filterLabel(key)}</dt><dd>{formatFilterValue(value)}</dd></span>)}</dl><button className="reuse-filter-button" onClick={() => onApplySnapshot(snapshotDetail)}>恢复并复用条件</button><div className="snapshot-results">{(snapshotDetail.results || []).map((item, index) => <button key={`${item.code}-${item.pattern}-${index}`} onClick={() => onChoose(item.code)}><b>{item.rank || index + 1}</b><span><strong>{item.name || item.code}</strong><small>{item.code} · {item.pattern_name || patternMeta[item.pattern || "breakout"].name}</small></span><em>{Math.round(item.score || 0)}分</em></button>)}</div></div> : <><div className="drawer-list">{runs.length ? runs.map(run => <button key={run.run_id} data-run-id={run.run_id} onClick={() => onOpenSnapshot(run.run_id)}><span><b>{new Date(run.created_at).toLocaleString("zh-CN")}</b><small>{run.result_count} 只 · Top {run.top_k || String(run.filters?.top_k || 50)}</small></span><ChevronRight /></button>) : <EmptyState compact text="尚未主动保存筛选快照" />}</div>{historyPage && historyPage.total > historyPage.page_size && <div className="history-pagination"><button disabled={historyPage.page <= 1} onClick={() => onHistoryPage(historyPage.page - 1)}>上一页</button><span>{historyPage.page} / {Math.ceil(historyPage.total / historyPage.page_size)}</span><button disabled={historyPage.page * historyPage.page_size >= historyPage.total} onClick={() => onHistoryPage(historyPage.page + 1)}>下一页</button></div>}</>}</aside></div>; }
+  const items = state[kind];
+  return <div className="drawer-backdrop" onClick={onClose}><aside className="state-drawer" onClick={e => e.stopPropagation()} aria-label={drawerLabel(kind)}><button className="drawer-close" onClick={onClose} aria-label="关闭"><X /></button><h2>{drawerLabel(kind)}</h2><p>记录只保存在本项目的本地数据库中。</p><div className="drawer-list">{items.length ? items.slice(0, 100).map((item, index) => <button key={`${item.code}-${index}`} onClick={() => onChoose(item.code)}><span><b>{item.name || item.code}</b><small>{item.code} · {item.market || "本地记录"}</small></span><ChevronRight /></button>) : <EmptyState compact text="暂无记录" />}</div></aside></div>;
 }
+
+function filterLabel(key: string) { return ({ board: "板块", industries: "行业", market_cap_min_yi: "市值下限", market_cap_max_yi: "市值上限", exclude_st: "剔除 ST", top_k: "Top K", mode: "结果模式" } as Record<string, string>)[key] || key; }
+function formatFilterValue(value: unknown) { if (Array.isArray(value)) return value.length ? value.join("、") : "不限"; if (value == null || value === "") return "不限"; if (typeof value === "boolean") return value ? "是" : "否"; return String(value); }
 
 function EmptyState({ text, compact = false }: { text: string; compact?: boolean }) { return <div className={`empty-state ${compact ? "compact" : ""}`}><Database /><span>{text}</span></div>; }
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) { return <div className="error-state"><Database /><h3>本地数据暂不可用</h3><p>{message}</p><button onClick={onRetry}>重新连接</button></div>; }

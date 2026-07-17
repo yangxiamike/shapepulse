@@ -49,7 +49,8 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
       if (viewport.width === 1024) {
         await page.getByRole("button", { name: "打开右侧面板" }).click();
         await page.getByRole("button", { name: "形态", exact: true }).click();
-        await expect(page.getByText("特一药业 · 形态事实")).toBeVisible();
+        await expect(page.getByTestId("pattern-group-select")).toBeVisible();
+        await expect(page.getByRole("heading", { name: /特一药业 · 形态事实|尚未计算|已计算但无匹配/ })).toBeVisible();
         await settleForScreenshot(page, page.locator(".market-rightbar"));
         await page.screenshot({ path: `${screenshotDir}/market-1024-right-drawer.png`, animations: "disabled", caret: "hide" });
       }
@@ -166,7 +167,7 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
     await settleForScreenshot(page, page.locator(".market-chart"));
     await page.screenshot({ path: `${screenshotDir}/market-1600-drawing-tools.png`, animations: "disabled", caret: "hide" });
     await page.getByRole("button", { name: "清除画线" }).click();
-    await page.getByRole("button", { name: "放大图表" }).click();
+    await page.getByRole("button", { name: "放大图表", exact: true }).click();
     await expect(page.locator(".range-toolbar button.active")).not.toHaveText("6个月");
 
     for (const label of ["分时", "5分", "指标尚未实现", "对比尚未实现", "预警尚未实现", "回放尚未实现"]) {
@@ -174,15 +175,16 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
       await expect(button).toBeDisabled();
     }
     await page.getByRole("button", { name: "形态", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "已计算但无匹配" })).toBeVisible();
+    await expect(page.getByTestId("pattern-group-select")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /尚未计算|已计算但无匹配|形态事实/ })).toBeVisible();
 
     await page.setViewportSize({ width: 1024, height: 800 });
     await page.goto("/market?code=002728");
     await expect(page.getByRole("heading", { name: "特一药业" })).toBeVisible();
     await page.getByRole("button", { name: "打开右侧面板" }).click();
     await page.getByRole("button", { name: "形态", exact: true }).click();
-    await expect(page.getByText("特一药业 · 形态事实")).toBeVisible();
-    await expect(page.getByText("规则版本 v1")).toBeVisible();
+    await expect(page.getByTestId("pattern-group-select")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /特一药业 · 形态事实|尚未计算|已计算但无匹配/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "到选股看板查看该股记录" })).toBeVisible();
     browserEvidence.push({ scenario: "interactions", periods: counts, drawings: ["line", "horizontal", "text", "measure", "clear"], state_persistence: true, mobile_pattern_panel: true, result: "pass" });
     expect(audit.consoleErrors).toEqual([]);

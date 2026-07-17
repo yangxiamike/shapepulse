@@ -29,7 +29,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { AppSidebar } from "./AppSidebar";
-import { MarketChart, type ChartDrawing, type DrawingKind } from "./MarketChart";
+import { MarketChart, type ChartDrawing, type DrawingMode, type MarketChartHandle } from "./MarketChart";
 import { api, fmtAmount, fmtMarketValue, fmtMetric, fmtNumber, formatDate, metricLabel } from "../lib/api";
 import type { Bar, PatternKey, PatternResponse, StateSnapshot, Stock } from "../lib/types";
 
@@ -43,6 +43,13 @@ type RightTab = typeof tabs[number];
 
 const patternNames: Record<PatternKey, string> = { breakout: "突破启动", pullback: "上升趋势回调", range_bounce: "区间下沿反弹" };
 const emptyState: StateSnapshot = { viewed: [], saved: [], pending: [], watchlist: [], history: { runs: [], recommendations: [] } };
+const rangeLimits: Record<string, Record<string, number>> = {
+  "1D": { D: 1, W: 1, M: 1, Q: 1, Y: 1 }, "5D": { D: 5, W: 2, M: 1, Q: 1, Y: 1 },
+  "1M": { D: 22, W: 5, M: 1, Q: 1, Y: 1 }, "3M": { D: 66, W: 14, M: 3, Q: 1, Y: 1 },
+  "6M": { D: 110, W: 27, M: 6, Q: 2, Y: 1 }, YTD: { D: 160, W: 32, M: 8, Q: 3, Y: 1 },
+  "1Y": { D: 250, W: 53, M: 12, Q: 4, Y: 1 }, "3Y": { D: 750, W: 160, M: 36, Q: 12, Y: 3 },
+  "5Y": { D: 1250, W: 266, M: 60, Q: 20, Y: 5 }, ALL: { D: 10000, W: 2500, M: 600, Q: 200, Y: 50 },
+};
 
 export function MarketClient() {
   const [stock, setStock] = useState<Stock | null>(null);
@@ -60,8 +67,16 @@ export function MarketClient() {
   const [pattern, setPattern] = useState<PatternResponse | null>(null);
   const [patternLoading, setPatternLoading] = useState(false);
   const [patternError, setPatternError] = useState("");
-  const [drawingMode, setDrawingMode] = useState<DrawingKind | null>(null);
+  const [drawingMode, setDrawingMode] = useState<DrawingMode | null>("select");
   const [drawings, setDrawings] = useState<ChartDrawing[]>([]);
+  const [selectedDrawing, setSelectedDrawing] = useState<number | null>(null);
+  const [layout, setLayout] = useState<1 | 2 | 4>(1);
+  const [layoutOpen, setLayoutOpen] = useState(false);
+  const [maximizedPane, setMaximizedPane] = useState<number | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [patternCategory, setPatternCategory] = useState<PatternKey>("breakout");
+  const [patternPool, setPatternPool] = useState<Stock[]>([]);
+  const [poolLoading, setPoolLoading] = useState(false);
   const [crosshairEnabled, setCrosshairEnabled] = useState(true);
   const [status, setStatus] = useState("连接本地数据…");
   const [error, setError] = useState("");
@@ -70,6 +85,9 @@ export function MarketClient() {
   const [perf, setPerf] = useState({ frontendMs: 0, httpMs: 0, queryMs: 0, renderMs: 0, cache: false });
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const operationStarted = useRef(0);
+  const loadSequence = useRef(0);
+  const workspaceRef = useRef<HTMLElement>(null);
+  const chartRefs = useRef<Array<MarketChartHandle | null>>([]);
 
   const refreshWatchlist = useCallback(async (snapshot: StateSnapshot) => {
     const items = await Promise.all(snapshot.watchlist.map(item => api.stock(item.code).then(result => result.item).catch(() => ({ code: item.code, ts_code: item.ts_code, name: item.name || item.code, close: 0, pct_chg: 0 } as Stock))));
@@ -83,30 +101,44 @@ export function MarketClient() {
     finally { setPatternLoading(false); }
   }, []);
 
-  const loadStock = useCallback(async (code: string, nextPeriod = "D", nextRange = "6M") => {
+  const loadPatternPool = useCallback(async (category: PatternKey) => {
+    setPoolLoading(true);
+    try {
+      const pool = await api.patternPool(category, 500);
+      setPatternPool(pool.items);
+    } catch (e) { setPatternError(e instanceof Error ? e.message : "形态股票池加载失败"); setPatternPool([]); }
+    finally { setPoolLoading(false); }
+  }, []);
+
+  const loadStock = useCallback(async (code: string, nextPeriod = "D", nextRange = "6M", preserveContext = false) => {
+    const sequence = ++loadSequence.current;
     const started = performance.now();
     operationStarted.current = started;
     setLoading(true); setError(""); setStatus("正在读取本地行情…");
     try {
       const [detailResult, history] = await Promise.all([api.stock(code), api.bars(code, nextPeriod, nextRange)]);
+      if (sequence !== loadSequence.current) return;
       const detail = detailResult.item;
       setStock(detail); setBars(history.items); setPeriod(nextPeriod); setRange(nextRange);
       setPerf(current => ({ ...current, frontendMs: performance.now() - started, httpMs: detailResult.httpMs + (history.http_ms || 0), queryMs: history.timings.total_ms || 0, cache: detailResult.cacheHit && Boolean(history.client_cache_hit) }));
       setStatus(`${history.client_cache_hit ? "前端缓存" : history.cache_hit ? "后端缓存" : "本地快照"} · ${formatDate(history.as_of.daily)} · ${history.items.length} 根`);
-      setSearchOpen(false); setQuery(""); setRightOpen(false);
-      window.history.replaceState(null, "", `/market?code=${detail.code}`);
+      setSearchOpen(false); setQuery(""); if (!preserveContext) setRightOpen(false);
+      window.history.replaceState(null, "", `/market?code=${detail.code}&category=${patternCategory}`);
       void api.updateState(detail.code, "viewed").catch(() => undefined);
       void loadPattern(detail.code);
     } catch (e) {
       const message = e instanceof Error ? e.message : "本地行情加载失败";
       setError(message); setStatus(message);
     } finally { setLoading(false); }
-  }, [loadPattern]);
+  }, [loadPattern, patternCategory]);
 
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get("code") || "000001";
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code") || "000001";
+    const requestedCategory = params.get("category") as PatternKey | null;
     const updateClock = () => setClock(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
     const boot = window.setTimeout(() => {
+      if (requestedCategory && requestedCategory in patternNames) { setPatternCategory(requestedCategory); void loadPatternPool(requestedCategory); }
       void loadStock(code);
       void api.state().then(snapshot => { setState(snapshot); void refreshWatchlist(snapshot); }).catch(() => undefined);
       updateClock();
@@ -114,6 +146,36 @@ export function MarketClient() {
     const timer = window.setInterval(updateClock, 1000);
     return () => { window.clearTimeout(boot); window.clearInterval(timer); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { if (rightTab === "形态") void loadPatternPool(patternCategory); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadPatternPool, patternCategory, rightTab]);
+
+  useEffect(() => {
+    const onFullscreen = () => {
+      setFullscreen(document.fullscreenElement === workspaceRef.current);
+      window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40);
+    };
+    document.addEventListener("fullscreenchange", onFullscreen);
+    return () => document.removeEventListener("fullscreenchange", onFullscreen);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (rightTab !== "形态" || (event.key !== "ArrowUp" && event.key !== "ArrowDown") || drawingMode !== "select") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, select, textarea, [contenteditable=true]")) return;
+      const index = patternPool.findIndex(item => item.code === stock?.code);
+      if (index < 0) return;
+      const nextIndex = Math.max(0, Math.min(patternPool.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)));
+      if (nextIndex === index) return;
+      event.preventDefault();
+      void loadStock(patternPool[nextIndex].code, period, range, true);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [drawingMode, loadStock, patternPool, period, range, rightTab, stock?.code]);
 
   const changeBars = useCallback(async (nextPeriod: string, nextRange = range) => {
     if (!stock || (nextPeriod === period && nextRange === range)) return;
@@ -160,6 +222,26 @@ export function MarketClient() {
     void changeBars(period, next);
   }
 
+  function changeLayout(next: 1 | 2 | 4) {
+    setLayout(next); setMaximizedPane(null); setLayoutOpen(false);
+    window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40);
+  }
+
+  async function toggleFullscreen() {
+    if (!workspaceRef.current) return;
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await workspaceRef.current.requestFullscreen();
+  }
+
+  function updateDrawing(index: number, drawing: ChartDrawing) {
+    setDrawings(items => items.map((item, itemIndex) => itemIndex === index ? drawing : item));
+  }
+
+  function deleteDrawing(index: number) {
+    setDrawings(items => items.filter((_item, itemIndex) => itemIndex !== index));
+    setSelectedDrawing(null);
+  }
+
   const onRendered = useCallback((durationMs: number) => {
     setPerf(current => ({ ...current, renderMs: durationMs, frontendMs: operationStarted.current ? performance.now() - operationStarted.current : current.frontendMs }));
   }, []);
@@ -167,6 +249,8 @@ export function MarketClient() {
   const latest = bars.at(-1);
   const maLegend = useMemo(() => latest ? [latest.ma5, latest.ma10, latest.ma20] : [], [latest]);
   const watched = Boolean(stock && state.watchlist.some(item => item.code === stock.code));
+  const visibleCount = rangeLimits[range]?.[period] || 110;
+  const paneIndexes = maximizedPane == null ? Array.from({ length: layout }, (_value, index) => index) : [maximizedPane];
 
   return <div className="app-shell market-shell">
     <AppSidebar active="market" />
@@ -178,7 +262,7 @@ export function MarketClient() {
           {query ? <button onClick={() => onSearch("")} aria-label="清空搜索"><X /></button> : <Search className="search-right" />}
           {searchOpen && <div className="search-results" role="listbox">{results.length ? results.map((item, index) => <button role="option" aria-selected={index === activeResult} key={item.code} className={index === activeResult ? "active" : ""} onMouseEnter={() => setActiveResult(index)} onClick={() => void loadStock(item.code, "D", "6M")}><span>{item.code}</span><b>{item.name}</b><em>{item.initials}</em></button>) : <p>没有匹配的本地股票</p>}</div>}
         </div>
-        <div className="layout-tools"><DisabledButton title="多图布局尚未实现"><Grid2X2 /><span>多图布局</span><ChevronDown /></DisabledButton><DisabledButton title="布局保存尚未实现"><span>未命名布局</span><ChevronDown /></DisabledButton><DisabledButton title="布局设置尚未实现" label="布局设置"><Settings2 /></DisabledButton><button className="mobile-panel-button" onClick={() => setRightOpen(true)} aria-label="打开右侧面板"><PanelRightOpen /></button><button aria-label="菜单"><Menu /></button></div>
+        <div className="layout-tools"><div className="layout-picker"><button onClick={() => setLayoutOpen(value => !value)} aria-expanded={layoutOpen}><Grid2X2 /><span>{layout} 图布局</span><ChevronDown /></button>{layoutOpen && <div className="layout-menu">{([1, 2, 4] as const).map(value => <button key={value} className={layout === value ? "active" : ""} onClick={() => changeLayout(value)}>{value} 图</button>)}</div>}</div><button onClick={() => changeLayout(1)} title="恢复单图"><span>{maximizedPane == null ? `布局 ${layout}` : "单图放大"}</span></button><button onClick={() => chartRefs.current.forEach(chart => chart?.fitContent())} title="适配全部历史" aria-label="适配图表"><Settings2 /></button><button className="mobile-panel-button" onClick={() => setRightOpen(true)} aria-label="打开右侧面板"><PanelRightOpen /></button><button aria-label="菜单"><Menu /></button></div>
       </header>
 
       <section className="quote-summary">
@@ -191,23 +275,30 @@ export function MarketClient() {
 
       {stock?.warnings?.length ? <div className="market-warning">{stock.warnings.join(" · ")}</div> : null}
 
-      <section className="chart-workspace">
+      <section ref={workspaceRef} className="chart-workspace" data-layout={layout} data-fullscreen={fullscreen}>
         <div className="chart-toolbar">
           <div className="period-tabs">{unavailablePeriods.map(label => <button key={label} disabled title="本地 zer0share 当前只有日线，分钟周期不可用">{label}</button>)}{periods.map(([label, value]) => <button key={label} className={period === value ? "active" : ""} onClick={() => void changeBars(value)}>{label}</button>)}</div>
-          <div className="chart-actions"><DisabledButton title="指标尚未实现">指标 <ChevronDown /></DisabledButton><i /><DisabledButton title="对比尚未实现">对比</DisabledButton><i /><DisabledButton title="预警尚未实现"><Bell />预警</DisabledButton><i /><DisabledButton title="回放尚未实现"><RotateCcw />回放</DisabledButton><i /><DisabledButton title="截图导出尚未实现" label="截图"><Camera /></DisabledButton><DisabledButton title="全屏尚未实现" label="全屏"><Fullscreen /></DisabledButton></div>
+          <div className="chart-actions"><DisabledButton title="指标尚未实现">指标 <ChevronDown /></DisabledButton><i /><DisabledButton title="对比尚未实现">对比</DisabledButton><i /><DisabledButton title="预警尚未实现"><Bell />预警</DisabledButton><i /><DisabledButton title="回放尚未实现"><RotateCcw />回放</DisabledButton><i /><DisabledButton title="截图导出尚未实现" label="截图"><Camera /></DisabledButton><button onClick={() => void toggleFullscreen()} aria-label={fullscreen ? "退出全屏" : "进入全屏"} title={fullscreen ? "退出全屏" : "进入全屏"}><Fullscreen />{fullscreen ? "退出" : "全屏"}</button></div>
           <div className="ma-legend"><span className="ma5">MA5　{fmtNumber(maLegend[0])}</span><span className="ma10">MA10　{fmtNumber(maLegend[1])}</span><span className="ma20">MA20　{fmtNumber(maLegend[2])}</span><span className="perf-chip" data-testid="market-performance">总 {perf.frontendMs.toFixed(0)}ms · HTTP {perf.httpMs.toFixed(0)}ms · 查询 {perf.queryMs.toFixed(0)}ms · 绘制 {perf.renderMs.toFixed(0)}ms{perf.cache ? " · 缓存" : ""}</span></div>
         </div>
         <div className="drawing-toolbar">
-          <DrawingButton label="光标/拖动" active={!drawingMode} onClick={() => setDrawingMode(null)}><MousePointer2 /></DrawingButton>
-          <DrawingButton label="趋势线" active={drawingMode === "line"} onClick={() => setDrawingMode(drawingMode === "line" ? null : "line")}><Pencil /></DrawingButton>
+          <DrawingButton label="选择/调整" active={drawingMode === "select"} onClick={() => setDrawingMode("select")}><MousePointer2 /></DrawingButton>
+          <DrawingButton label="斐波那契回撤" active={drawingMode === "fibonacci"} onClick={() => setDrawingMode("fibonacci")}><Layers3 /></DrawingButton>
+          <DrawingButton label="趋势线" active={drawingMode === "trend"} onClick={() => setDrawingMode("trend")}><Pencil /></DrawingButton>
+          <DrawingButton label="线段" active={drawingMode === "segment"} onClick={() => setDrawingMode("segment")}><LineChart /></DrawingButton>
+          <DrawingButton label="射线" active={drawingMode === "ray"} onClick={() => setDrawingMode("ray")}><LineChart /></DrawingButton>
           <DrawingButton label={`十字光标${crosshairEnabled ? "已开启" : "已关闭"}`} active={crosshairEnabled} onClick={() => setCrosshairEnabled(value => !value)}><Crosshair /></DrawingButton>
-          <DrawingButton label="水平线" active={drawingMode === "horizontal"} onClick={() => setDrawingMode(drawingMode === "horizontal" ? null : "horizontal")}><LineChart /></DrawingButton>
-          <DrawingButton label="文本" active={drawingMode === "text"} onClick={() => setDrawingMode(drawingMode === "text" ? null : "text")}><Type /></DrawingButton>
-          <DrawingButton label="测量" active={drawingMode === "measure"} onClick={() => setDrawingMode(drawingMode === "measure" ? null : "measure")}><Ruler /></DrawingButton>
+          <DrawingButton label="水平线" active={drawingMode === "horizontal"} onClick={() => setDrawingMode("horizontal")}><LineChart /></DrawingButton>
+          <DrawingButton label="垂直线" active={drawingMode === "vertical"} onClick={() => setDrawingMode("vertical")}><LineChart /></DrawingButton>
+          <DrawingButton label="曲线" active={drawingMode === "curve"} onClick={() => setDrawingMode("curve")}><Pencil /></DrawingButton>
+          <DrawingButton label="自由绘制" active={drawingMode === "freehand"} onClick={() => setDrawingMode("freehand")}><Pencil /></DrawingButton>
+          <DrawingButton label="文本" active={drawingMode === "text"} onClick={() => setDrawingMode("text")}><Type /></DrawingButton>
+          <DrawingButton label="测量" active={drawingMode === "measure"} onClick={() => setDrawingMode("measure")}><Ruler /></DrawingButton>
           <DrawingButton label="放大图表" active={false} onClick={zoomIn}><ZoomIn /></DrawingButton>
-          <DrawingButton label="清除画线" active={drawings.length > 0} onClick={() => setDrawings([])}><Trash2 /></DrawingButton>
+          <DrawingButton label="删除所选" active={selectedDrawing != null} onClick={() => selectedDrawing != null && deleteDrawing(selectedDrawing)}><Trash2 /></DrawingButton>
+          <DrawingButton label="清除画线（全部）" active={drawings.length > 0} onClick={() => { setDrawings([]); setSelectedDrawing(null); }}><Trash2 /></DrawingButton>
         </div>
-        <div className="chart-stage">{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : <MarketChart bars={bars} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawings={drawings} onRendered={onRendered} onDrawComplete={drawing => { setDrawings(items => [...items, drawing]); setDrawingMode(null); }} />}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
+        <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={setSelectedDrawing} onDrawingChange={updateDrawing} onDrawingDelete={deleteDrawing} onDrawingsChange={setDrawings} onRendered={onRendered} onDrawComplete={drawing => { setDrawings(items => [...items, drawing]); setDrawingMode("select"); }} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
         <div className="range-toolbar">{ranges.map(([label, value]) => <button className={range === value ? "active" : ""} key={value} onClick={() => void changeBars(period, value)}>{label}</button>)}<b>{bars[0]?.time || "—"} 至 {bars.at(-1)?.time || "—"}　<CalendarDays /></b></div>
       </section>
     </main>
@@ -220,7 +311,7 @@ export function MarketClient() {
         <div className="watch-header"><span>名称/代码</span><span>最新价</span><span>涨跌幅</span></div>
         <div className="watch-list">{watchlist.length ? watchlist.map(item => <button key={item.code} className={item.code === stock?.code ? "active" : ""} onClick={() => void loadStock(item.code, "D", "6M")}><span><b>{item.name}</b><em>{item.code}</em></span><strong>{fmtNumber(item.close)}</strong><i className={item.pct_chg >= 0 ? "up" : "down"}>{signed(item.pct_chg)}%</i></button>) : <PanelEmpty title="暂无自选" text="添加后会保存在本项目的本地数据库中。" />}</div>
         <button className={`add-watch ${watched ? "remove" : ""}`} onClick={() => void toggleWatchlist()} disabled={!stock}>{watched ? <X /> : <Plus />}{watched ? "移出自选" : "添加自选"}</button>
-      </> : rightTab === "详情" ? <DetailPanel stock={stock} /> : rightTab === "形态" ? <PatternPanel stock={stock} data={pattern} loading={patternLoading} error={patternError} onRetry={() => stock && void loadPattern(stock.code)} /> : <UnavailablePanel tab={rightTab} />}
+      </> : rightTab === "详情" ? <DetailPanel stock={stock} /> : rightTab === "形态" ? <PatternWorkspace stock={stock} category={patternCategory} pool={patternPool} poolLoading={poolLoading} onCategory={setPatternCategory} onChoose={code => void loadStock(code, period, range, true)}><PatternPanel stock={stock} data={pattern} loading={patternLoading} error={patternError} onRetry={() => stock && void loadPattern(stock.code)} /></PatternWorkspace> : <UnavailablePanel tab={rightTab} />}
     </aside>
 
     <footer className="market-statusbar"><span><i className={stock ? "connected" : ""} />{stock ? "已连接" : "未连接"}</span><span><Clock3 />{clock}</span><span className="status-center">本地数据　{status}</span><span><CircleDot />zer0share 日线快照</span><span>CN</span></footer>
@@ -230,6 +321,10 @@ export function MarketClient() {
 function DetailPanel({ stock }: { stock: Stock | null }) {
   if (!stock) return <PanelEmpty title="尚未选择股票" text="先搜索或从自选中打开一只股票。" />;
   return <div className="detail-panel"><div className="panel-title"><Layers3 /><div><h3>{stock.name}</h3><p>{stock.ts_code}</p></div></div><dl><dt>市场</dt><dd>{stock.market || "—"}</dd><dt>行业</dt><dd>{stock.industry || "—"}</dd><dt>总市值</dt><dd>{fmtMarketValue(stock.total_mv)}</dd><dt>市盈率 TTM</dt><dd>{fmtNumber(stock.pe_ttm)}</dd><dt>市净率</dt><dd>{fmtNumber(stock.pb)}</dd><dt>ST 状态</dt><dd>{stock.is_st ? "是" : "否"}</dd></dl><div className="panel-dates"><b>数据表日期</b><span>行情 {formatDate(stock.as_of?.quote)}</span><span>估值 {formatDate(stock.as_of?.valuation)}</span><span>ST {formatDate(stock.as_of?.st)}</span><span>复权 {formatDate(stock.as_of?.adj_factor)}</span></div>{stock.warnings?.map(item => <p className="panel-warning" key={item}>{item}</p>)}</div>;
+}
+
+function PatternWorkspace({ stock, category, pool, poolLoading, onCategory, onChoose, children }: { stock: Stock | null; category: PatternKey; pool: Stock[]; poolLoading: boolean; onCategory: (category: PatternKey) => void; onChoose: (code: string) => void; children: React.ReactNode }) {
+  return <div className="pattern-workspace"><label className="pattern-group"><span>形态分组</span><select data-testid="pattern-group-select" value={category} onChange={event => onCategory(event.target.value as PatternKey)}>{(Object.keys(patternNames) as PatternKey[]).map(key => <option key={key} value={key}>{patternNames[key]}</option>)}</select></label><div className="pattern-pool" data-testid="pattern-pool">{poolLoading ? <p>正在加载股票池…</p> : pool.length ? pool.map((item, index) => <button key={item.code} aria-current={item.code === stock?.code ? "true" : undefined} className={item.code === stock?.code ? "active" : ""} onClick={() => onChoose(item.code)}><b>{index + 1}</b><span><strong>{item.name}</strong><small>{item.code}</small></span><em>{Math.round(item.score || 0)}分</em></button>) : <p>该分类当前没有可用股票</p>}</div><div className="pattern-facts">{children}</div></div>;
 }
 
 function PatternPanel({ stock, data, loading, error, onRetry }: { stock: Stock | null; data: PatternResponse | null; loading: boolean; error: string; onRetry: () => void }) {

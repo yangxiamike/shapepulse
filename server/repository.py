@@ -190,12 +190,17 @@ class LocalMarketRepository:
         )
 
     def _daily_with_factors(
-        self, code: str, start_date: str, end_date: str, include_factors: bool
+        self,
+        code: str,
+        start_date: str | None,
+        end_date: str | None,
+        include_factors: bool,
+        limit: int | None = None,
     ) -> pd.DataFrame:
         latest_daily = self.latest_partition("daily_kline")
         latest_adj = self.latest_partition("adj_factor")
         token = (latest_daily, latest_adj)
-        key = f"daily-source:{code}:{start_date}:{end_date}:{include_factors}"
+        key = f"daily-source:{code}:{start_date}:{end_date}:{include_factors}:{limit}"
         with self._lock:
             hit = self._cache.get(key)
             if hit is not None and hit[0] == token:
@@ -221,13 +226,91 @@ class LocalMarketRepository:
             params.append(adj_source)
         else:
             sql = f"SELECT {columns} FROM read_parquet(?, hive_partitioning=true) d "
-        sql += "WHERE d.ts_code=? AND d.trade_date>=? AND d.trade_date<=? ORDER BY d.trade_date"
-        params.extend([code, start_date, end_date])
+        where = ["d.ts_code=?"]
+        params.append(code)
+        if start_date is not None:
+            where.append("d.trade_date>=?")
+            params.append(start_date)
+        if end_date is not None:
+            where.append("d.trade_date<=?")
+            params.append(end_date)
+        sql += "WHERE " + " AND ".join(where)
+        if limit is not None:
+            sql = f"SELECT * FROM ({sql} ORDER BY d.trade_date DESC LIMIT ?) q ORDER BY trade_date"
+            params.append(limit)
+        else:
+            sql += " ORDER BY d.trade_date"
         with self._query_lock:
             frame = self._duck.execute(sql, params).fetchdf()
         with self._lock:
             self._cache[key] = (token, frame.copy())
         return frame
+
+    def bar_bounds(self, code: str) -> tuple[str | None, str | None]:
+        latest = self.latest_partition("daily_kline")
+        key = f"bar-bounds:{code}"
+        with self._lock:
+            hit = self._cache.get(key)
+            if hit is not None and hit[0] == latest:
+                return hit[1]
+        source = str(self.data_dir / "stock" / "daily_kline" / "date=*" / "data.parquet")
+        with self._query_lock:
+            row = self._duck.execute(
+                "SELECT min(trade_date), max(trade_date) FROM read_parquet(?, hive_partitioning=true) WHERE ts_code=?",
+                [source, code],
+            ).fetchone()
+        value = (None, None) if row is None else tuple(None if item is None else str(item) for item in row)
+        with self._lock:
+            self._cache[key] = (latest, value)
+        return value
+
+    def _latest_factor(self, code: str, end_date: str) -> float | None:
+        latest = self.latest_partition("adj_factor")
+        key = f"latest-factor:{code}:{end_date}"
+        with self._lock:
+            hit = self._cache.get(key)
+            if hit is not None and hit[0] == latest:
+                return hit[1]
+        source = str(self.data_dir / "stock" / "adj_factor" / "date=*" / "data.parquet")
+        with self._query_lock:
+            row = self._duck.execute(
+                "SELECT adj_factor FROM read_parquet(?, hive_partitioning=true) "
+                "WHERE ts_code=? AND trade_date<=? AND adj_factor IS NOT NULL "
+                "ORDER BY trade_date DESC LIMIT 1",
+                [source, code, end_date],
+            ).fetchone()
+        value = None if row is None else float(row[0])
+        with self._lock:
+            self._cache[key] = (latest, value)
+        return value
+
+    @staticmethod
+    def _normalize_daily(frame: pd.DataFrame) -> pd.DataFrame:
+        """Return one renderer-safe, date-aligned OHLCV row per trading day."""
+        if frame.empty:
+            return frame.copy()
+        work = frame.copy()
+        work["trade_date"] = (
+            work["trade_date"].astype(str).str.replace(r"\D", "", regex=True).str[:8]
+        )
+        work.loc[~work["trade_date"].str.fullmatch(r"\d{8}"), "trade_date"] = pd.NA
+        numeric = ["open", "high", "low", "close", "pre_close", "vol", "amount", "adj_factor"]
+        for column in numeric:
+            if column in work:
+                work[column] = pd.to_numeric(work[column], errors="coerce")
+        work = work.dropna(subset=["trade_date", "open", "high", "low", "close"])
+        work = work[(work[["open", "high", "low", "close"]] > 0).all(axis=1)]
+        if work.empty:
+            return work
+        # A malformed high/low makes lightweight-charts discard the entire candle.
+        # Preserve the source open/close and expand only the envelope when needed.
+        work["high"] = work[["open", "high", "low", "close"]].max(axis=1)
+        work["low"] = work[["open", "high", "low", "close"]].min(axis=1)
+        for column in ("vol", "amount"):
+            if column in work:
+                work[column] = work[column].fillna(0).clip(lower=0)
+        work = work.sort_values("trade_date").drop_duplicates("trade_date", keep="last")
+        return work.reset_index(drop=True)
 
     def resolve_code(self, raw: str) -> str | None:
         query = raw.strip().upper()
@@ -326,7 +409,7 @@ class LocalMarketRepository:
     def bars(
         self,
         raw_code: str,
-        start_date: str,
+        start_date: str | None,
         end_date: str | None,
         adjust: str,
         period: str,
@@ -340,6 +423,7 @@ class LocalMarketRepository:
         if latest_daily is None:
             raise FileNotFoundError("daily_kline data not found")
         effective_end = min(end_date or latest_daily, latest_daily)
+        oldest_available, newest_available = self.bar_bounds(code)
         adj_as_of = self.latest_partition("adj_factor")
         token = (latest_daily, adj_as_of)
         cache_key = f"bars:{code}:{start_date}:{effective_end}:{adjust}:{period}:{limit}"
@@ -358,8 +442,13 @@ class LocalMarketRepository:
                 return payload
         query_started = time.perf_counter()
         daily = self._daily_with_factors(
-            code, start_date, effective_end, adjust in {"qfq", "hfq"}
+            code,
+            start_date,
+            effective_end,
+            adjust in {"qfq", "hfq"},
+            limit if period == "1d" else None,
         )
+        daily = self._normalize_daily(daily)
         query_ms = (time.perf_counter() - query_started) * 1000
         warnings: list[str] = []
         used_adjust = adjust
@@ -370,15 +459,25 @@ class LocalMarketRepository:
                 used_adjust = "raw"
                 warnings.append("复权因子不可用，已返回未复权行情")
             else:
-                daily["adj_factor"] = daily["adj_factor"].ffill().bfill()
+                daily["adj_factor"] = daily["adj_factor"].ffill()
+                if daily["adj_factor"].isna().iloc[0]:
+                    seed = self._latest_factor(code, str(daily["trade_date"].iloc[0]))
+                    if seed:
+                        daily["adj_factor"] = daily["adj_factor"].fillna(seed)
+                daily["adj_factor"] = daily["adj_factor"].bfill()
                 if effective_end > factor_end:
                     warnings.append(f"复权因子截至 {factor_end}，尾端沿用最近已知因子")
                 if adjust == "qfq":
-                    multiplier = daily["adj_factor"] / daily["adj_factor"].iloc[-1]
+                    # Every segment uses the same latest local factor. Otherwise an
+                    # older page would jump vertically when prepended to the chart.
+                    anchor = self._latest_factor(code, latest_daily)
+                    if not anchor:
+                        anchor = float(daily["adj_factor"].iloc[-1])
+                    multiplier = daily["adj_factor"] / anchor
                 else:
                     multiplier = daily["adj_factor"]
                 for column in ("open", "high", "low", "close", "pre_close"):
-                    daily[column] = (daily[column] * multiplier).round(2)
+                    daily[column] = (daily[column] * multiplier).round(4)
                 daily["change"] = (daily["close"] - daily["pre_close"]).round(2)
                 daily["pct_chg"] = (daily["change"] / daily["pre_close"] * 100).round(2)
                 daily = daily.drop(columns=["adj_factor"])
@@ -386,8 +485,8 @@ class LocalMarketRepository:
         aggregate_started = time.perf_counter()
         if period != "1d" and not daily.empty:
             daily = self._resample(daily, period)
-        if limit is not None and limit > 0:
-            daily = daily.tail(limit)
+            if limit is not None:
+                daily = daily.tail(limit)
         aggregate_ms = (time.perf_counter() - aggregate_started) * 1000
         serialize_started = time.perf_counter()
         records = []
@@ -416,6 +515,20 @@ class LocalMarketRepository:
             "requested_adjust": adjust,
             "as_of": {"daily": latest_daily, "adj_factor": adj_as_of},
             "bars": records,
+            "range": {
+                "requested_start": start_date,
+                "requested_end": end_date,
+                "returned_start": None if not records else records[0]["trade_date"],
+                "returned_end": None if not records else records[-1]["trade_date"],
+                "oldest_available": oldest_available,
+                "newest_available": newest_available,
+                "has_more_before": bool(
+                    records and oldest_available and records[0]["trade_date"] > oldest_available
+                ),
+                "has_more_after": bool(
+                    records and newest_available and records[-1]["trade_date"] < newest_available
+                ),
+            },
             "warnings": warnings,
             "cache_hit": False,
             "timings": {

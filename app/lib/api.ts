@@ -4,7 +4,11 @@ import type {
   DataDates,
   HistoryRecommendation,
   PatternKey,
+  PatternPool,
   PatternResponse,
+  SavedScreenSnapshot,
+  SavedScreenPage,
+  ScreenFilters,
   ScreenProgress,
   ScreenResponse,
   StateItem,
@@ -88,7 +92,7 @@ function mapStock(raw: Raw): Stock {
     is_st: Boolean(raw.is_st),
     pattern: raw.category ? patternKey(raw.category) : undefined,
     pattern_name: raw.category_label ? String(raw.category_label) : undefined,
-    score: optionalNumeric(raw.score),
+    score: optionalNumeric(raw.score ?? raw.match_score),
     reasons: Array.isArray(raw.reasons) ? raw.reasons.map(String) : [],
     metrics: (raw.metrics || {}) as Record<string, number>,
     rank: optionalNumeric(raw.rank),
@@ -182,7 +186,37 @@ function mapScreen(raw: Raw): ScreenResponse {
     cache_hit: Boolean(raw.cache_hit),
     elapsed_ms: numeric(raw.elapsed_ms),
     run_id: raw.history_run_id ? String(raw.history_run_id) : undefined,
+    screen_token: raw.screen_token ? String(raw.screen_token) : undefined,
+    top_k: numeric(raw.top_k),
+    filters: (raw.filters || {}) as Partial<ScreenFilters>,
   };
+}
+
+function mapSavedSnapshot(raw: Raw): SavedScreenSnapshot {
+  return {
+    ...raw,
+    run_id: String(raw.run_id || raw.history_run_id || ""),
+    snapshot_date: String(raw.snapshot_date || ""),
+    result_count: numeric(raw.result_count),
+    filters: (raw.filters || {}) as Record<string, unknown>,
+    category_counts: (raw.category_counts || {}) as SavedScreenSnapshot["category_counts"],
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+    created_at: String(raw.created_at || new Date().toISOString()),
+    rule_version: raw.rule_version == null ? undefined : String(raw.rule_version),
+    top_k: numeric(((raw.filters || {}) as Raw).top_k) || undefined,
+    results: Array.isArray(raw.results) ? (raw.results as Raw[]).map(mapStock) : undefined,
+  };
+}
+
+function optionalQueryNumber(value?: string | null) {
+  if (value == null || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeScreenFilters(filters: ScreenFilters) {
+  const boardMap: Record<string, string> = { mainboard: "主板", chinext: "创业板", star: "科创板" };
+  return { ...filters, board: boardMap[filters.board] || filters.board };
 }
 
 export const api = {
@@ -202,30 +236,17 @@ export const api = {
     stockCache.set(key, item);
     return { item, cacheHit: false, httpMs };
   },
-  bars: async (code: string, period = "D", range = "6M", force = false): Promise<BarsResponse> => {
-    const key = `${symbolOf(code)}:${period}:${range}:qfq`;
+  bars: async (code: string, period = "D", _range = "6M", force = false): Promise<BarsResponse> => {
+    void _range;
+    const key = `${symbolOf(code)}:${period}:qfq:full`;
     if (!force && barsCache.has(key)) {
       return { ...barsCache.get(key)!, client_cache_hit: true, http_ms: 0 };
     }
     const periodMap: Record<string, string> = { D: "1d", W: "1w", M: "1m", Q: "1q", Y: "1y" };
-    const rangeLimits: Record<string, Record<string, number>> = {
-      "1D": { D: 1, W: 1, M: 1, Q: 1, Y: 1 },
-      "5D": { D: 5, W: 2, M: 1, Q: 1, Y: 1 },
-      "1M": { D: 22, W: 5, M: 1, Q: 1, Y: 1 },
-      "3M": { D: 66, W: 14, M: 3, Q: 1, Y: 1 },
-      "6M": { D: 110, W: 27, M: 6, Q: 2, Y: 1 },
-      YTD: { D: 160, W: 32, M: 8, Q: 3, Y: 1 },
-      "1Y": { D: 250, W: 53, M: 12, Q: 4, Y: 1 },
-      "3Y": { D: 750, W: 160, M: 36, Q: 12, Y: 3 },
-      "5Y": { D: 1250, W: 266, M: 60, Q: 20, Y: 5 },
-      ALL: { D: 5000, W: 1200, M: 240, Q: 80, Y: 20 },
-    };
-    const limit = rangeLimits[range]?.[period] || 110;
-    const years = range === "ALL" ? 20 : Math.max(1, Math.ceil(limit / ({ D: 240, W: 52, M: 12, Q: 4, Y: 1 }[period] || 240)));
-    const start = `${new Date().getFullYear() - years}0101`;
-    const { data, httpMs } = await request<{ bars: Bar[]; period: string; as_of: DataDates; warnings: string[]; timings: Record<string, number>; cache_hit: boolean }>(
-      `/bars/${encodeURIComponent(code)}?period=${periodMap[period] || period}&start=${start}&limit=${limit}`,
+    const { data, httpMs } = await request<{ bars: Bar[]; period: string; as_of: DataDates; warnings: string[]; timings: Record<string, number>; cache_hit: boolean; range?: Raw }>(
+      `/bars/${encodeURIComponent(code)}?period=${periodMap[period] || period}&adjust=qfq&limit=10000`,
     );
+    const historyRange = data.range || {};
     const response: BarsResponse = {
       items: withMovingAverages(data.bars || []),
       period: data.period,
@@ -235,21 +256,26 @@ export const api = {
       cache_hit: Boolean(data.cache_hit),
       client_cache_hit: false,
       http_ms: httpMs,
+      has_more: Boolean(historyRange.has_more_before),
+      history_start: historyRange.oldest_available ? String(historyRange.oldest_available) : null,
+      history_end: historyRange.newest_available ? String(historyRange.newest_available) : null,
     };
     barsCache.set(key, response);
     return response;
   },
-  screen: async (query: string, onProgress?: (progress: ScreenProgress) => void): Promise<ScreenResponse> => {
-    const incoming = new URLSearchParams(query);
+  screen: async (input: ScreenFilters | string, onProgress?: (progress: ScreenProgress) => void): Promise<ScreenResponse> => {
+    const incoming = typeof input === "string" ? new URLSearchParams(input) : null;
     const boardMap: Record<string, string> = { mainboard: "主板", chinext: "创业板", star: "科创板" };
+    const selectedBoard = incoming?.get("board") || (typeof input === "string" ? "mainboard" : input.board);
     const body = {
-      board: boardMap[incoming.get("board") || "mainboard"] || "主板",
-      operator: incoming.get("mv_operator") || "gte",
-      market_cap_yi: Number(incoming.get("mv_value") || "50"),
-      exclude_st: incoming.get("exclude_st") !== "false",
-      top_k: 50,
-      mode: "per_category",
-      save_history: true,
+      board: boardMap[selectedBoard] || selectedBoard || "主板",
+      industries: typeof input === "string" ? (incoming?.get("industries")?.split(",").filter(Boolean) || []) : input.industries,
+      market_cap_min_yi: typeof input === "string" ? optionalQueryNumber(incoming?.get("market_cap_min_yi")) : input.market_cap_min_yi,
+      market_cap_max_yi: typeof input === "string" ? optionalQueryNumber(incoming?.get("market_cap_max_yi")) : input.market_cap_max_yi,
+      exclude_st: typeof input === "string" ? incoming?.get("exclude_st") !== "false" : input.exclude_st,
+      top_k: typeof input === "string" ? Math.max(1, Number(incoming?.get("top_k") || 50)) : input.top_k,
+      mode: typeof input === "string" ? "per_category" : input.mode,
+      save_history: false,
     };
     const { data: started } = await request<Raw>("/screen/start", { method: "POST", body: JSON.stringify(body) });
     const jobId = String(started.job_id || "");
@@ -268,6 +294,27 @@ export const api = {
       }
       await new Promise(resolve => window.setTimeout(resolve, 80));
     }
+  },
+  industries: async () => {
+    const { data } = await request<Raw>("/industries");
+    const names = Array.isArray(data.names) ? data.names.map(String) : Array.isArray(data.items) ? (data.items as Raw[]).map(item => String(item.name || "")).filter(Boolean) : [];
+    return { items: names, as_of: data.as_of ? String(data.as_of) : null };
+  },
+  saveScreenSnapshot: async (screen: ScreenResponse, filters: ScreenFilters) => {
+    const body = screen.screen_token ? { screen_token: screen.screen_token } : { filters: normalizeScreenFilters(filters) };
+    const { data } = await request<Raw>("/screen/snapshots", { method: "POST", body: JSON.stringify(body) });
+    const runId = String(data.history_run_id || data.run_id || "");
+    if (!runId) throw new Error("本次筛选快照未返回记录编号");
+    return mapSavedSnapshot((await request<Raw>(`/screen/snapshots/${encodeURIComponent(runId)}`)).data);
+  },
+  screenSnapshot: async (runId: string) => mapSavedSnapshot((await request<Raw>(`/screen/snapshots/${encodeURIComponent(runId)}`)).data),
+  screenSnapshots: async (page = 1, pageSize = 20): Promise<SavedScreenPage> => {
+    const { data } = await request<Raw>(`/screen/snapshots?page=${Math.max(1, Math.floor(page))}&page_size=${Math.max(1, Math.floor(pageSize))}`);
+    return { items: Array.isArray(data.items) ? (data.items as Raw[]).map(mapSavedSnapshot) : [], page: numeric(data.page) || 1, page_size: numeric(data.page_size) || pageSize, total: numeric(data.total) };
+  },
+  patternPool: async (category: PatternKey, limit = 200): Promise<PatternPool> => {
+    const { data } = await request<Raw>(`/pattern/pool?category=${encodeURIComponent(category)}&limit=${Math.max(1, Math.floor(limit))}`);
+    return { category, category_label: String(data.category_label || category), items: Array.isArray(data.items) ? (data.items as Raw[]).map(mapStock) : [], snapshot_id: data.snapshot_id ? String(data.snapshot_id) : null };
   },
   state: async () => mapState((await request<Raw>("/state")).data),
   updateState: async (code: string, state: "viewed" | "saved" | "pending" | "watchlist", enabled = true) => {

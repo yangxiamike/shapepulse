@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import copy
+import re
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Any, Callable
@@ -29,6 +31,7 @@ class MarketService:
         self.state_store = StateStore(self.settings.state_db)
         self._screen_lock = threading.RLock()
         self._screen_cache: dict[tuple, dict[str, Any]] = {}
+        self._completed_screens: dict[str, dict[str, Any]] = {}
 
     def health(self) -> dict[str, Any]:
         payload = self.repository.health()
@@ -45,6 +48,23 @@ class MarketService:
         limit = max(1, min(50, int(limit)))
         return {"query": query, "results": self.repository.search(query, limit)}
 
+    def industries(self) -> dict[str, Any]:
+        frame = self.repository.industries()
+        if frame.empty:
+            return {"items": [], "as_of": None, "source": "申万一级行业（本地 zer0share）"}
+        items = []
+        for (code, name), group in frame.groupby(["l1_code", "l1_name"], sort=False):
+            items.append({"code": str(code), "name": str(name), "stock_count": int(len(group))})
+        items.sort(key=lambda item: (item["name"], item["code"]))
+        industry_file = self.repository.data_dir / "stock" / "industry" / "sw_member" / "data.parquet"
+        as_of = datetime.fromtimestamp(industry_file.stat().st_mtime).astimezone().date().isoformat()
+        return {
+            "items": items,
+            "names": [item["name"] for item in items],
+            "as_of": as_of,
+            "source": "申万一级行业（本地 zer0share）",
+        }
+
     def stock(self, code: str, mark_viewed: bool = False) -> dict[str, Any] | None:
         payload = self.repository.stock(code)
         if payload is None:
@@ -57,7 +77,7 @@ class MarketService:
     def bars(
         self,
         code: str,
-        start_date: str = "20150101",
+        start_date: str | None = None,
         end_date: str | None = None,
         adjust: str = "qfq",
         period: str = "1d",
@@ -77,11 +97,14 @@ class MarketService:
         period = aliases.get(period, period)
         if period not in {"1d", "1w", "1m", "1q", "1y"}:
             raise ValueError("period must be 1d, 1w, 1m, 1q, or 1y")
-        self._validate_date(start_date, "start")
+        if start_date:
+            self._validate_date(start_date, "start")
         if end_date:
             self._validate_date(end_date, "end")
-            if end_date < start_date:
+            if start_date and end_date < start_date:
                 raise ValueError("end must be on or after start")
+        if limit is not None:
+            limit = self._positive_integer(limit, "limit")
         return self.repository.bars(code, start_date, end_date, adjust, period, limit)
 
     @staticmethod
@@ -90,6 +113,18 @@ class MarketService:
             datetime.strptime(value, "%Y%m%d")
         except ValueError as exc:
             raise ValueError(f"{label} must use YYYYMMDD") from exc
+
+    @staticmethod
+    def _positive_integer(value: Any, label: str) -> int:
+        if isinstance(value, bool):
+            raise ValueError(f"{label} must be a positive integer")
+        raw = str(value).strip()
+        if not re.fullmatch(r"[0-9]+", raw):
+            raise ValueError(f"{label} must be a positive integer")
+        parsed = int(raw)
+        if parsed < 1:
+            raise ValueError(f"{label} must be a positive integer")
+        return parsed
 
     def screen(
         self,
@@ -114,8 +149,9 @@ class MarketService:
             snapshots.stock_st,
             self._threshold_mtime,
             tuple(filters["boards"]),
-            filters["market_cap_operator"],
-            filters["market_cap_yi"],
+            tuple(filters["industries"]),
+            filters["market_cap_min_yi"],
+            filters["market_cap_max_yi"],
             filters["exclude_st"],
             filters["top_k"],
             filters["mode"],
@@ -153,24 +189,39 @@ class MarketService:
                 - int(previous_counts.get(category, 0))
                 for category in CATEGORY_ORDER
             }
-        if save_history:
-            history_results = payload["results"]
-            if filters["mode"] == "per_category":
-                history_results = [
-                    item for category in CATEGORY_ORDER for item in payload["categories"][category]
-                ]
-            payload["history_run_id"] = self.state_store.record_screen(
-                payload["as_of"]["daily"],
-                filters,
-                history_results,
-                evaluations=evaluations,
-                category_counts=payload["counts"]["by_category"],
-                warnings=payload["warnings"],
-            )
         payload["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
         payload["timings"]["total_ms"] = payload["elapsed_ms"]
+        payload["rule_version"] = self.thresholds.get("version")
+        screen_token = uuid.uuid4().hex
+        payload["screen_token"] = screen_token
+        self._remember_completed_screen(screen_token, payload, evaluations)
+        if save_history:
+            payload["history_run_id"] = self.save_screen_snapshot(screen_token)[
+                "history_run_id"
+            ]
         notify("筛选完成", 1, 1)
         return payload
+
+    def _remember_completed_screen(
+        self, screen_token: str, payload: dict[str, Any], evaluations: list[dict[str, Any]]
+    ) -> None:
+        now = time.monotonic()
+        with self._screen_lock:
+            expired = [
+                token
+                for token, item in self._completed_screens.items()
+                if now - float(item["created_monotonic"]) > 15 * 60
+            ]
+            for token in expired:
+                self._completed_screens.pop(token, None)
+            while len(self._completed_screens) >= 32:
+                self._completed_screens.pop(next(iter(self._completed_screens)))
+            self._completed_screens[screen_token] = {
+                "created_monotonic": now,
+                "payload": copy.deepcopy(payload),
+                "evaluations": copy.deepcopy(evaluations),
+                "history_run_id": None,
+            }
 
     def _normalize_filters(self, source: dict[str, Any]) -> dict[str, Any]:
         defaults = self.thresholds["screen"]
@@ -181,16 +232,57 @@ class MarketService:
         unknown = set(boards).difference(ALLOWED_BOARDS)
         if unknown:
             raise ValueError(f"unsupported boards: {', '.join(sorted(unknown))}")
-        operator = str(source.get("market_cap_operator", source.get("operator", defaults["default_market_cap_operator"]))).lower()
-        aliases = {">=": "gte", ">": "gt", "<=": "lte", "<": "lt"}
-        operator = aliases.get(operator, operator)
-        if operator not in {"gte", "gt", "lte", "lt"}:
-            raise ValueError("market_cap_operator must be gte, gt, lte, or lt")
-        cap = float(source.get("market_cap_yi", source.get("market_cap", defaults["default_market_cap_yi"])))
-        if cap < 0:
-            raise ValueError("market_cap_yi cannot be negative")
-        top_k = int(source.get("top_k", defaults["default_top_k"]))
-        top_k = max(1, min(int(defaults["max_top_k"]), top_k))
+        industries = source.get("industries", source.get("industry", []))
+        if isinstance(industries, str):
+            industries = [item.strip() for item in industries.split(",") if item.strip()]
+        industries = list(dict.fromkeys(str(item).strip() for item in (industries or []) if str(item).strip()))
+        industry_frame = self.repository.industries()
+        available_industries = set(industry_frame.get("l1_name", pd.Series(dtype=str)).dropna().astype(str))
+        available_industries.update(industry_frame.get("l1_code", pd.Series(dtype=str)).dropna().astype(str))
+        unknown_industries = set(industries).difference(available_industries)
+        if unknown_industries:
+            raise ValueError(f"unsupported industries: {', '.join(sorted(unknown_industries))}")
+
+        def optional_cap(name: str) -> float | None:
+            value = source.get(name)
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return None
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{name} must be a non-negative number or empty") from exc
+            if not pd.notna(parsed) or parsed < 0:
+                raise ValueError(f"{name} must be a non-negative number or empty")
+            return parsed
+
+        operator = None
+        has_range = any(key in source for key in ("market_cap_min_yi", "market_cap_max_yi"))
+        if has_range:
+            cap_min = optional_cap("market_cap_min_yi")
+            cap_max = optional_cap("market_cap_max_yi")
+        elif any(key in source for key in ("market_cap_yi", "market_cap", "market_cap_operator", "operator")):
+            operator = str(source.get("market_cap_operator", source.get("operator", "gte"))).lower()
+            aliases = {">=": "gte", ">": "gt", "<=": "lte", "<": "lt"}
+            operator = aliases.get(operator, operator)
+            if operator not in {"gte", "gt", "lte", "lt"}:
+                raise ValueError("market_cap_operator must be gte, gt, lte, or lt")
+            legacy_value = source.get("market_cap_yi", source.get("market_cap"))
+            try:
+                cap = float(legacy_value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("market_cap_yi must be a non-negative number") from exc
+            if not pd.notna(cap) or cap < 0:
+                raise ValueError("market_cap_yi must be a non-negative number")
+            # Legacy strict operators cannot be represented by the inclusive V1.2
+            # range. Keep them in compatibility fields and apply below.
+            cap_min = cap if operator in {"gte", "gt"} else None
+            cap_max = cap if operator in {"lte", "lt"} else None
+        else:
+            cap_min = optional_cap("market_cap_min_yi")
+            cap_max = optional_cap("market_cap_max_yi")
+        if cap_min is not None and cap_max is not None and cap_min > cap_max:
+            raise ValueError("market_cap_min_yi cannot exceed market_cap_max_yi")
+        top_k = self._positive_integer(source.get("top_k", defaults["default_top_k"]), "top_k")
         mode = str(source.get("mode", "combined"))
         if mode not in {"combined", "per_category"}:
             raise ValueError("mode must be combined or per_category")
@@ -201,8 +293,10 @@ class MarketService:
             exclude_st = bool(exclude_raw)
         return {
             "boards": boards,
+            "industries": industries,
+            "market_cap_min_yi": cap_min,
+            "market_cap_max_yi": cap_max,
             "market_cap_operator": operator,
-            "market_cap_yi": cap,
             "exclude_st": exclude_st,
             "top_k": top_k,
             "mode": mode,
@@ -218,29 +312,28 @@ class MarketService:
             raise FileNotFoundError("daily_kline and daily_basic are required for screening")
         reference_started = time.perf_counter()
         progress("读取股票、估值和 ST 快照", 0, 3)
-        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="market-ref") as pool:
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="market-ref") as pool:
             basic_future = pool.submit(self.repository.basic)
             valuation_future = pool.submit(self.repository.daily_basic_snapshot)
             st_future = pool.submit(self.repository.st_snapshot)
+            industry_future = pool.submit(self.repository.industries)
             basic = basic_future.result()
             progress("读取股票、估值和 ST 快照", 1, 3)
             valuation_date, valuation = valuation_future.result()
             progress("读取股票、估值和 ST 快照", 2, 3)
             st_date, st = st_future.result()
+            industry = industry_future.result()
         progress("读取股票、估值和 ST 快照", 3, 3)
         pool = basic[basic["market"].isin(filters["boards"])].merge(
             valuation, on="ts_code", how="left", suffixes=("", "_daily")
         )
+        industry = industry[["ts_code", "l1_code", "l1_name"]].drop_duplicates("ts_code", keep="first")
+        pool = pool.merge(industry, on="ts_code", how="left")
         pool["total_mv_yi"] = pool["total_mv"] / 10000.0
         valid_valuation = pool["total_mv_yi"].notna()
-        cap = filters["market_cap_yi"]
-        op = filters["market_cap_operator"]
-        comparison = {
-            "gte": pool["total_mv_yi"].ge(cap),
-            "gt": pool["total_mv_yi"].gt(cap),
-            "lte": pool["total_mv_yi"].le(cap),
-            "lt": pool["total_mv_yi"].lt(cap),
-        }[op]
+        comparison = self._market_cap_mask(pool["total_mv_yi"], filters)
+        if filters["industries"]:
+            comparison &= pool["l1_name"].isin(filters["industries"]) | pool["l1_code"].isin(filters["industries"])
         eligible = pool[valid_valuation & comparison].copy()
         st_codes = set(st["ts_code"].astype(str)) if not st.empty else set()
         eligible["is_st"] = eligible["ts_code"].isin(st_codes)
@@ -280,6 +373,8 @@ class MarketService:
                 "name": json_value(details.get("name")),
                 "market": json_value(details.get("market")),
                 "exchange": json_value(details.get("exchange")),
+                "industry_code": json_value(details.get("l1_code")),
+                "industry_name": json_value(details.get("l1_name")),
                 "total_mv_yi": round(float(details["total_mv_yi"]), 2),
                 "circ_mv_yi": None
                 if pd.isna(details.get("circ_mv"))
@@ -348,6 +443,7 @@ class MarketService:
             for index, item in enumerate(items, 1):
                 item["rank"] = index
                 item["category_rank"] = index
+                item["match_score"] = item.get("score")
             categories[category] = items
         combined = [copy.deepcopy(item) for item in scored[: filters["top_k"]]]
         category_ranks = {
@@ -358,6 +454,7 @@ class MarketService:
         for index, item in enumerate(combined, 1):
             item["rank"] = index
             item["category_rank"] = category_ranks.get((item["category"], item["ts_code"]))
+            item["match_score"] = item.get("score")
         warnings = []
         if snapshots.daily_kline != valuation_date:
             warnings.append(f"行情截至 {snapshots.daily_kline}，估值截至 {valuation_date}")
@@ -403,6 +500,22 @@ class MarketService:
             "_evaluations": evaluations,
         }
 
+    @staticmethod
+    def _market_cap_mask(values: pd.Series, filters: dict[str, Any]) -> pd.Series:
+        result = pd.Series(True, index=values.index)
+        cap_min = filters.get("market_cap_min_yi")
+        cap_max = filters.get("market_cap_max_yi")
+        if cap_min is not None:
+            result &= values.ge(cap_min)
+        if cap_max is not None:
+            result &= values.le(cap_max)
+        # V1.2 bounds are inclusive; strict operators only remain for V1.1 callers.
+        if filters.get("market_cap_operator") == "gt" and cap_min is not None:
+            result &= values.gt(cap_min)
+        if filters.get("market_cap_operator") == "lt" and cap_max is not None:
+            result &= values.lt(cap_max)
+        return result
+
     def state(self, history_limit: int = 20) -> dict[str, Any]:
         payload = self.state_store.snapshot(max(1, min(100, int(history_limit))))
         basic = self.repository.basic().set_index("ts_code")
@@ -430,6 +543,120 @@ class MarketService:
                     }
                 )
         return payload
+
+    def save_screen_snapshot(
+        self,
+        screen_token: str | None = None,
+        fallback_filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        token = str(screen_token or "").strip()
+        if token:
+            with self._screen_lock:
+                entry = self._completed_screens.get(token)
+                if entry is not None and time.monotonic() - float(
+                    entry["created_monotonic"]
+                ) > 15 * 60:
+                    self._completed_screens.pop(token, None)
+                    entry = None
+            if entry is None and fallback_filters is None:
+                raise LookupError("screen_token is unknown or expired; run the screen again")
+        else:
+            entry = None
+        if entry is None:
+            generated = self.screen(fallback_filters or {}, False)
+            token = generated["screen_token"]
+
+        # Keep the lock through persistence so retrying the same token is idempotent.
+        with self._screen_lock:
+            entry = self._completed_screens.get(token)
+            if entry is None:
+                raise LookupError("screen_token is unknown or expired; run the screen again")
+            existing_run_id = entry.get("history_run_id")
+            payload = copy.deepcopy(entry["payload"])
+            if existing_run_id:
+                payload["history_run_id"] = existing_run_id
+                return payload
+            filters = payload["filters"]
+            history_results = payload["results"]
+            if filters["mode"] == "per_category":
+                history_results = [
+                    item
+                    for category in CATEGORY_ORDER
+                    for item in payload["categories"][category]
+                ]
+            run_id = self.state_store.record_screen(
+                payload["as_of"]["daily"],
+                filters,
+                history_results,
+                evaluations=entry["evaluations"],
+                category_counts=payload["counts"]["by_category"],
+                warnings=payload["warnings"],
+                rule_version=payload.get("rule_version"),
+                payload=payload,
+                saved_by_user=True,
+            )
+            entry["history_run_id"] = run_id
+        payload["history_run_id"] = run_id
+        return payload
+
+    def saved_snapshots(self, page: int = 1, page_size: int = 20) -> dict[str, Any]:
+        return self.state_store.list_saved_snapshots(page, page_size)
+
+    def saved_snapshot(self, run_id: str) -> dict[str, Any]:
+        payload = self.state_store.saved_snapshot(run_id)
+        if payload is None:
+            raise LookupError(f"saved screen snapshot not found: {run_id}")
+        return payload
+
+    def pattern_pool(self, category: str, limit: Any = 200) -> dict[str, Any]:
+        category = str(category).strip().lower()
+        if category not in CATEGORY_ORDER:
+            raise ValueError(f"category must be one of: {', '.join(CATEGORY_ORDER)}")
+        parsed_limit = self._positive_integer(limit, "limit")
+        saved = self.state_store.latest_saved_category(category)
+        if saved is not None:
+            run, items = saved
+            if items:
+                pool = items[:parsed_limit]
+                return {
+                    "category": category,
+                    "category_label": self.thresholds[category]["label"],
+                    "available_categories": self._pattern_categories(),
+                    "items": [self._pool_item(item, index) for index, item in enumerate(pool, 1)],
+                    "total": len(items),
+                    "source": "saved_snapshot",
+                    "snapshot_id": run["run_id"],
+                    "as_of": run["snapshot_date"],
+                }
+        current = self.screen({"mode": "per_category", "top_k": parsed_limit}, False)
+        items = current["categories"][category]
+        return {
+            "category": category,
+            "category_label": self.thresholds[category]["label"],
+            "available_categories": self._pattern_categories(),
+            "items": [self._pool_item(item, index) for index, item in enumerate(items, 1)],
+            "total": current["counts"]["by_category"][category],
+            "source": "current_calculation",
+            "snapshot_id": None,
+            "as_of": current["as_of"]["daily"],
+        }
+
+    @staticmethod
+    def _pool_item(item: dict[str, Any], fallback_rank: int) -> dict[str, Any]:
+        return {
+            "code": item.get("code", item.get("ts_code")),
+            "ts_code": item.get("ts_code", item.get("code")),
+            "symbol": item.get("symbol"),
+            "name": item.get("name"),
+            "score": item.get("score"),
+            "rank": item.get("category_rank", item.get("rank", fallback_rank)),
+        }
+
+    def _pattern_categories(self) -> list[dict[str, str]]:
+        return [
+            {"category": category, "label": str(self.thresholds[category]["label"])}
+            for category in CATEGORY_ORDER
+        ]
 
     def update_state(self, code: str, action: str) -> dict[str, Any]:
         resolved = self.repository.resolve_code(code)

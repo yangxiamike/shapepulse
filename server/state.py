@@ -11,7 +11,7 @@ from typing import Any
 
 
 def now_iso() -> str:
-    return datetime.now().astimezone().isoformat(timespec="seconds")
+    return datetime.now().astimezone().isoformat(timespec="microseconds")
 
 
 class StateStore:
@@ -60,6 +60,9 @@ class StateStore:
                     result_count INTEGER NOT NULL,
                     category_counts_json TEXT NOT NULL DEFAULT '{}',
                     warnings_json TEXT NOT NULL DEFAULT '[]',
+                    rule_version TEXT,
+                    payload_json TEXT NOT NULL DEFAULT '{}',
+                    saved_by_user INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS recommendation_history (
@@ -71,6 +74,7 @@ class StateStore:
                     rank INTEGER NOT NULL,
                     score REAL NOT NULL,
                     reasons_json TEXT NOT NULL,
+                    item_json TEXT NOT NULL DEFAULT '{}',
                     snapshot_date TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
@@ -102,6 +106,23 @@ class StateStore:
             if "warnings_json" not in run_columns:
                 connection.execute(
                     "ALTER TABLE screen_runs ADD COLUMN warnings_json TEXT NOT NULL DEFAULT '[]'"
+                )
+            if "rule_version" not in run_columns:
+                connection.execute("ALTER TABLE screen_runs ADD COLUMN rule_version TEXT")
+            if "payload_json" not in run_columns:
+                connection.execute(
+                    "ALTER TABLE screen_runs ADD COLUMN payload_json TEXT NOT NULL DEFAULT '{}'"
+                )
+            if "saved_by_user" not in run_columns:
+                connection.execute(
+                    "ALTER TABLE screen_runs ADD COLUMN saved_by_user INTEGER NOT NULL DEFAULT 0"
+                )
+            history_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(recommendation_history)")
+            }
+            if "item_json" not in history_columns:
+                connection.execute(
+                    "ALTER TABLE recommendation_history ADD COLUMN item_json TEXT NOT NULL DEFAULT '{}'"
                 )
             columns = {row[1] for row in connection.execute("PRAGMA table_info(stock_state)")}
             if "watchlist" not in columns:
@@ -167,6 +188,9 @@ class StateStore:
         evaluations: list[dict] | None = None,
         category_counts: dict[str, int] | None = None,
         warnings: list[str] | None = None,
+        rule_version: str | int | None = None,
+        payload: dict[str, Any] | None = None,
+        saved_by_user: bool = True,
     ) -> str:
         run_id = uuid.uuid4().hex
         timestamp = now_iso()
@@ -175,8 +199,9 @@ class StateStore:
                 """
                 INSERT INTO screen_runs(
                     run_id, snapshot_date, filters_json, result_count,
-                    category_counts_json, warnings_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    category_counts_json, warnings_json, rule_version,
+                    payload_json, saved_by_user, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -185,6 +210,9 @@ class StateStore:
                     len(results),
                     json.dumps(category_counts or {}, ensure_ascii=False),
                     json.dumps(warnings or [], ensure_ascii=False),
+                    None if rule_version is None else str(rule_version),
+                    json.dumps(payload or {}, ensure_ascii=False),
+                    int(saved_by_user),
                     timestamp,
                 ),
             )
@@ -192,8 +220,8 @@ class StateStore:
                 """
                 INSERT INTO recommendation_history(
                     run_id, ts_code, category, category_label, rank, score,
-                    reasons_json, snapshot_date, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    reasons_json, item_json, snapshot_date, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -204,6 +232,7 @@ class StateStore:
                         item["rank"],
                         item["score"],
                         json.dumps(item.get("reasons", []), ensure_ascii=False),
+                        json.dumps(item, ensure_ascii=False),
                         snapshot_date,
                         timestamp,
                     )
@@ -235,6 +264,83 @@ class StateStore:
                 )
         return run_id
 
+    @staticmethod
+    def _decode_run(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        item = dict(row)
+        item["filters"] = json.loads(item.pop("filters_json"))
+        item["category_counts"] = json.loads(item.pop("category_counts_json", "{}") or "{}")
+        item["warnings"] = json.loads(item.pop("warnings_json", "[]") or "[]")
+        item["saved_by_user"] = bool(item.get("saved_by_user", 0))
+        payload = json.loads(item.pop("payload_json", "{}") or "{}")
+        if payload:
+            item["payload"] = payload
+        return item
+
+    def list_saved_snapshots(self, page: int = 1, page_size: int = 20) -> dict[str, Any]:
+        page = max(1, int(page))
+        page_size = max(1, min(100, int(page_size)))
+        offset = (page - 1) * page_size
+        with self._connection() as connection:
+            total = int(connection.execute(
+                "SELECT count(*) FROM screen_runs WHERE saved_by_user=1"
+            ).fetchone()[0])
+            rows = connection.execute(
+                "SELECT * FROM screen_runs WHERE saved_by_user=1 "
+                "ORDER BY created_at DESC, run_id DESC LIMIT ? OFFSET ?",
+                (page_size, offset),
+            ).fetchall()
+        items = []
+        for row in rows:
+            item = self._decode_run(row)
+            item.pop("payload", None)
+            items.append(item)
+        return {
+            "items": items,
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "pages": (total + page_size - 1) // page_size,
+        }
+
+    def saved_snapshot(self, run_id: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM screen_runs WHERE run_id=? AND saved_by_user=1", (run_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            recommendations = connection.execute(
+                "SELECT * FROM recommendation_history WHERE run_id=? ORDER BY rank, id",
+                (run_id,),
+            ).fetchall()
+        item = self._decode_run(row)
+        results = []
+        for recommendation in recommendations:
+            record = dict(recommendation)
+            full = json.loads(record.pop("item_json", "{}") or "{}")
+            if full:
+                results.append(full)
+            else:
+                record["reasons"] = json.loads(record.pop("reasons_json", "[]") or "[]")
+                results.append(record)
+        item["results"] = results
+        item["restore"] = {"filters": item["filters"]}
+        return item
+
+    def latest_saved_category(self, category: str) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM screen_runs WHERE saved_by_user=1 ORDER BY created_at DESC, run_id DESC LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        run = self._decode_run(row)
+        payload = run.get("payload", {})
+        items = payload.get("categories", {}).get(category, [])
+        if not items:
+            items = [item for item in run.get("payload", {}).get("results", []) if item.get("category") == category]
+        return run, items
+
     def previous_category_counts(
         self, filters: dict, before_snapshot: str
     ) -> tuple[str, dict[str, int]] | None:
@@ -244,7 +350,7 @@ class StateStore:
                 """
                 SELECT snapshot_date, category_counts_json
                 FROM screen_runs
-                WHERE filters_json=? AND snapshot_date < ?
+                WHERE filters_json=? AND snapshot_date < ? AND saved_by_user=1
                 ORDER BY snapshot_date DESC, created_at DESC
                 LIMIT 1
                 """,
@@ -263,7 +369,7 @@ class StateStore:
                     SELECT pe.*, sr.filters_json, sr.warnings_json
                     FROM pattern_evaluations pe
                     JOIN screen_runs sr ON sr.run_id=pe.run_id
-                    WHERE pe.ts_code=?
+                    WHERE pe.ts_code=? AND sr.saved_by_user=1
                     ORDER BY pe.snapshot_date DESC, pe.created_at DESC, pe.id DESC
                     LIMIT ?
                     """,
@@ -308,20 +414,23 @@ class StateStore:
                 "SELECT * FROM stock_state ORDER BY updated_at DESC"
             ).fetchall()]
             runs = [dict(row) for row in connection.execute(
-                "SELECT * FROM screen_runs ORDER BY created_at DESC LIMIT ?", (history_limit,)
+                "SELECT * FROM screen_runs WHERE saved_by_user=1 ORDER BY created_at DESC LIMIT ?", (history_limit,)
             ).fetchall()]
             recommendations = [dict(row) for row in connection.execute(
                 """
                 SELECT * FROM recommendation_history
-                WHERE run_id IN (SELECT run_id FROM screen_runs ORDER BY created_at DESC LIMIT ?)
+                WHERE run_id IN (
+                    SELECT run_id FROM screen_runs WHERE saved_by_user=1
+                    ORDER BY created_at DESC LIMIT ?
+                )
                 ORDER BY created_at DESC, rank ASC
                 """,
                 (history_limit,),
             ).fetchall()]
         for run in runs:
-            run["filters"] = json.loads(run.pop("filters_json"))
-            run["category_counts"] = json.loads(run.pop("category_counts_json", "{}") or "{}")
-            run["warnings"] = json.loads(run.pop("warnings_json", "[]") or "[]")
+            decoded = self._decode_run(run)
+            run.clear()
+            run.update(decoded)
         for item in recommendations:
             item["reasons"] = json.loads(item.pop("reasons_json"))
         viewed, saved, pending, watchlist = [], [], [], []

@@ -94,6 +94,16 @@ export type ScreenProgress = {
   total: number;
 };
 
+export type ScreenFilters = {
+  board: string;
+  industries: string[];
+  market_cap_min_yi: number | null;
+  market_cap_max_yi: number | null;
+  exclude_st: boolean;
+  top_k: number;
+  mode: "per_category" | "combined";
+};
+
 export type ScreenResponse = {
   items: Stock[];
   categories: Record<PatternKey, Stock[]>;
@@ -109,6 +119,9 @@ export type ScreenResponse = {
   cache_hit: boolean;
   elapsed_ms?: number;
   run_id?: string;
+  screen_token?: string;
+  top_k?: number;
+  filters?: Partial<ScreenFilters>;
 };
 
 export type StateItem = StockState & {
@@ -133,6 +146,8 @@ export type HistoryRun = {
   category_counts: Partial<ScreenCounts>;
   warnings: string[];
   created_at: string;
+  rule_version?: string | number;
+  top_k?: number;
 };
 
 export type HistoryRecommendation = {
@@ -155,6 +170,25 @@ export type StateSnapshot = {
   pending: StateItem[];
   watchlist: StateItem[];
   history: { runs: HistoryRun[]; recommendations: HistoryRecommendation[] };
+};
+
+export type SavedScreenSnapshot = HistoryRun & {
+  saved_at?: string;
+  results?: Stock[];
+};
+
+export type SavedScreenPage = {
+  items: SavedScreenSnapshot[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+export type PatternPool = {
+  category: PatternKey;
+  category_label: string;
+  items: Stock[];
+  snapshot_id?: string | null;
 };
 
 export type StateSummary = {
@@ -197,4 +231,7 @@ export type BarsResponse = {
   cache_hit: boolean;
   client_cache_hit?: boolean;
   http_ms?: number;
+  has_more?: boolean;
+  history_start?: string | null;
+  history_end?: string | null;
 };
