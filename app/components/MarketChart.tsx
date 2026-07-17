@@ -33,6 +33,7 @@ export type DrawingKind =
   | "horizontal"
   | "vertical"
   | "fibonacci"
+  | "fibonacci-extension"
   | "curve"
   | "freehand"
   | "text"
@@ -52,6 +53,9 @@ export type ChartDrawing = {
   /** New drawings use relative coordinates so they survive layout/fullscreen resizing. */
   coordinateSpace?: "pixel" | "relative";
   points?: ChartPoint[];
+  control?: ChartPoint;
+  color?: string;
+  lineWidth?: number;
 };
 
 export type MarketChartHandle = {
@@ -74,6 +78,9 @@ type Props = {
   onDrawingDelete?: (index: number) => void;
   onDrawingsChange?: (drawings: ChartDrawing[]) => void;
   onRendered?: (durationMs: number) => void;
+  drawingColor?: string;
+  drawingLineWidth?: number;
+  drawingText?: string;
   /** Called as the visible window approaches the earliest loaded bar. */
   onNeedMoreHistory?: () => void;
   /** Same boundary notification with the oldest loaded date for paged loaders. */
@@ -97,7 +104,8 @@ export type NormalizedChartBar = {
   ma20: number | null;
 };
 
-const FIBONACCI_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const;
+const FIBONACCI_RETRACEMENT_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const;
+const FIBONACCI_EXTENSION_LEVELS = [0, 0.618, 1, 1.272, 1.618, 2, 2.618] as const;
 const HIT_DISTANCE = 8;
 
 function finitePositive(value: unknown): value is number {
@@ -153,7 +161,7 @@ export function normalizeChartBars(bars: readonly Bar[]): NormalizedChartBar[] {
 type ScreenDrawing = Omit<ChartDrawing, "coordinateSpace">;
 type EditState = {
   index: number;
-  handle: "start" | "end" | "move";
+  handle: "start" | "end" | "control" | "move";
   origin: ChartPoint;
   drawing: ScreenDrawing;
 };
@@ -173,6 +181,7 @@ function toScreenDrawing(drawing: ChartDrawing, width: number, height: number): 
     x2: end.x,
     y2: end.y,
     points: drawing.points?.map(point => toScreenPoint(point, relative, width, height)),
+    control: drawing.control ? toScreenPoint(drawing.control, relative, width, height) : undefined,
   };
 }
 
@@ -188,6 +197,7 @@ function fromScreenDrawing(drawing: ScreenDrawing, width: number, height: number
     y2: drawing.y2 / safeHeight,
     coordinateSpace,
     points: drawing.points?.map(point => ({ x: point.x / safeWidth, y: point.y / safeHeight })),
+    control: drawing.control ? { x: drawing.control.x / safeWidth, y: drawing.control.y / safeHeight } : undefined,
   };
 }
 
@@ -201,6 +211,34 @@ function distanceToSegment(point: ChartPoint, start: ChartPoint, end: ChartPoint
   if (dx === 0 && dy === 0) return distance(point, start);
   const ratio = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy)));
   return distance(point, { x: start.x + ratio * dx, y: start.y + ratio * dy });
+}
+
+function curveControl(drawing: ScreenDrawing): ChartPoint {
+  return drawing.control ?? {
+    x: (drawing.x1 + drawing.x2) / 2,
+    y: Math.min(drawing.y1, drawing.y2) - Math.max(28, Math.abs(drawing.x2 - drawing.x1) * 0.16),
+  };
+}
+
+function distanceToCurve(point: ChartPoint, drawing: ScreenDrawing) {
+  const control = curveControl(drawing);
+  let closest = Number.POSITIVE_INFINITY;
+  let previous = { x: drawing.x1, y: drawing.y1 };
+  for (let step = 1; step <= 28; step += 1) {
+    const t = step / 28;
+    const inverse = 1 - t;
+    const current = {
+      x: inverse * inverse * drawing.x1 + 2 * inverse * t * control.x + t * t * drawing.x2,
+      y: inverse * inverse * drawing.y1 + 2 * inverse * t * control.y + t * t * drawing.y2,
+    };
+    closest = Math.min(closest, distanceToSegment(point, previous, current));
+    previous = current;
+  }
+  return closest;
+}
+
+function fibonacciLevels(kind: DrawingKind) {
+  return kind === "fibonacci-extension" ? FIBONACCI_EXTENSION_LEVELS : FIBONACCI_RETRACEMENT_LEVELS;
 }
 
 function extendedLine(drawing: ScreenDrawing, width: number, height: number, ray: boolean): [ChartPoint, ChartPoint] {
@@ -238,14 +276,18 @@ function hitDrawing(point: ChartPoint, drawing: ScreenDrawing, width: number, he
   const end = { x: drawing.x2, y: drawing.y2 };
   if (distance(point, start) <= HIT_DISTANCE) return "start" as const;
   if (distance(point, end) <= HIT_DISTANCE) return "end" as const;
+  if (drawing.kind === "curve") {
+    if (distance(point, curveControl(drawing)) <= HIT_DISTANCE) return "control" as const;
+    return distanceToCurve(point, drawing) <= HIT_DISTANCE ? "move" as const : null;
+  }
   if (drawing.kind === "freehand" && drawing.points?.length) {
     for (let index = 1; index < drawing.points.length; index += 1) {
       if (distanceToSegment(point, drawing.points[index - 1], drawing.points[index]) <= HIT_DISTANCE) return "move" as const;
     }
     return null;
   }
-  if (drawing.kind === "fibonacci") {
-    for (const level of FIBONACCI_LEVELS) {
+  if (drawing.kind === "fibonacci" || drawing.kind === "fibonacci-extension") {
+    for (const level of fibonacciLevels(drawing.kind)) {
       const y = drawing.y1 + (drawing.y2 - drawing.y1) * level;
       if (distanceToSegment(point, { x: drawing.x1, y }, { x: drawing.x2, y }) <= HIT_DISTANCE) return "move" as const;
     }
@@ -268,18 +310,24 @@ function drawHandle(ctx: CanvasRenderingContext2D, point: ChartPoint) {
 function paintOneDrawing(ctx: CanvasRenderingContext2D, drawing: ScreenDrawing, width: number, height: number, selected: boolean) {
   const start = { x: drawing.x1, y: drawing.y1 };
   const end = { x: drawing.x2, y: drawing.y2 };
+  const color = drawing.color || "#111315";
+  const lineWidth = Math.max(1, Math.min(6, drawing.lineWidth || 1.5));
   ctx.save();
-  ctx.strokeStyle = selected ? "#2864ff" : "#111315";
-  ctx.fillStyle = selected ? "#2864ff" : "#111315";
-  ctx.lineWidth = selected ? 2 : 1.5;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = lineWidth;
+  if (selected) {
+    ctx.shadowColor = "rgba(40,100,255,.3)";
+    ctx.shadowBlur = 2;
+  }
 
   if (drawing.kind === "text") {
     ctx.fillText(drawing.text || "文本标记", drawing.x1 + 5, drawing.y1 - 5);
     ctx.beginPath();
     ctx.arc(drawing.x1, drawing.y1, 3, 0, Math.PI * 2);
     ctx.fill();
-  } else if (drawing.kind === "fibonacci") {
-    for (const level of FIBONACCI_LEVELS) {
+  } else if (drawing.kind === "fibonacci" || drawing.kind === "fibonacci-extension") {
+    for (const level of fibonacciLevels(drawing.kind)) {
       const y = drawing.y1 + (drawing.y2 - drawing.y1) * level;
       ctx.beginPath();
       ctx.moveTo(drawing.x1, y);
@@ -288,11 +336,10 @@ function paintOneDrawing(ctx: CanvasRenderingContext2D, drawing: ScreenDrawing, 
       ctx.fillText(`${(level * 100).toFixed(level === 0 || level === 1 ? 0 : 1)}%`, Math.min(drawing.x1, drawing.x2) + 4, y - 3);
     }
   } else if (drawing.kind === "curve") {
-    const controlX = (drawing.x1 + drawing.x2) / 2;
-    const controlY = Math.min(drawing.y1, drawing.y2) - Math.max(28, Math.abs(drawing.x2 - drawing.x1) * 0.16);
+    const control = curveControl(drawing);
     ctx.beginPath();
     ctx.moveTo(drawing.x1, drawing.y1);
-    ctx.quadraticCurveTo(controlX, controlY, drawing.x2, drawing.y2);
+    ctx.quadraticCurveTo(control.x, control.y, drawing.x2, drawing.y2);
     ctx.stroke();
   } else if (drawing.kind === "freehand" && drawing.points?.length) {
     ctx.beginPath();
@@ -318,8 +365,23 @@ function paintOneDrawing(ctx: CanvasRenderingContext2D, drawing: ScreenDrawing, 
   }
 
   if (selected) {
+    ctx.shadowColor = "transparent";
     drawHandle(ctx, start);
     if (drawing.kind !== "horizontal" && drawing.kind !== "vertical" && drawing.kind !== "text") drawHandle(ctx, end);
+    if (drawing.kind === "curve") {
+      const control = curveControl(drawing);
+      ctx.save();
+      ctx.setLineDash([3, 4]);
+      ctx.strokeStyle = "rgba(40,100,255,.65)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(control.x, control.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+      ctx.restore();
+      drawHandle(ctx, control);
+    }
   }
   ctx.restore();
 }
@@ -337,6 +399,9 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   onDrawingDelete,
   onDrawingsChange,
   onRendered,
+  drawingColor = "#2864ff",
+  drawingLineWidth = 2,
+  drawingText = "文本标记",
   onNeedMoreHistory,
   onNeedOlder,
   historyLoadThreshold = 8,
@@ -373,13 +438,16 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     const ratio = window.devicePixelRatio || 1;
     const width = container.clientWidth;
     const height = container.clientHeight;
-    canvas.width = Math.max(1, Math.round(width * ratio));
-    canvas.height = Math.max(1, Math.round(height * ratio));
+    const pixelWidth = Math.max(1, Math.round(width * ratio));
+    const pixelHeight = Math.max(1, Math.round(height * ratio));
+    if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+    if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.scale(ratio, ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
     ctx.font = '13px "Microsoft YaHei UI", sans-serif';
     drawingsRef.current.forEach((drawing, index) => paintOneDrawing(ctx, toScreenDrawing(drawing, width, height), width, height, index === selectedRef.current));
     if (previewDrawing.current) paintOneDrawing(ctx, previewDrawing.current, width, height, false);
@@ -534,6 +602,14 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
+  function cursorFor(handle: EditState["handle"] | null, drawing?: ScreenDrawing, dragging = false) {
+    if (!handle) return "default";
+    if (handle === "move" || handle === "control") return dragging ? "grabbing" : "grab";
+    if (drawing?.kind === "horizontal") return "ns-resize";
+    if (drawing?.kind === "vertical") return "ew-resize";
+    return handle === "start" ? "nwse-resize" : "nesw-resize";
+  }
+
   function pointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
     const current = point(event);
     const width = event.currentTarget.clientWidth;
@@ -551,7 +627,14 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       }
       editState.current = match;
       selectDrawing(match?.index ?? null);
-      if (match) event.currentTarget.setPointerCapture(event.pointerId);
+      if (match) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.currentTarget.style.cursor = cursorFor(match.handle, match.drawing, true);
+        event.currentTarget.dataset.hitTarget = match.handle;
+      } else {
+        event.currentTarget.style.cursor = "default";
+        delete event.currentTarget.dataset.hitTarget;
+      }
       paintDrawings();
       return;
     }
@@ -563,8 +646,10 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       y1: current.y,
       x2: current.x,
       y2: current.y,
-      text: drawingMode === "text" ? "文本标记" : undefined,
+      text: drawingMode === "text" ? drawingText : undefined,
       points: drawingMode === "freehand" ? [current] : undefined,
+      color: drawingColor,
+      lineWidth: drawingLineWidth,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
     paintDrawings();
@@ -576,6 +661,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     const height = event.currentTarget.clientHeight;
     if (drawingMode === "select" && editState.current) {
       const edit = editState.current;
+      event.currentTarget.style.cursor = cursorFor(edit.handle, edit.drawing, true);
       const dx = current.x - edit.origin.x;
       const dy = current.y - edit.origin.y;
       let next: ScreenDrawing;
@@ -585,6 +671,8 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       } else if (edit.handle === "end") {
         next = { ...edit.drawing, x2: current.x, y2: current.y };
         if (next.kind === "freehand" && next.points?.length) next.points = [...next.points.slice(0, -1), current];
+      } else if (edit.handle === "control") {
+        next = { ...edit.drawing, control: current };
       } else {
         next = {
           ...edit.drawing,
@@ -593,6 +681,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
           x2: edit.drawing.x2 + dx,
           y2: edit.drawing.y2 + dy,
           points: edit.drawing.points?.map(item => ({ x: item.x + dx, y: item.y + dy })),
+          control: edit.drawing.control ? { x: edit.drawing.control.x + dx, y: edit.drawing.control.y + dy } : undefined,
         };
       }
       const originalSpace = drawingsRef.current[edit.index].coordinateSpace ?? "pixel";
@@ -604,18 +693,35 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       paintDrawings();
       return;
     }
-    if (!drawingMode || drawingMode === "select" || !startPoint.current || !previewDrawing.current) return;
+    if (drawingMode === "select") {
+      let hovered: { handle: EditState["handle"]; drawing: ScreenDrawing } | null = null;
+      for (let index = drawingsRef.current.length - 1; index >= 0; index -= 1) {
+        const drawing = toScreenDrawing(drawingsRef.current[index], width, height);
+        const handle = hitDrawing(current, drawing, width, height);
+        if (handle) {
+          hovered = { handle, drawing };
+          break;
+        }
+      }
+      event.currentTarget.style.cursor = cursorFor(hovered?.handle ?? null, hovered?.drawing);
+      if (hovered) event.currentTarget.dataset.hitTarget = hovered.handle;
+      else delete event.currentTarget.dataset.hitTarget;
+      return;
+    }
+    if (!drawingMode || !startPoint.current || !previewDrawing.current) return;
     previewDrawing.current.x2 = current.x;
     previewDrawing.current.y2 = drawingMode === "horizontal" ? startPoint.current.y : current.y;
     if (drawingMode === "vertical") previewDrawing.current.x2 = startPoint.current.x;
-    if (drawingMode === "freehand") previewDrawing.current.points = [...(previewDrawing.current.points ?? []), current];
+    if (drawingMode === "freehand") previewDrawing.current.points?.push(current);
     paintDrawings();
   }
 
   function pointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (drawingMode === "select") {
+      const edit = editState.current;
       editState.current = null;
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      event.currentTarget.style.cursor = cursorFor(edit?.handle ?? null, edit?.drawing);
       return;
     }
     if (!drawingMode || !startPoint.current || !previewDrawing.current) return;
@@ -625,6 +731,13 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     previewDrawing.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     paintDrawings();
+  }
+
+  function pointerLeave(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (!editState.current) {
+      event.currentTarget.style.cursor = drawingMode && drawingMode !== "select" ? "crosshair" : "default";
+      delete event.currentTarget.dataset.hitTarget;
+    }
   }
 
   function keyDown(event: ReactKeyboardEvent<HTMLCanvasElement>) {
@@ -639,7 +752,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   }
 
   const normalizedCount = normalizedBars.length;
-  const interactive = Boolean(drawingMode);
+  const interactive = Boolean(drawingMode && (drawingMode !== "select" || drawings.length > 0));
   return <div
     ref={host}
     className={`market-chart ${compact ? "compact" : ""}`}
@@ -650,10 +763,14 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     data-first-time={normalizedBars[0]?.time}
     data-last-time={normalizedBars.at(-1)?.time}
     data-drawing-mode={drawingMode ?? "pan"}
+    data-drawings={drawings.length}
+    data-drawing-kinds={drawings.map(drawing => drawing.kind).join(",")}
+    data-drawing-styles={drawings.map(drawing => `${drawing.color || "#111315"}:${drawing.lineWidth || 1.5}`).join(",")}
+    data-selected-drawing={activeSelected ?? ""}
   >
     <canvas
       ref={overlay}
-      className={`drawing-overlay ${interactive ? "drawing" : ""}`}
+      className={`drawing-overlay ${interactive ? drawingMode === "select" ? "selecting" : "drawing" : ""}`}
       aria-label={drawingMode === "select" ? "选择和调整画线" : drawingMode ? `绘制${drawingMode}` : undefined}
       tabIndex={interactive ? 0 : -1}
       onKeyDown={keyDown}
@@ -661,6 +778,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       onPointerMove={pointerMove}
       onPointerUp={pointerUp}
       onPointerCancel={pointerUp}
+      onPointerLeave={pointerLeave}
     />
   </div>;
 });

@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-16T15:54:40.288Z",
+  "captured_at": "2026-07-17T03:32:00.927Z",
   "results": [
     {
       "scenario": "responsive",
@@ -63,10 +63,10 @@
       "scenario": "shape-sample",
       "category": "突破启动",
       "sample": 5,
-      "code": "603456",
+      "code": "600671",
       "rank": "5",
       "reason": "近20日快速抬升",
-      "pct": "+0.88%",
+      "pct": "+2.38%",
       "result": "pass"
     },
     {
@@ -123,8 +123,38 @@
       "scenario": "shape-sample",
       "category": "区间下沿反弹",
       "sample": 1,
-      "code": "000690",
+      "code": "603318",
       "rank": "1",
+      "reason": "位于80日区间下沿",
+      "pct": "-4.86%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "区间下沿反弹",
+      "sample": 2,
+      "code": "001210",
+      "rank": "2",
+      "reason": "位于80日区间下沿",
+      "pct": "-0.48%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "区间下沿反弹",
+      "sample": 3,
+      "code": "002898",
+      "rank": "3",
+      "reason": "位于80日区间下沿",
+      "pct": "-2.63%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "区间下沿反弹",
+      "sample": 4,
+      "code": "000690",
+      "rank": "4",
       "reason": "位于80日区间下沿",
       "pct": "-0.64%",
       "result": "pass"
@@ -132,41 +162,11 @@
     {
       "scenario": "shape-sample",
       "category": "区间下沿反弹",
-      "sample": 2,
-      "code": "600982",
-      "rank": "2",
-      "reason": "位于80日区间下沿",
-      "pct": "-1.49%",
-      "result": "pass"
-    },
-    {
-      "scenario": "shape-sample",
-      "category": "区间下沿反弹",
-      "sample": 3,
-      "code": "601588",
-      "rank": "3",
-      "reason": "位于80日区间下沿",
-      "pct": "+0.61%",
-      "result": "pass"
-    },
-    {
-      "scenario": "shape-sample",
-      "category": "区间下沿反弹",
-      "sample": 4,
-      "code": "600863",
-      "rank": "4",
-      "reason": "位于80日区间下沿",
-      "pct": "-3.15%",
-      "result": "pass"
-    },
-    {
-      "scenario": "shape-sample",
-      "category": "区间下沿反弹",
       "sample": 5,
-      "code": "000402",
+      "code": "600527",
       "rank": "5",
       "reason": "位于80日区间下沿",
-      "pct": "+0.81%",
+      "pct": "-1.41%",
       "result": "pass"
     },
     {

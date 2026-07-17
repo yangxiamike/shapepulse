@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Bookmark,
@@ -80,6 +80,10 @@ export function BoardClient() {
   const [snapshotDetail, setSnapshotDetail] = useState<SavedScreenSnapshot | null>(null);
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [historyPage, setHistoryPage] = useState<SavedScreenPage | null>(null);
+  const [detailWidth, setDetailWidth] = useState(440);
+  const workspaceRef = useRef<HTMLElement>(null);
+  const workspaceResizeActive = useRef(false);
+  const workspaceResizeFrame = useRef<number | null>(null);
 
   const filters = useMemo<ScreenFilters>(() => ({
     board,
@@ -104,7 +108,7 @@ export function BoardClient() {
     const items = activeView === "combined" ? data.items : data.categories[activeView];
     return items.slice(0, Math.min(topK, items.length));
   }, [activeView, data, topK]);
-  const visibleItems = expanded ? activeItems : activeItems.slice(0, 10);
+  const visibleItems = expanded ? activeItems : activeItems.slice(0, 9);
 
   const hydrateStock = useCallback(async (base: Stock) => {
     try {
@@ -167,6 +171,10 @@ export function BoardClient() {
     return () => window.clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => () => {
+    if (workspaceResizeFrame.current != null) cancelAnimationFrame(workspaceResizeFrame.current);
+  }, []);
+
   const saveCurrentSnapshot = useCallback(async () => {
     if (!data || savingSnapshot) return;
     setSavingSnapshot(true); setError("");
@@ -228,6 +236,45 @@ export function BoardClient() {
     }
   }
 
+  function detailWidthLimit() {
+    const workspaceWidth = workspaceRef.current?.getBoundingClientRect().width || 1200;
+    return Math.max(340, Math.min(620, workspaceWidth - 680));
+  }
+
+  function resizeDetailAt(clientX: number) {
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const next = Math.max(340, Math.min(detailWidthLimit(), rect.right - clientX));
+    if (workspaceResizeFrame.current != null) cancelAnimationFrame(workspaceResizeFrame.current);
+    workspaceResizeFrame.current = requestAnimationFrame(() => {
+      workspaceResizeFrame.current = null;
+      setDetailWidth(next);
+    });
+  }
+
+  function startWorkspaceResize(event: React.PointerEvent<HTMLDivElement>) {
+    workspaceResizeActive.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeDetailAt(event.clientX);
+  }
+
+  function moveWorkspaceResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (workspaceResizeActive.current) resizeDetailAt(event.clientX);
+  }
+
+  function finishWorkspaceResize(event: React.PointerEvent<HTMLDivElement>) {
+    workspaceResizeActive.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  function workspaceResizeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    if (event.key === "Home") setDetailWidth(340);
+    else if (event.key === "End") setDetailWidth(detailWidthLimit());
+    else setDetailWidth(current => Math.max(340, Math.min(detailWidthLimit(), current + (event.key === "ArrowLeft" ? 24 : -24))));
+  }
+
   const asOf = data?.as_of.daily || "";
   const saved = Boolean(selected && state.saved.some(item => item.code === selected.code));
   const pending = Boolean(selected && state.pending.some(item => item.code === selected.code));
@@ -285,7 +332,12 @@ export function BoardClient() {
 
         {data?.warnings.length ? <section className="data-warning" aria-label="数据口径警告"><TriangleAlert /> <div>{data.warnings.map(item => <span key={item}>{item}</span>)}</div><DatePills dates={data.as_of} /></section> : data && <section className="date-strip"><DatePills dates={data.as_of} /></section>}
 
-        <section className="board-workspace">
+        <section
+          ref={workspaceRef}
+          className="board-workspace"
+          style={{ "--board-detail-width": `${detailWidth}px` } as React.CSSProperties}
+          data-detail-width={Math.round(detailWidth)}
+        >
           <article className={`candidate-card ${expanded ? "expanded" : ""}`}>
             <div className="section-heading"><div><h2>{title}</h2><span>{feedback}</span></div><button onClick={() => void runScreen()} aria-label="刷新"><RefreshCw /></button></div>
             {error ? <ErrorState message={error} onRetry={runScreen} /> : <div className="table-wrap">
@@ -307,8 +359,24 @@ export function BoardClient() {
               </table>
               {!activeItems.length && !loading && <EmptyState text="当前条件暂无候选，请调整市值或板块后重新筛选" />}
             </div>}
-            {activeItems.length > 10 && <button className="view-all-button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>{expanded ? "收起列表" : `查看全部 ${activeItems.length} 只`} <ChevronDown className={expanded ? "rotate" : ""} /></button>}
+            {activeItems.length > 9 && <button className="view-all-button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>{expanded ? "收起列表" : `查看全部 ${activeItems.length} 只`} <ChevronDown className={expanded ? "rotate" : ""} /></button>}
           </article>
+          <div
+            className="board-workspace-resizer"
+            data-testid="board-workspace-resizer"
+            role="separator"
+            aria-label="调整候选列表与个股详情宽度"
+            aria-orientation="vertical"
+            aria-valuemin={340}
+            aria-valuemax={620}
+            aria-valuenow={Math.round(detailWidth)}
+            tabIndex={0}
+            onKeyDown={workspaceResizeKeyDown}
+            onPointerDown={startWorkspaceResize}
+            onPointerMove={moveWorkspaceResize}
+            onPointerUp={finishWorkspaceResize}
+            onPointerCancel={finishWorkspaceResize}
+          />
           <article className="detail-card">
             {selected ? <>
               <div className="detail-chart-head"><b>日 K · 近 5 个月</b><span className="ma ma5">MA5</span><span className="ma ma10">MA10</span><span className="ma ma20">MA20</span></div>

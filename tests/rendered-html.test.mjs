@@ -32,7 +32,8 @@ test("server-renders the independent market terminal", async () => {
   assert.match(html, /<title>本地行情终端 \| 手动跟踪市场<\/title>/i);
   assert.match(html, /搜索股票名称/);
   assert.match(html, /自选/);
-  assert.match(html, /交易/);
+  assert.match(html, /形态/);
+  assert.doesNotMatch(html, /交易/);
   assert.doesNotMatch(html, /今日推荐|筛选进度|上一只|下一只/);
 });
 

@@ -1,129 +1,129 @@
 {
-  "captured_at": "2026-07-16T15:54:47.613Z",
+  "captured_at": "2026-07-17T03:32:04.381Z",
   "viewport": "1600x1000",
   "groups": {
     "first": {
-      "frontend_ms": 1444.2,
+      "frontend_ms": 538.4,
       "detail_requests": 1,
       "breakdown": {
-        "text": "总 927ms · HTTP 1294ms · 查询 866ms · 绘制 22ms",
-        "frontend_ms": 927,
-        "http_ms": 1294,
-        "backend_query_ms": 866,
-        "chart_redraw_ms": 22,
+        "text": "总 195ms · HTTP 204ms · 查询 76ms · 绘制 56ms",
+        "frontend_ms": 195,
+        "http_ms": 204,
+        "backend_query_ms": 76,
+        "chart_redraw_ms": 56,
         "cache_hit": false
       },
       "bars": {
-        "url": "http://127.0.0.1:8765/api/bars/600519?period=1d&start=20250101&limit=110",
-        "cache_hit": false,
+        "url": "http://127.0.0.1:8875/api/bars/600519?period=1d&adjust=qfq&limit=10000",
+        "cache_hit": true,
         "timings": {
-          "query_ms": 814.3,
-          "adjust_ms": 1.8,
-          "aggregate_ms": 0.1,
-          "serialize_ms": 2.8,
-          "total_ms": 866.3
+          "total_ms": 76,
+          "query_ms": 0,
+          "adjust_ms": 0,
+          "aggregate_ms": 0,
+          "serialize_ms": 0
         },
-        "bar_count": 110
+        "bar_count": 3285
       }
     },
     "repeat": {
-      "frontend_ms": 55.8,
+      "frontend_ms": 117.4,
       "client_cache_hit": true,
       "breakdown": {
-        "text": "总 6ms · HTTP 0ms · 查询 52ms · 绘制 20ms · 缓存",
-        "frontend_ms": 6,
+        "text": "总 65ms · HTTP 0ms · 查询 32ms · 绘制 15ms · 缓存",
+        "frontend_ms": 65,
         "http_ms": 0,
-        "backend_query_ms": 52,
-        "chart_redraw_ms": 20,
+        "backend_query_ms": 32,
+        "chart_redraw_ms": 15,
         "cache_hit": true
       }
     },
     "same_stock": {
-      "first_weekly_ms": 150.9,
+      "first_weekly_ms": 132.1,
       "detail_requests": 1,
       "weekly_count": 27,
       "breakdown": {
-        "text": "总 101ms · HTTP 60ms · 查询 52ms · 绘制 33ms",
-        "frontend_ms": 101,
-        "http_ms": 60,
-        "backend_query_ms": 52,
-        "chart_redraw_ms": 33,
-        "cache_hit": false
+        "text": "总 60ms · HTTP 56ms · 查询 32ms · 绘制 39ms · 缓存",
+        "frontend_ms": 60,
+        "http_ms": 56,
+        "backend_query_ms": 32,
+        "chart_redraw_ms": 39,
+        "cache_hit": true
       }
     },
     "switched_stock": {
-      "search_ms": 242.4,
-      "switch_ms": 906,
+      "search_ms": 245.8,
+      "switch_ms": 195.2,
       "total_detail_requests": 2,
       "breakdown": {
-        "text": "总 548ms · HTTP 574ms · 查询 517ms · 绘制 13ms",
-        "frontend_ms": 548,
-        "http_ms": 574,
-        "backend_query_ms": 517,
-        "chart_redraw_ms": 13,
+        "text": "总 151ms · HTTP 177ms · 查询 66ms · 绘制 30ms",
+        "frontend_ms": 151,
+        "http_ms": 177,
+        "backend_query_ms": 66,
+        "chart_redraw_ms": 30,
         "cache_hit": false
       }
     },
     "screening": {
-      "button_feedback_ms": 75.9,
-      "first_filter_ms": 2426.8,
+      "button_feedback_ms": 70.4,
+      "first_filter_ms": 302.5,
       "progress_seen": true,
-      "repeated_button_feedback_ms": 49.5,
-      "repeated_filter_ms": 858.9
+      "repeated_button_feedback_ms": 82.4,
+      "repeated_filter_ms": 397.3
     },
     "board_to_market": {
-      "frontend_ms": 125.4,
+      "frontend_ms": 214.9,
       "code": "002728"
     }
   },
   "raw_bars_responses": [
     {
-      "url": "http://127.0.0.1:8765/api/bars/600519?period=1d&start=20250101&limit=110",
-      "cache_hit": false,
-      "timings": {
-        "query_ms": 814.3,
-        "adjust_ms": 1.8,
-        "aggregate_ms": 0.1,
-        "serialize_ms": 2.8,
-        "total_ms": 866.3
-      },
-      "bar_count": 110
-    },
-    {
-      "url": "http://127.0.0.1:8765/api/bars/600519?period=1w&start=20250101&limit=27",
-      "cache_hit": false,
-      "timings": {
-        "query_ms": 16.8,
-        "adjust_ms": 2.1,
-        "aggregate_ms": 4.4,
-        "serialize_ms": 0.7,
-        "total_ms": 52.2
-      },
-      "bar_count": 27
-    },
-    {
-      "url": "http://127.0.0.1:8765/api/bars/000858?period=1d&start=20250101&limit=110",
-      "cache_hit": false,
-      "timings": {
-        "query_ms": 483.1,
-        "adjust_ms": 1.8,
-        "aggregate_ms": 0.1,
-        "serialize_ms": 2.7,
-        "total_ms": 517.3
-      },
-      "bar_count": 110
-    },
-    {
-      "url": "http://127.0.0.1:8765/api/bars/002728?period=1d&start=20250101&limit=110",
+      "url": "http://127.0.0.1:8875/api/bars/600519?period=1d&adjust=qfq&limit=10000",
       "cache_hit": true,
       "timings": {
-        "total_ms": 46.8,
+        "total_ms": 76,
         "query_ms": 0,
         "adjust_ms": 0,
         "aggregate_ms": 0,
         "serialize_ms": 0
       },
-      "bar_count": 110
+      "bar_count": 3285
+    },
+    {
+      "url": "http://127.0.0.1:8875/api/bars/600519?period=1w&adjust=qfq&limit=10000",
+      "cache_hit": true,
+      "timings": {
+        "total_ms": 32.4,
+        "query_ms": 0,
+        "adjust_ms": 0,
+        "aggregate_ms": 0,
+        "serialize_ms": 0
+      },
+      "bar_count": 694
+    },
+    {
+      "url": "http://127.0.0.1:8875/api/bars/000858?period=1d&adjust=qfq&limit=10000",
+      "cache_hit": true,
+      "timings": {
+        "total_ms": 66.4,
+        "query_ms": 0,
+        "adjust_ms": 0,
+        "aggregate_ms": 0,
+        "serialize_ms": 0
+      },
+      "bar_count": 3225
+    },
+    {
+      "url": "http://127.0.0.1:8875/api/bars/002728?period=1d&adjust=qfq&limit=10000",
+      "cache_hit": true,
+      "timings": {
+        "total_ms": 68.1,
+        "query_ms": 0,
+        "adjust_ms": 0,
+        "aggregate_ms": 0,
+        "serialize_ms": 0
+      },
+      "bar_count": 2775
     }
   ]
 }
