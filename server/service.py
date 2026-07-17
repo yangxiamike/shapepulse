@@ -614,21 +614,6 @@ class MarketService:
         if category not in CATEGORY_ORDER:
             raise ValueError(f"category must be one of: {', '.join(CATEGORY_ORDER)}")
         parsed_limit = self._positive_integer(limit, "limit")
-        saved = self.state_store.latest_saved_category(category)
-        if saved is not None:
-            run, items = saved
-            if items:
-                pool = items[:parsed_limit]
-                return {
-                    "category": category,
-                    "category_label": self.thresholds[category]["label"],
-                    "available_categories": self._pattern_categories(),
-                    "items": [self._pool_item(item, index) for index, item in enumerate(pool, 1)],
-                    "total": len(items),
-                    "source": "saved_snapshot",
-                    "snapshot_id": run["run_id"],
-                    "as_of": run["snapshot_date"],
-                }
         current = self.screen({"mode": "per_category", "top_k": parsed_limit}, False)
         items = current["categories"][category]
         return {

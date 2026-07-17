@@ -159,6 +159,35 @@ class ScreenSemanticsTests(unittest.TestCase):
             with self.subTest(top_k=value), self.assertRaisesRegex(ValueError, "positive integer"):
                 self.service._normalize_filters({"top_k": value})
 
+    def test_pattern_pool_uses_current_complete_calculation_not_saved_snapshot(self):
+        saved_item = {"ts_code": "000001.SZ", "name": "旧快照股票", "score": 99}
+        self.service.state_store = type(
+            "StateStore",
+            (),
+            {"latest_saved_category": lambda _self, _category: ({"run_id": "old-run"}, [saved_item])},
+        )()
+        current_items = [
+            {"ts_code": "600001.SH", "name": "当前股票一", "score": 92},
+            {"ts_code": "600002.SH", "name": "当前股票二", "score": 91},
+        ]
+        received: dict[str, object] = {}
+
+        def screen(filters, save):
+            received.update({"filters": filters, "save": save})
+            return {
+                "categories": {"breakout": current_items},
+                "counts": {"by_category": {"breakout": 2}},
+                "as_of": {"daily": "20260716"},
+            }
+
+        self.service.screen = screen
+        result = self.service.pattern_pool("breakout", 500)
+
+        self.assertEqual(received, {"filters": {"mode": "per_category", "top_k": 500}, "save": False})
+        self.assertEqual(result["source"], "current_calculation")
+        self.assertEqual(result["total"], 2)
+        self.assertEqual([item["ts_code"] for item in result["items"]], ["600001.SH", "600002.SH"])
+
 
 class LocalDataIntegrationTests(unittest.TestCase):
     @classmethod

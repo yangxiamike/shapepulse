@@ -21,6 +21,7 @@ import {
   LineSeries,
   type IChartApi,
   type ISeriesApi,
+  type Logical,
   type LogicalRange,
   type Time,
 } from "lightweight-charts";
@@ -35,6 +36,7 @@ export type DrawingKind =
   | "vertical"
   | "fibonacci"
   | "fibonacci-extension"
+  | "rectangle"
   | "curve"
   | "freehand"
   | "text"
@@ -99,6 +101,8 @@ type Props = {
   historyLoadThreshold?: number;
   /** Number of latest bars shown initially; all supplied bars remain scrollable. */
   visibleCount?: number;
+  /** Empty logical bars kept after the latest candle. */
+  rightPaddingBars?: number;
   /** Disable only when a parent intentionally manages the logical range itself. */
   fitContentOnDataChange?: boolean;
 };
@@ -272,6 +276,7 @@ function usesTwoPointPlacement(kind: DrawingKind) {
     || kind === "ray"
     || kind === "fibonacci"
     || kind === "fibonacci-extension"
+    || kind === "rectangle"
     || kind === "curve"
     || kind === "measure";
 }
@@ -328,6 +333,17 @@ function hitDrawing(point: ChartPoint, drawing: ScreenDrawing, width: number, he
     }
     return null;
   }
+  if (drawing.kind === "rectangle") {
+    const left = Math.min(drawing.x1, drawing.x2);
+    const right = Math.max(drawing.x1, drawing.x2);
+    const top = Math.min(drawing.y1, drawing.y2);
+    const bottom = Math.max(drawing.y1, drawing.y2);
+    const onEdge = distanceToSegment(point, { x: left, y: top }, { x: right, y: top }) <= HIT_DISTANCE
+      || distanceToSegment(point, { x: right, y: top }, { x: right, y: bottom }) <= HIT_DISTANCE
+      || distanceToSegment(point, { x: right, y: bottom }, { x: left, y: bottom }) <= HIT_DISTANCE
+      || distanceToSegment(point, { x: left, y: bottom }, { x: left, y: top }) <= HIT_DISTANCE;
+    return onEdge || (point.x > left && point.x < right && point.y > top && point.y < bottom) ? "move" as const : null;
+  }
   if (drawing.kind === "text") return Math.abs(point.x - drawing.x1) < 90 && Math.abs(point.y - drawing.y1) < 24 ? "move" as const : null;
   const [lineStart, lineEnd] = lineEndpoints(drawing, width, height);
   return distanceToSegment(point, lineStart, lineEnd) <= HIT_DISTANCE ? "move" as const : null;
@@ -381,6 +397,16 @@ function paintOneDrawing(ctx: CanvasRenderingContext2D, drawing: ScreenDrawing, 
     ctx.moveTo(drawing.points[0].x, drawing.points[0].y);
     drawing.points.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
     ctx.stroke();
+  } else if (drawing.kind === "rectangle") {
+    const left = Math.min(drawing.x1, drawing.x2);
+    const top = Math.min(drawing.y1, drawing.y2);
+    const rectangleWidth = Math.abs(drawing.x2 - drawing.x1);
+    const rectangleHeight = Math.abs(drawing.y2 - drawing.y1);
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.fillRect(left, top, rectangleWidth, rectangleHeight);
+    ctx.restore();
+    ctx.strokeRect(left, top, rectangleWidth, rectangleHeight);
   } else {
     if (drawing.kind === "measure") ctx.setLineDash([5, 4]);
     const [lineStart, lineEnd] = lineEndpoints(drawing, width, height);
@@ -443,6 +469,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   onNeedOlder,
   historyLoadThreshold = 8,
   visibleCount,
+  rightPaddingBars,
   fitContentOnDataChange = true,
 }, forwardedRef) {
   const host = useRef<HTMLDivElement>(null);
@@ -559,6 +586,14 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     ma20Ref.current = chart.addSeries(LineSeries, { color: "#8856e8", lineWidth: 1, priceScaleId: "right", priceLineVisible: false, lastValueVisible: false });
 
     const visibleRangeChanged = (range: LogicalRange | null) => {
+      if (range) {
+        container.dataset.visibleFrom = range.from.toFixed(3);
+        container.dataset.visibleTo = range.to.toFixed(3);
+        const latestIndex = previousTimeline.current.length - 1;
+        container.dataset.visibleRightPadding = latestIndex >= 0 ? (range.to - latestIndex).toFixed(3) : "0";
+        const latestX = latestIndex >= 0 ? chart.timeScale().logicalToCoordinate(latestIndex as Logical) : null;
+        if (latestX != null) container.dataset.latestBarRightGap = (container.clientWidth - latestX).toFixed(1);
+      }
       if (!range || range.from > historyLoadThresholdRef.current || (!onNeedMoreHistoryRef.current && !onNeedOlderRef.current)) return;
       const earliest = previousTimeline.current[0];
       if (!earliest || earliestRequestRef.current === earliest) return;
@@ -614,20 +649,24 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     ma10Ref.current?.setData(normalizedBars.filter(bar => bar.ma10 != null).map(bar => ({ time: bar.time as Time, value: bar.ma10! })));
     ma20Ref.current?.setData(normalizedBars.filter(bar => bar.ma20 != null).map(bar => ({ time: bar.time as Time, value: bar.ma20! })));
 
+    previousTimeline.current = timeline;
     if (logicalRange && prepended > 0) {
       chartRef.current?.timeScale().setVisibleLogicalRange({ from: logicalRange.from + prepended, to: logicalRange.to + prepended });
     } else if (fitContentOnDataChange) {
       const count = visibleCount == null ? timeline.length : Math.max(1, Math.floor(visibleCount));
-      if (timeline.length > 0 && count < timeline.length) {
-        chartRef.current?.timeScale().setVisibleLogicalRange({ from: timeline.length - count, to: timeline.length - 1 });
+      const padding = Math.max(0, Math.floor(rightPaddingBars || 0));
+      if (timeline.length > 0 && (count < timeline.length || padding > 0)) {
+        chartRef.current?.timeScale().setVisibleLogicalRange({
+          from: Math.max(0, timeline.length - count),
+          to: timeline.length - 1 + padding,
+        });
       } else {
         chartRef.current?.timeScale().fitContent();
       }
     }
     if (timeline[0] !== previous[0]) earliestRequestRef.current = null;
-    previousTimeline.current = timeline;
     requestAnimationFrame(() => requestAnimationFrame(() => onRendered?.(performance.now() - started)));
-  }, [fitContentOnDataChange, normalizedBars, onRendered, visibleCount]);
+  }, [fitContentOnDataChange, normalizedBars, onRendered, rightPaddingBars, visibleCount]);
 
   useEffect(() => {
     chartRef.current?.applyOptions({
@@ -876,6 +915,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     data-dropped-bars={bars.length - normalizedCount}
     data-first-time={normalizedBars[0]?.time}
     data-last-time={normalizedBars.at(-1)?.time}
+    data-right-padding-bars={rightPaddingBars ?? 0}
     data-drawing-mode={drawingMode ?? "pan"}
     data-drawings={drawings.length}
     data-drawing-kinds={drawings.map(drawing => drawing.kind).join(",")}

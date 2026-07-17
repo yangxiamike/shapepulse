@@ -121,7 +121,7 @@ export function BoardClient() {
     try {
       const [{ item: detail }, history] = await Promise.all([
         api.stock(base.code),
-        api.bars(base.code, "D", "6M"),
+        api.bars(base.code, "D", "3M"),
       ]);
       setSelected(current => current?.code === base.code ? {
         ...base,
@@ -436,8 +436,8 @@ export function BoardClient() {
           />
           <article className="detail-card">
             {selected ? <>
-              <div className="detail-chart-head"><b>日 K · 近 5 个月</b><span className="ma ma5">MA5</span><span className="ma ma10">MA10</span><span className="ma ma20">MA20</span></div>
-              <div className="detail-chart"><MarketChart bars={selected.bars || []} visibleCount={110} compact /></div>
+              <div className="detail-chart-head"><b>日 K · 近 3 个月</b><span className="ma ma5">MA5</span><span className="ma ma10">MA10</span><span className="ma ma20">MA20</span></div>
+              <div className="detail-chart"><MarketChart key={selected.code} bars={selected.bars || []} visibleCount={66} rightPaddingBars={8} compact /></div>
               <div className="pattern-reading">
                 <div className="reading-head"><div><h3>形态解读</h3><small data-testid="pattern-fact-count">{matchesForStock(selected).length === 1 ? "仅匹配 1 个真实形态" : `共匹配 ${matchesForStock(selected).length} 个真实形态`}</small></div></div>
                 <div className="detail-pattern-matches">

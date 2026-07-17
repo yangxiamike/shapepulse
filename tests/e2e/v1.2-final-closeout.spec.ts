@@ -12,6 +12,7 @@ const twoPointTools = new Set([
   "射线",
   "斐波那契回撤",
   "斐波那契扩展",
+  "矩形",
   "曲线",
   "测量",
 ]);
@@ -80,6 +81,76 @@ test.describe.serial("V1.2 final closeout", () => {
       complete_codes: codes,
       multi_pattern: { code: multiCode, count: multi.matches.length, categories: multi.matches.map((item: { category: string }) => item.category) },
       ordinary_screen_does_not_save_snapshot: historyAfter.total === historyBefore.total,
+      result: "pass",
+    });
+  });
+
+  test("pattern pool is complete and board chart keeps the three-month window with right breathing room", async ({ page }) => {
+    test.setTimeout(180_000);
+    const errors = audit(page);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+
+    const completePools: Record<string, { source: string; total: number; items: unknown[] }> = {};
+    for (const category of ["breakout", "pullback", "range_bounce"]) {
+      const pool = await apiJson(page, `/pattern/pool?category=${category}&limit=10000`);
+      expect(pool.source).toBe("current_calculation");
+      expect(pool.items.length).toBe(pool.total);
+      expect(pool.items.length).toBeGreaterThan(1);
+      completePools[category] = pool;
+    }
+    const completePool = completePools.breakout;
+
+    await page.goto("/market?code=002728&category=breakout");
+    await expect(page.locator(".market-chart").first()).toBeVisible({ timeout: 60_000 });
+    const patternTab = page.getByRole("button", { name: "形态", exact: true });
+    await page.waitForTimeout(1_000);
+    await patternTab.click();
+    await expect(patternTab).toHaveClass(/active/);
+    await expect(page.getByTestId("pattern-pool").locator(":scope > button")).toHaveCount(completePool.total, { timeout: 120_000 });
+    await expect(page.locator("#pattern-pool-title").locator("..").locator("span")).toContainText(`${completePool.total} 只`);
+    await page.getByTestId("pattern-group-select").selectOption("range_bounce");
+    await expect(page.getByTestId("pattern-pool").locator(":scope > button")).toHaveCount(completePools.range_bounce.total, { timeout: 120_000 });
+    await expect(page.locator("#pattern-pool-title").locator("..").locator("span")).toContainText(`${completePools.range_bounce.total} 只`);
+    await page.getByTestId("pattern-group-select").selectOption("breakout");
+    await expect(page.getByTestId("pattern-pool").locator(":scope > button")).toHaveCount(completePool.total, { timeout: 120_000 });
+    await page.screenshot({ path: `${screenshotDir}/market-1920-complete-pattern-pool.png`, animations: "disabled", caret: "initial" });
+
+    await openBoard(page);
+    await expect(page.locator(".detail-chart-head b")).toHaveText("日 K · 近 3 个月");
+    const detailChart = page.locator(".detail-chart .market-chart");
+    await expect(detailChart).toHaveAttribute("data-right-padding-bars", "8");
+    await expect.poll(async () => Number(await detailChart.getAttribute("data-visible-right-padding"))).toBeGreaterThan(7.5);
+    const before = await chartWindow(detailChart);
+    expect(before.bars).toBeLessThanOrEqual(66);
+    expect(before.bars).toBeGreaterThan(40);
+    expect(before.right_padding).toBeGreaterThan(7.5);
+    expect(before.right_gap_px).toBeGreaterThan(55);
+
+    const chartBox = await visibleBox(detailChart);
+    await page.mouse.move(chartBox.x + chartBox.width * 0.48, chartBox.y + chartBox.height * 0.45);
+    await page.mouse.down();
+    await page.mouse.move(chartBox.x + chartBox.width * 0.72, chartBox.y + chartBox.height * 0.45, { steps: 10 });
+    await page.mouse.up();
+    await expect.poll(async () => (await chartWindow(detailChart)).from).not.toBeCloseTo(before.from, 1);
+
+    const firstCode = (await page.locator(".candidate-table tbody tr").first().locator(".code-cell").textContent())?.trim();
+    const secondRow = page.locator(".candidate-table tbody tr").nth(1);
+    const secondCode = (await secondRow.locator(".code-cell").textContent())?.trim();
+    expect(secondCode).not.toBe(firstCode);
+    await secondRow.click();
+    await expect(page.locator(".stock-snapshot .snapshot-title")).toContainText(secondCode || "");
+    await expect(detailChart).toHaveAttribute("data-right-padding-bars", "8");
+    await expect.poll(async () => Number(await detailChart.getAttribute("data-visible-right-padding"))).toBeGreaterThan(7.5);
+    const afterSwitch = await chartWindow(detailChart);
+    expect(afterSwitch.right_padding).toBeGreaterThan(7.5);
+    expect(Math.abs(afterSwitch.right_gap_px - before.right_gap_px)).toBeLessThan(8);
+    await page.screenshot({ path: `${screenshotDir}/board-1920-three-month-right-gap.png`, fullPage: true, animations: "disabled", caret: "initial" });
+
+    expect(errors).toEqual([]);
+    evidence.push({
+      gate: "G9",
+      pattern_pools: Object.fromEntries(Object.entries(completePools).map(([category, pool]) => [category, { total: pool.total, source: pool.source }])),
+      board_chart: { label: "日 K · 近 3 个月", default: before, after_switch: afterSwitch, panned_then_reset: true },
       result: "pass",
     });
   });
@@ -167,6 +238,7 @@ test.describe.serial("V1.2 final closeout", () => {
       ["垂直线", "vertical"],
       ["斐波那契回撤", "fibonacci"],
       ["斐波那契扩展", "fibonacci-extension"],
+      ["矩形", "rectangle"],
       ["曲线", "curve"],
       ["自由绘制", "freehand"],
       ["文本", "text"],
@@ -201,6 +273,33 @@ test.describe.serial("V1.2 final closeout", () => {
     }
     expect(new Set(signatures).size).toBe(tools.length);
 
+    await clearDrawings(page, chart);
+    await page.getByRole("button", { name: "矩形", exact: true }).click();
+    await page.mouse.click(box.x + 260, box.y + 350);
+    await expect(chart).toHaveAttribute("data-drawings", "0");
+    await expect(overlay).toHaveAttribute("data-drawing-phase", "awaiting-second-point");
+    await page.mouse.move(box.x + 690, box.y + 160, { steps: 5 });
+    await page.mouse.click(box.x + 690, box.y + 160);
+    const rectangleGeometry = await drawingBounds(overlay);
+    expect(rectangleGeometry.min_x).toBeGreaterThan(200);
+    expect(rectangleGeometry.max_x).toBeLessThan(rectangleGeometry.canvas_width - 100);
+    expect(rectangleGeometry.max_x - rectangleGeometry.min_x).toBeGreaterThan(400);
+    expect(rectangleGeometry.max_y - rectangleGeometry.min_y).toBeGreaterThan(170);
+    await page.getByRole("button", { name: "选择/调整", exact: true }).click();
+    const rectangleCenter = {
+      x: box.x + (rectangleGeometry.min_x + rectangleGeometry.max_x) / 2,
+      y: box.y + (rectangleGeometry.min_y + rectangleGeometry.max_y) / 2,
+    };
+    await page.mouse.move(rectangleCenter.x, rectangleCenter.y);
+    await expect(overlay).toHaveAttribute("data-hit-target", "move");
+    await page.mouse.down();
+    await page.mouse.move(rectangleCenter.x + 55, rectangleCenter.y + 25, { steps: 6 });
+    await page.mouse.up();
+    const movedRectangleGeometry = await drawingBounds(overlay);
+    expect(movedRectangleGeometry.min_x).toBeGreaterThan(rectangleGeometry.min_x + 45);
+    expect(movedRectangleGeometry.min_y).toBeGreaterThan(rectangleGeometry.min_y + 15);
+    await page.screenshot({ path: `${screenshotDir}/market-1600-rectangle.png`, animations: "disabled", caret: "initial" });
+
     const lineGeometry: Record<string, Awaited<ReturnType<typeof drawingBounds>>> = {};
     for (const label of ["趋势线", "线段", "射线"] as const) {
       await clearDrawings(page, chart);
@@ -229,7 +328,7 @@ test.describe.serial("V1.2 final closeout", () => {
 
     await page.screenshot({ path: `${screenshotDir}/market-1600-segment.png`, animations: "disabled", caret: "initial" });
     expect(errors).toEqual([]);
-    evidence.push({ gate: "G5-G6", tools: tools.map(([label, kind]) => ({ label, kind })), unique_signatures: signatures.length, first_click_keeps_zero_drawings: true, drag_compatible: true, line_geometry: lineGeometry, result: "pass" });
+    evidence.push({ gate: "G5-G6", tools: tools.map(([label, kind]) => ({ label, kind })), unique_signatures: signatures.length, first_click_keeps_zero_drawings: true, drag_compatible: true, rectangle_geometry: rectangleGeometry, rectangle_moved_geometry: movedRectangleGeometry, line_geometry: lineGeometry, result: "pass" });
   });
 
   test("Fibonacci settings and both divider modes pass mouse, keyboard, validation and responsive geometry", async ({ page }) => {
@@ -405,6 +504,16 @@ async function drawFibonacciByClicks(page: Page, box: NonNullable<Awaited<Return
   await page.mouse.move(end.x, end.y, { steps: 6 });
   await page.mouse.click(end.x, end.y);
   return { start, end, middle: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 } };
+}
+
+async function chartWindow(chart: Locator) {
+  return chart.evaluate((element: HTMLElement) => ({
+    bars: Number(element.dataset.bars || 0),
+    from: Number(element.dataset.visibleFrom || 0),
+    to: Number(element.dataset.visibleTo || 0),
+    right_padding: Number(element.dataset.visibleRightPadding || 0),
+    right_gap_px: Number(element.dataset.latestBarRightGap || 0),
+  }));
 }
 
 async function drawingBounds(overlay: Locator) {

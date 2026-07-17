@@ -36,7 +36,7 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
         expect(chart?.width || 0).toBeGreaterThanOrEqual(420);
         expect(chart?.height || 0).toBeGreaterThanOrEqual(280);
       }
-      await expect(page.locator(".detail-chart .market-chart")).toHaveAttribute("data-bars", "110");
+      await expect(page.locator(".detail-chart .market-chart")).toHaveAttribute("data-bars", "66");
       await settleForScreenshot(page, page.locator(".detail-chart .market-chart"));
       await captureScreenshot(page, { path: `${screenshotDir}/board-${viewport.width}-overview.png`, fullPage: viewport.width < 1440, animations: "disabled", caret: "hide" });
 
@@ -90,7 +90,7 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
         expect(tag).toBe(category.label);
         expect(reason.length).toBeGreaterThan(3);
         await row.click();
-        await expect(page.locator(".detail-chart .market-chart")).toHaveAttribute("data-bars", "110");
+        await expect(page.locator(".detail-chart .market-chart")).toHaveAttribute("data-bars", "66");
         const detailPctText = await page.locator(".snapshot-price span").innerText();
         const rowPctValue = Number(pct.replace("%", ""));
         const detailPctValue = Number(detailPctText.match(/([+-]?\d+\.\d+)%/)?.[1]);

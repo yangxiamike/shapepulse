@@ -29,6 +29,7 @@ import {
   Ruler,
   Search,
   Settings2,
+  Square,
   Spline,
   Trash2,
   Type,
@@ -139,7 +140,7 @@ export function MarketClient() {
   const loadPatternPool = useCallback(async (category: PatternKey) => {
     setPoolLoading(true);
     try {
-      const pool = await api.patternPool(category, 500);
+      const pool = await api.patternPool(category, 10_000);
       setPatternPool(pool.items);
     } catch (e) { setPatternError(e instanceof Error ? e.message : "形态股票池加载失败"); setPatternPool([]); }
     finally { setPoolLoading(false); }
@@ -543,6 +544,7 @@ export function MarketClient() {
             <DrawingButton label="斐波那契扩展" active={drawingMode === "fibonacci-extension"} onClick={() => setDrawingMode("fibonacci-extension")}><LineChart /></DrawingButton>
           </div>
           <div className="drawing-tool-group" role="group" aria-label="曲线和自由绘制">
+            <DrawingButton label="矩形" hint="矩形：两次点击确定对角点" active={drawingMode === "rectangle"} onClick={() => setDrawingMode("rectangle")}><Square /></DrawingButton>
             <DrawingButton label="曲线" active={drawingMode === "curve"} onClick={() => setDrawingMode("curve")}><Spline /></DrawingButton>
             <DrawingButton label="自由绘制" active={drawingMode === "freehand"} onClick={() => setDrawingMode("freehand")}><Brush /></DrawingButton>
           </div>

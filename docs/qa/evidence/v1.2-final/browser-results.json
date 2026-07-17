@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-17T04:46:17.549Z",
+  "captured_at": "2026-07-17T05:39:15.892Z",
   "results": [
     {
       "gate": "G2-G3",
@@ -65,6 +65,42 @@
         ]
       },
       "ordinary_screen_does_not_save_snapshot": true,
+      "result": "pass"
+    },
+    {
+      "gate": "G9",
+      "pattern_pools": {
+        "breakout": {
+          "total": 158,
+          "source": "current_calculation"
+        },
+        "pullback": {
+          "total": 151,
+          "source": "current_calculation"
+        },
+        "range_bounce": {
+          "total": 2444,
+          "source": "current_calculation"
+        }
+      },
+      "board_chart": {
+        "label": "日 K · 近 3 个月",
+        "default": {
+          "bars": 66,
+          "from": 2709,
+          "to": 2782,
+          "right_padding": 8,
+          "right_gap_px": 100.9
+        },
+        "after_switch": {
+          "bars": 66,
+          "from": 3078,
+          "to": 3151,
+          "right_padding": 8,
+          "right_gap_px": 100.9
+        },
+        "panned_then_reset": true
+      },
       "result": "pass"
     },
     {
@@ -182,6 +218,10 @@
           "kind": "fibonacci-extension"
         },
         {
+          "label": "矩形",
+          "kind": "rectangle"
+        },
+        {
           "label": "曲线",
           "kind": "curve"
         },
@@ -198,9 +238,27 @@
           "kind": "measure"
         }
       ],
-      "unique_signatures": 11,
+      "unique_signatures": 12,
       "first_click_keeps_zero_drawings": true,
       "drag_compatible": true,
+      "rectangle_geometry": {
+        "min_x": 254,
+        "max_x": 695,
+        "min_y": 154,
+        "max_y": 355,
+        "pixels": 85542,
+        "canvas_width": 1032,
+        "canvas_height": 543
+      },
+      "rectangle_moved_geometry": {
+        "min_x": 309,
+        "max_x": 750,
+        "min_y": 179,
+        "max_y": 380,
+        "pixels": 85542,
+        "canvas_width": 1032,
+        "canvas_height": 543
+      },
       "line_geometry": {
         "趋势线": {
           "min_x": 0,
