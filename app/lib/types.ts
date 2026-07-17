@@ -70,6 +70,7 @@ export type Stock = {
   is_st?: boolean;
   pattern?: PatternKey;
   pattern_name?: string;
+  matches?: PatternMatch[];
   score?: number;
   reasons?: string[];
   metrics?: Record<string, number>;

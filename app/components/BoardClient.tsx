@@ -43,9 +43,11 @@ import type {
   ScreenResponse,
   StateSnapshot,
   Stock,
+  PatternMatch,
 } from "../lib/types";
 
 type ViewKey = "combined" | PatternKey;
+type WorkspaceResizeMode = "free" | "ratio";
 
 const patternMeta: Record<PatternKey, { name: string; color: "mint" | "blue" | "lime" }> = {
   breakout: { name: "突破启动", color: "mint" },
@@ -81,9 +83,14 @@ export function BoardClient() {
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [historyPage, setHistoryPage] = useState<SavedScreenPage | null>(null);
   const [detailWidth, setDetailWidth] = useState(440);
+  const [workspaceHeight, setWorkspaceHeight] = useState(664);
+  const [workspaceResizeMode, setWorkspaceResizeMode] = useState<WorkspaceResizeMode>("free");
+  const [stackedWorkspace, setStackedWorkspace] = useState(false);
+  const [workspaceWidth, setWorkspaceWidth] = useState(1422);
   const workspaceRef = useRef<HTMLElement>(null);
   const workspaceResizeActive = useRef(false);
   const workspaceResizeFrame = useRef<number | null>(null);
+  const workspaceResizeStart = useRef<{ clientY: number; height: number } | null>(null);
 
   const filters = useMemo<ScreenFilters>(() => ({
     board,
@@ -121,6 +128,7 @@ export function BoardClient() {
         ...detail,
         pattern: base.pattern,
         pattern_name: base.pattern_name,
+        matches: base.matches,
         score: base.score,
         reasons: base.reasons,
         metrics: base.metrics,
@@ -173,6 +181,24 @@ export function BoardClient() {
 
   useEffect(() => () => {
     if (workspaceResizeFrame.current != null) cancelAnimationFrame(workspaceResizeFrame.current);
+  }, []);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 1100px)");
+    const sync = () => setStackedWorkspace(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    const node = workspaceRef.current;
+    if (!node) return;
+    const observer = new ResizeObserver(entries => {
+      if (entries[0]) setWorkspaceWidth(entries[0].contentRect.width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
 
   const saveCurrentSnapshot = useCallback(async () => {
@@ -241,44 +267,65 @@ export function BoardClient() {
     return Math.max(340, Math.min(620, workspaceWidth - 680));
   }
 
-  function resizeDetailAt(clientX: number) {
+  function scheduleWorkspaceResize(clientX: number, clientY: number) {
     const rect = workspaceRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const next = Math.max(340, Math.min(detailWidthLimit(), rect.right - clientX));
+    const nextWidth = Math.max(340, Math.min(detailWidthLimit(), rect.right - clientX));
+    const start = workspaceResizeStart.current;
+    const nextHeight = start ? Math.max(520, Math.min(920, start.height + clientY - start.clientY)) : workspaceHeight;
     if (workspaceResizeFrame.current != null) cancelAnimationFrame(workspaceResizeFrame.current);
     workspaceResizeFrame.current = requestAnimationFrame(() => {
       workspaceResizeFrame.current = null;
-      setDetailWidth(next);
+      if (!stackedWorkspace) setDetailWidth(nextWidth);
+      if (workspaceResizeMode === "free") setWorkspaceHeight(nextHeight);
     });
   }
 
   function startWorkspaceResize(event: React.PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
     workspaceResizeActive.current = true;
+    workspaceResizeStart.current = { clientY: event.clientY, height: workspaceHeight };
     event.currentTarget.setPointerCapture(event.pointerId);
-    resizeDetailAt(event.clientX);
+    if (!stackedWorkspace) scheduleWorkspaceResize(event.clientX, event.clientY);
   }
 
   function moveWorkspaceResize(event: React.PointerEvent<HTMLDivElement>) {
-    if (workspaceResizeActive.current) resizeDetailAt(event.clientX);
+    if (workspaceResizeActive.current) {
+      event.preventDefault();
+      scheduleWorkspaceResize(event.clientX, event.clientY);
+    }
   }
 
   function finishWorkspaceResize(event: React.PointerEvent<HTMLDivElement>) {
     workspaceResizeActive.current = false;
+    workspaceResizeStart.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
   function workspaceResizeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+    if ((event.key === "ArrowUp" || event.key === "ArrowDown") && workspaceResizeMode !== "free") return;
+    if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && stackedWorkspace) return;
     event.preventDefault();
-    if (event.key === "Home") setDetailWidth(340);
-    else if (event.key === "End") setDetailWidth(detailWidthLimit());
-    else setDetailWidth(current => Math.max(340, Math.min(detailWidthLimit(), current + (event.key === "ArrowLeft" ? 24 : -24))));
+    if (event.key === "Home") {
+      if (stackedWorkspace) setWorkspaceHeight(520);
+      else setDetailWidth(340);
+    } else if (event.key === "End") {
+      if (stackedWorkspace) setWorkspaceHeight(920);
+      else setDetailWidth(detailWidthLimit());
+    } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      setWorkspaceHeight(current => Math.max(520, Math.min(920, current + (event.key === "ArrowDown" ? 24 : -24))));
+    } else {
+      setDetailWidth(current => Math.max(340, Math.min(detailWidthLimit(), current + (event.key === "ArrowLeft" ? 24 : -24))));
+    }
   }
 
   const asOf = data?.as_of.daily || "";
   const saved = Boolean(selected && state.saved.some(item => item.code === selected.code));
   const pending = Boolean(selected && state.pending.some(item => item.code === selected.code));
   const title = activeView === "combined" ? "综合榜" : patternMeta[activeView].name;
+  const effectiveWorkspaceHeight = expanded ? Math.max(workspaceHeight, 820) : workspaceHeight;
+  const detailRatio = Math.round(detailWidth / Math.max(1, workspaceWidth) * 100);
 
   return (
     <div className="app-shell board-shell">
@@ -332,11 +379,21 @@ export function BoardClient() {
 
         {data?.warnings.length ? <section className="data-warning" aria-label="数据口径警告"><TriangleAlert /> <div>{data.warnings.map(item => <span key={item}>{item}</span>)}</div><DatePills dates={data.as_of} /></section> : data && <section className="date-strip"><DatePills dates={data.as_of} /></section>}
 
+        <section className="workspace-resize-controls" aria-label="候选与详情分隔模式">
+          <div><b>候选 / 详情布局</b><span data-testid="workspace-resize-feedback">{stackedWorkspace ? `上下分隔 · 候选区 ${Math.round(workspaceHeight)}px` : `详情约 ${detailRatio}% · 高 ${Math.round(effectiveWorkspaceHeight)}px`}</span></div>
+          <div role="group" aria-label="分隔拖动模式">
+            <button type="button" className={workspaceResizeMode === "free" ? "active" : ""} aria-pressed={workspaceResizeMode === "free"} onClick={() => setWorkspaceResizeMode("free")}>自由调整</button>
+            <button type="button" className={workspaceResizeMode === "ratio" ? "active" : ""} aria-pressed={workspaceResizeMode === "ratio"} onClick={() => setWorkspaceResizeMode("ratio")}>仅左右比例</button>
+          </div>
+        </section>
+
         <section
           ref={workspaceRef}
-          className="board-workspace"
-          style={{ "--board-detail-width": `${detailWidth}px` } as React.CSSProperties}
+          className={`board-workspace mode-${workspaceResizeMode} ${stackedWorkspace ? "stacked" : ""}`}
+          style={{ "--board-detail-width": `${detailWidth}px`, "--board-workspace-height": `${effectiveWorkspaceHeight}px` } as React.CSSProperties}
           data-detail-width={Math.round(detailWidth)}
+          data-workspace-height={Math.round(effectiveWorkspaceHeight)}
+          data-resize-mode={workspaceResizeMode}
         >
           <article className={`candidate-card ${expanded ? "expanded" : ""}`}>
             <div className="section-heading"><div><h2>{title}</h2><span>{feedback}</span></div><button onClick={() => void runScreen()} aria-label="刷新"><RefreshCw /></button></div>
@@ -349,7 +406,7 @@ export function BoardClient() {
                   return <tr key={`${stock.code}-${stock.pattern}`} className={selected?.code === stock.code && selected?.pattern === stock.pattern ? "selected" : ""} onClick={() => void chooseStock(stock)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void chooseStock(stock); } }}>
                     <td><span className={(rank || index + 1) <= 3 ? "rank top-rank" : "rank"}>{rank || index + 1}</span></td>
                     <td className="code-cell">{stock.code}</td><td className="name-cell">{stock.name}</td><td>{stock.industry || stock.market || "—"}</td>
-                    <td><span className={`pattern-tag ${meta.color}`}>{stock.pattern_name || meta.name}</span></td>
+                    <td className="pattern-cell"><div className="pattern-tags" data-testid={`stock-patterns-${stock.code}`}>{matchesForStock(stock).map(match => <span className={`pattern-tag ${patternMeta[match.category].color}`} key={match.category}>{match.category_label || patternMeta[match.category].name}</span>)}</div></td>
                     <td className="reason-cell" title={(stock.reasons || []).join("；")}>{stock.reasons?.[0] || "已计算，理由待复核"}</td>
                     <td><div className="score-cell"><b>{Math.round(stock.score || 0)}</b><i><span style={{ width: `${stock.score || 0}%` }} /></i></div></td>
                     <td>{fmtMarketValue(stock.total_mv)}</td><td className={stock.pct_chg >= 0 ? "up" : "down"}>{signed(stock.pct_chg)}%</td>
@@ -365,11 +422,11 @@ export function BoardClient() {
             className="board-workspace-resizer"
             data-testid="board-workspace-resizer"
             role="separator"
-            aria-label="调整候选列表与个股详情宽度"
-            aria-orientation="vertical"
-            aria-valuemin={340}
-            aria-valuemax={620}
-            aria-valuenow={Math.round(detailWidth)}
+            aria-label={workspaceResizeMode === "free" ? "自由调整候选列表与个股详情尺寸" : "按左右比例调整候选列表与个股详情"}
+            aria-orientation={stackedWorkspace ? "horizontal" : "vertical"}
+            aria-valuemin={stackedWorkspace ? 520 : 340}
+            aria-valuemax={stackedWorkspace ? 920 : 620}
+            aria-valuenow={stackedWorkspace ? Math.round(workspaceHeight) : Math.round(detailWidth)}
             tabIndex={0}
             onKeyDown={workspaceResizeKeyDown}
             onPointerDown={startWorkspaceResize}
@@ -382,9 +439,14 @@ export function BoardClient() {
               <div className="detail-chart-head"><b>日 K · 近 5 个月</b><span className="ma ma5">MA5</span><span className="ma ma10">MA10</span><span className="ma ma20">MA20</span></div>
               <div className="detail-chart"><MarketChart bars={selected.bars || []} visibleCount={110} compact /></div>
               <div className="pattern-reading">
-                <div className="reading-head"><h3>形态解读</h3><span className={`pattern-tag ${patternMeta[selected.pattern || "breakout"].color}`}>{selected.pattern_name || patternMeta[selected.pattern || "breakout"].name}</span></div>
-                {selected.reasons?.length ? <ul>{selected.reasons.slice(0, 4).map(reason => <li key={reason}><Check />{reason}</li>)}</ul> : <p className="reading-empty">已计算，但没有可展示的匹配理由。</p>}
-                {selected.metrics && <div className="metric-facts">{Object.entries(selected.metrics).slice(0, 4).map(([key, value]) => <span key={key}><small>{metricLabel(key)}</small><b>{fmtMetric(key, value)}</b></span>)}</div>}
+                <div className="reading-head"><div><h3>形态解读</h3><small data-testid="pattern-fact-count">{matchesForStock(selected).length === 1 ? "仅匹配 1 个真实形态" : `共匹配 ${matchesForStock(selected).length} 个真实形态`}</small></div></div>
+                <div className="detail-pattern-matches">
+                  {matchesForStock(selected).map(match => <section className="detail-pattern-match" data-pattern={match.category} key={match.category}>
+                    <div><span className={`pattern-tag ${patternMeta[match.category].color}`}>{match.category_label || patternMeta[match.category].name}</span><b>{match.score.toFixed(1)} 分</b></div>
+                    {match.reasons.length ? <ul>{match.reasons.slice(0, 4).map(reason => <li key={reason}><Check />{reason}</li>)}</ul> : <p className="reading-empty">已计算，但没有可展示的匹配理由。</p>}
+                    {Object.keys(match.metrics).length > 0 && <div className="metric-facts">{Object.entries(match.metrics).slice(0, 4).map(([key, value]) => <span key={key}><small>{metricLabel(key)}</small><b>{fmtMetric(key, value)}</b></span>)}</div>}
+                  </section>)}
+                </div>
                 <div className="detail-actions"><button className={`secondary-action ${pending ? "active" : ""}`} onClick={() => void toggleState("pending")}><CircleHelp />{pending ? "移出待判断" : "待判断"}</button><Link className="open-market-button" href={`/market?code=${selected.code}${selected.pattern ? `&category=${selected.pattern}` : ""}`}>打开行情 <ExternalLink /></Link></div>
               </div>
             </> : <EmptyState text="选择一只候选股票查看详情" />}
@@ -438,3 +500,15 @@ function EmptyState({ text, compact = false }: { text: string; compact?: boolean
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) { return <div className="error-state"><Database /><h3>本地数据暂不可用</h3><p>{message}</p><button onClick={onRetry}>重新连接</button></div>; }
 function drawerLabel(key: string) { return ({ viewed: "已查看", saved: "已保存", pending: "待判断", history: "历史筛选记录" } as Record<string, string>)[key] || key; }
 function signed(value?: number) { if (value == null || !Number.isFinite(value)) return "—"; return `${value >= 0 ? "+" : ""}${fmtNumber(value)}`; }
+
+function matchesForStock(stock: Stock): PatternMatch[] {
+  if (stock.matches?.length) return stock.matches;
+  const category = stock.pattern || "breakout";
+  return [{
+    category,
+    category_label: stock.pattern_name || patternMeta[category].name,
+    score: stock.score || 0,
+    reasons: stock.reasons || [],
+    metrics: stock.metrics || {},
+  }];
+}

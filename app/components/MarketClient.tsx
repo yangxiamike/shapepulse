@@ -36,7 +36,14 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { AppSidebar } from "./AppSidebar";
-import { MarketChart, type ChartDrawing, type DrawingMode, type MarketChartHandle } from "./MarketChart";
+import {
+  defaultFibonacciLevels,
+  MarketChart,
+  type ChartDrawing,
+  type DrawingMode,
+  type FibonacciLevel,
+  type MarketChartHandle,
+} from "./MarketChart";
 import { api, fmtAmount, fmtMarketValue, fmtMetric, fmtNumber, formatDate, metricLabel } from "../lib/api";
 import type { Bar, PatternKey, PatternResponse, StateSnapshot, Stock } from "../lib/types";
 
@@ -47,6 +54,7 @@ const unavailablePeriods = ["分时", "5分", "15分", "30分", "60分"];
 const ranges = [["1天", "1D"], ["5天", "5D"], ["1个月", "1M"], ["3个月", "3M"], ["6个月", "6M"], ["YTD", "YTD"], ["1年", "1Y"], ["3年", "3Y"], ["5年", "5Y"], ["全部", "ALL"]] as const;
 const tabs = ["自选", "详情", "形态", "指标", "因子"] as const;
 type RightTab = typeof tabs[number];
+type FibonacciKind = "fibonacci" | "fibonacci-extension";
 
 const patternNames: Record<PatternKey, string> = { breakout: "突破启动", pullback: "上升趋势回调", range_bounce: "区间下沿反弹" };
 const emptyState: StateSnapshot = { viewed: [], saved: [], pending: [], watchlist: [], history: { runs: [], recommendations: [] } };
@@ -80,6 +88,13 @@ export function MarketClient() {
   const [drawingColor, setDrawingColor] = useState("#2864ff");
   const [drawingLineWidth, setDrawingLineWidth] = useState(2);
   const [drawingText, setDrawingText] = useState("文本标记");
+  const [fibonacciDefaults, setFibonacciDefaults] = useState<Record<FibonacciKind, FibonacciLevel[]>>({
+    fibonacci: defaultFibonacciLevels("fibonacci"),
+    "fibonacci-extension": defaultFibonacciLevels("fibonacci-extension"),
+  });
+  const [fibonacciSettings, setFibonacciSettings] = useState<{ index: number; left: number; top: number } | null>(null);
+  const [customFibonacciValue, setCustomFibonacciValue] = useState("");
+  const [fibonacciError, setFibonacciError] = useState("");
   const [layout, setLayout] = useState<1 | 2 | 4>(1);
   const [layoutOpen, setLayoutOpen] = useState(false);
   const [maximizedPane, setMaximizedPane] = useState<number | null>(null);
@@ -107,6 +122,7 @@ export function MarketClient() {
   const patternCategoryRef = useRef<PatternKey>("breakout");
   const rightResizeActive = useRef(false);
   const rightResizeFrame = useRef<number | null>(null);
+  const fibonacciInputRef = useRef<HTMLInputElement>(null);
 
   const refreshWatchlist = useCallback(async (snapshot: StateSnapshot) => {
     const items = await Promise.all(snapshot.watchlist.map(item => api.stock(item.code).then(result => result.item).catch(() => ({ code: item.code, ts_code: item.ts_code, name: item.name || item.code, close: 0, pct_chg: 0 } as Stock))));
@@ -220,6 +236,19 @@ export function MarketClient() {
   }, []);
 
   useEffect(() => {
+    if (!fibonacciSettings) return;
+    const frame = requestAnimationFrame(() => fibonacciInputRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFibonacciSettings(null);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [fibonacciSettings]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (rightTab !== "形态" || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
       const target = event.target as HTMLElement | null;
@@ -298,6 +327,7 @@ export function MarketClient() {
 
   function selectDrawing(index: number | null) {
     setSelectedDrawing(index);
+    if (fibonacciSettings && fibonacciSettings.index !== index) setFibonacciSettings(null);
     if (index == null) return;
     const drawing = drawings[index];
     if (!drawing) return;
@@ -343,6 +373,61 @@ export function MarketClient() {
   function deleteDrawing(index: number) {
     setDrawings(items => items.filter((_item, itemIndex) => itemIndex !== index));
     setSelectedDrawing(null);
+    setFibonacciSettings(null);
+  }
+
+  function openFibonacciSettings(index: number, point: { clientX: number; clientY: number }) {
+    const drawing = drawings[index];
+    if (drawing?.kind !== "fibonacci" && drawing?.kind !== "fibonacci-extension") return;
+    setSelectedDrawing(index);
+    setCustomFibonacciValue("");
+    setFibonacciError("");
+    setFibonacciSettings({
+      index,
+      left: Math.max(12, Math.min(point.clientX + 12, window.innerWidth - 352)),
+      top: Math.max(12, Math.min(point.clientY + 12, window.innerHeight - 520)),
+    });
+  }
+
+  function currentFibonacciLevels() {
+    if (!fibonacciSettings) return [];
+    const drawing = drawings[fibonacciSettings.index];
+    if (drawing?.kind !== "fibonacci" && drawing?.kind !== "fibonacci-extension") return [];
+    return drawing.fibonacciLevels?.length
+      ? drawing.fibonacciLevels
+      : fibonacciDefaults[drawing.kind];
+  }
+
+  function updateFibonacciLevels(next: FibonacciLevel[]) {
+    if (!fibonacciSettings) return;
+    const drawing = drawings[fibonacciSettings.index];
+    if (drawing?.kind !== "fibonacci" && drawing?.kind !== "fibonacci-extension") return;
+    const normalized = next.map(level => ({ ...level }));
+    setDrawings(items => items.map((item, index) => index === fibonacciSettings.index ? { ...item, fibonacciLevels: normalized } : item));
+    setFibonacciDefaults(current => ({ ...current, [drawing.kind]: normalized }));
+  }
+
+  function addCustomFibonacciLevel() {
+    const raw = customFibonacciValue.trim().replace(/%$/, "");
+    const value = Number(raw);
+    const levels = currentFibonacciLevels();
+    if (!raw || !Number.isFinite(value) || value < 0 || value > 10) {
+      setFibonacciError("请输入 0 到 10 之间的比例，例如 1.414");
+      return;
+    }
+    if (levels.some(level => Math.abs(level.value - value) < 0.000001)) {
+      setFibonacciError("这个比例已经存在");
+      return;
+    }
+    updateFibonacciLevels([...levels, {
+      id: `custom-${Date.now()}-${value}`,
+      value,
+      enabled: true,
+      custom: true,
+    }].sort((left, right) => left.value - right.value));
+    setCustomFibonacciValue("");
+    setFibonacciError("");
+    requestAnimationFrame(() => fibonacciInputRef.current?.focus());
   }
 
   function rightWidthLimit() {
@@ -447,9 +532,9 @@ export function MarketClient() {
             <DrawingButton label={`十字光标${crosshairEnabled ? "已开启" : "已关闭"}`} active={crosshairEnabled} onClick={() => setCrosshairEnabled(value => !value)}><Crosshair /></DrawingButton>
           </div>
           <div className="drawing-tool-group" role="group" aria-label="线工具">
-            <DrawingButton label="趋势线" active={drawingMode === "trend"} onClick={() => setDrawingMode("trend")}><PenLine /></DrawingButton>
-            <DrawingButton label="线段" active={drawingMode === "segment"} onClick={() => setDrawingMode("segment")}><Minus /></DrawingButton>
-            <DrawingButton label="射线" active={drawingMode === "ray"} onClick={() => setDrawingMode("ray")}><ArrowUpRight /></DrawingButton>
+            <DrawingButton label="趋势线" hint="趋势线：穿过两个锚点，并向两端延伸" active={drawingMode === "trend"} onClick={() => setDrawingMode("trend")}><PenLine /></DrawingButton>
+            <DrawingButton label="线段" hint="线段：只连接两个锚点" active={drawingMode === "segment"} onClick={() => setDrawingMode("segment")}><Minus /></DrawingButton>
+            <DrawingButton label="射线" hint="射线：从第一点穿过第二点，向前延伸" active={drawingMode === "ray"} onClick={() => setDrawingMode("ray")}><ArrowUpRight /></DrawingButton>
             <DrawingButton label="水平线" active={drawingMode === "horizontal"} onClick={() => setDrawingMode("horizontal")}><MoveHorizontal /></DrawingButton>
             <DrawingButton label="垂直线" active={drawingMode === "vertical"} onClick={() => setDrawingMode("vertical")}><MoveVertical /></DrawingButton>
           </div>
@@ -471,7 +556,7 @@ export function MarketClient() {
             <DrawingButton label="清除画线（全部）" active={drawings.length > 0} onClick={() => { setDrawings([]); setSelectedDrawing(null); setDrawingMode(null); }}><Trash2 /></DrawingButton>
           </div>
         </div>
-        <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
+        <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} fibonacciLevels={drawingMode === "fibonacci-extension" ? fibonacciDefaults["fibonacci-extension"] : fibonacciDefaults.fibonacci} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onDrawingDoubleClick={openFibonacciSettings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
         <div className="range-toolbar">{ranges.map(([label, value]) => <button className={range === value ? "active" : ""} key={value} onClick={() => void changeBars(period, value)}>{label}</button>)}<b>{bars[0]?.time || "—"} 至 {bars.at(-1)?.time || "—"}　<CalendarDays /></b></div>
       </section>
     </main>
@@ -504,6 +589,33 @@ export function MarketClient() {
     </aside>
 
     <footer className="market-statusbar"><span><i className={stock ? "connected" : ""} />{stock ? "已连接" : "未连接"}</span><span><Clock3 />{clock}</span><span className="status-center">本地数据　{status}</span><span><CircleDot />zer0share 日线快照</span><span>CN</span></footer>
+    {fibonacciSettings && <div className="fibonacci-settings-layer" onMouseDown={event => {
+      if (event.target === event.currentTarget) setFibonacciSettings(null);
+    }}>
+      <section
+        className="fibonacci-settings"
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="fibonacci-settings-title"
+        style={{ left: fibonacciSettings.left, top: fibonacciSettings.top }}
+      >
+        <div className="fibonacci-settings-head"><div><b id="fibonacci-settings-title">斐波那契比例设置</b><small>修改立即应用，并作为同类新图形默认值</small></div><button type="button" onClick={() => setFibonacciSettings(null)} aria-label="关闭斐波那契设置"><X /></button></div>
+        <div className="fibonacci-level-list">
+          {currentFibonacciLevels().map(level => <label key={level.id}>
+            <input type="checkbox" checked={level.enabled} onChange={event => updateFibonacciLevels(currentFibonacciLevels().map(item => item.id === level.id ? { ...item, enabled: event.target.checked } : item))} />
+            <span>{formatFibonacciLevel(level.value)}</span>
+            <em>{level.custom ? "自定义" : "默认"}</em>
+            {level.custom && <button type="button" aria-label={`删除自定义比例 ${formatFibonacciLevel(level.value)}`} onClick={() => updateFibonacciLevels(currentFibonacciLevels().filter(item => item.id !== level.id))}><Trash2 /></button>}
+          </label>)}
+        </div>
+        <form className="fibonacci-custom-form" onSubmit={event => { event.preventDefault(); addCustomFibonacciLevel(); }}>
+          <label><span>新增自定义比例</span><input ref={fibonacciInputRef} value={customFibonacciValue} onChange={event => { setCustomFibonacciValue(event.target.value); setFibonacciError(""); }} inputMode="decimal" placeholder="例如 1.414" aria-label="自定义斐波那契比例" /></label>
+          <button type="submit"><Plus />新增</button>
+        </form>
+        {fibonacciError && <p className="fibonacci-error" role="alert">{fibonacciError}</p>}
+        <p className="fibonacci-hint">按 Esc 或点击菜单外部关闭。</p>
+      </section>
+    </div>}
   </div>;
 }
 
@@ -563,7 +675,8 @@ function PatternDates({ data }: { data: PatternResponse }) { return <div classNa
 function UnavailablePanel({ tab }: { tab: RightTab }) { return <PanelEmpty title={`${tab} · 暂不可用`} text={`${tab}能力尚未实现，本版本只保留禁用入口。`} />; }
 function PanelEmpty({ title, text }: { title: string; text: string }) { return <div className="right-placeholder"><CircleDot /><h3>{title}</h3><p>{text}</p></div>; }
 function QuoteFact({ label, value }: { label: string; value: string }) { return <span><small>{label}</small><b>{value}</b></span>; }
-function DrawingButton({ label, active, onClick, children }: { label: string; active: boolean; onClick: () => void; children: React.ReactNode }) { return <button title={label} aria-label={label} aria-pressed={active} className={active ? "active" : ""} onClick={onClick}>{children}</button>; }
+function DrawingButton({ label, hint, active, onClick, children }: { label: string; hint?: string; active: boolean; onClick: () => void; children: React.ReactNode }) { return <button title={hint || label} aria-label={label} aria-pressed={active} className={active ? "active" : ""} onClick={onClick}>{children}</button>; }
 function DisabledButton({ title, label, children }: { title: string; label?: string; children: React.ReactNode }) { return <button disabled title={title} aria-label={label || title}>{children}</button>; }
 function periodLabel(value: string) { return ({ D: "日K", W: "周K", M: "月K", Q: "季K", Y: "年K" } as Record<string, string>)[value] || value; }
 function signed(value?: number) { if (value == null || !Number.isFinite(value)) return "—"; return `${value >= 0 ? "+" : ""}${fmtNumber(value)}`; }
+function formatFibonacciLevel(value: number) { return `${Number(value.toFixed(4))}（${Number((value * 100).toFixed(2))}%）`; }

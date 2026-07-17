@@ -92,6 +92,17 @@ function mapStock(raw: Raw): Stock {
     is_st: Boolean(raw.is_st),
     pattern: raw.category ? patternKey(raw.category) : undefined,
     pattern_name: raw.category_label ? String(raw.category_label) : undefined,
+    matches: Array.isArray(raw.matches) ? raw.matches.map(item => {
+      const match = item as Raw;
+      return {
+        category: patternKey(match.category),
+        category_label: String(match.category_label || ""),
+        score: numeric(match.score),
+        reasons: Array.isArray(match.reasons) ? match.reasons.map(String) : [],
+        metrics: (match.metrics || {}) as Record<string, number>,
+        minimum_score: optionalNumeric(match.minimum_score),
+      };
+    }) : [],
     score: optionalNumeric(raw.score ?? raw.match_score),
     reasons: Array.isArray(raw.reasons) ? raw.reasons.map(String) : [],
     metrics: (raw.metrics || {}) as Record<string, number>,

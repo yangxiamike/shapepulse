@@ -38,21 +38,21 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
       }
       await expect(page.locator(".detail-chart .market-chart")).toHaveAttribute("data-bars", "110");
       await settleForScreenshot(page, page.locator(".detail-chart .market-chart"));
-      await page.screenshot({ path: `${screenshotDir}/board-${viewport.width}-overview.png`, fullPage: viewport.width < 1440, animations: "disabled", caret: "hide" });
+      await captureScreenshot(page, { path: `${screenshotDir}/board-${viewport.width}-overview.png`, fullPage: viewport.width < 1440, animations: "disabled", caret: "hide" });
 
       await page.goto("/market?code=002728");
       await expect(page.getByRole("heading", { name: "特一药业" })).toBeVisible();
       await expect(page.locator(".market-chart")).toHaveAttribute("data-bars", "110");
       expect(await hasPageOverflow(page)).toBe(false);
       await settleForScreenshot(page, page.locator(".market-chart"));
-      await page.screenshot({ path: `${screenshotDir}/market-${viewport.width}-002728-daily.png`, animations: "disabled", caret: "hide" });
+      await captureScreenshot(page, { path: `${screenshotDir}/market-${viewport.width}-002728-daily.png`, animations: "disabled", caret: "hide" });
       if (viewport.width === 1024) {
         await page.getByRole("button", { name: "打开右侧面板" }).click();
         await page.getByRole("button", { name: "形态", exact: true }).click();
         await expect(page.getByTestId("pattern-group-select")).toBeVisible();
         await expect(page.getByRole("heading", { name: /特一药业 · 形态事实|尚未计算|已计算但无匹配/ })).toBeVisible();
         await settleForScreenshot(page, page.locator(".market-rightbar"));
-        await page.screenshot({ path: `${screenshotDir}/market-1024-right-drawer.png`, animations: "disabled", caret: "hide" });
+        await captureScreenshot(page, { path: `${screenshotDir}/market-1024-right-drawer.png`, animations: "disabled", caret: "hide" });
       }
       browserEvidence.push({ scenario: "responsive", viewport: size, overflow: false, result: "pass" });
     }
@@ -99,7 +99,7 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
         await expect(page.locator(".pattern-reading li").first()).toBeVisible();
         await settleForScreenshot(page, page.locator(".detail-chart .market-chart"));
         const sample = String(index + 1).padStart(2, "0");
-        await page.screenshot({ path: `${screenshotDir}/sample-${category.slug}-${sample}-${code}.png`, animations: "disabled", caret: "hide" });
+        await captureScreenshot(page, { path: `${screenshotDir}/sample-${category.slug}-${sample}-${code}.png`, animations: "disabled", caret: "hide" });
         browserEvidence.push({ scenario: "shape-sample", category: category.label, sample: index + 1, code, rank, reason, pct, result: "pass" });
       }
     }
@@ -165,7 +165,7 @@ test.describe.serial("v1.1 Chrome acceptance", () => {
       await page.mouse.up();
     }
     await settleForScreenshot(page, page.locator(".market-chart"));
-    await page.screenshot({ path: `${screenshotDir}/market-1600-drawing-tools.png`, animations: "disabled", caret: "hide" });
+    await captureScreenshot(page, { path: `${screenshotDir}/market-1600-drawing-tools.png`, animations: "disabled", caret: "hide" });
     await page.getByRole("button", { name: "清除画线" }).click();
     await page.getByRole("button", { name: "放大图表", exact: true }).click();
     await expect(page.locator(".range-toolbar button.active")).not.toHaveText("6个月");
@@ -202,6 +202,16 @@ async function settleForScreenshot(page: Page, target: Locator) {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(600);
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
+
+async function captureScreenshot(page: Page, options: Parameters<Page["screenshot"]>[0]) {
+  try {
+    await page.screenshot(options);
+  } catch (error) {
+    if (!(error instanceof Error) || !/unknown error, open/i.test(error.message)) throw error;
+    await page.waitForTimeout(150);
+    await page.screenshot(options);
+  }
 }
 
 async function hasPageOverflow(page: Page) {

@@ -265,7 +265,8 @@ test.describe.serial("v1.2.1 interaction acceptance", () => {
       expect(await horizontalOverflow(page)).toBe(false);
       if (viewport.width > 1100) await expect(page.getByTestId("board-workspace-resizer")).toBeVisible();
       else {
-        await expect(page.getByTestId("board-workspace-resizer")).toBeHidden();
+        await expect(page.getByTestId("board-workspace-resizer")).toBeVisible();
+        await expect(page.getByTestId("board-workspace-resizer")).toHaveAttribute("aria-orientation", "horizontal");
         const candidate = await page.locator(".candidate-card").boundingBox();
         const detail = await page.locator(".detail-card").boundingBox();
         expect(candidate && detail ? detail.y >= candidate.y + candidate.height : false).toBe(true);

@@ -16,7 +16,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" data-font-size="standard" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `try{var s=localStorage.getItem("manual-market-font-size");if(s==="small"||s==="standard"||s==="large")document.documentElement.dataset.fontSize=s}catch(e){}` }} />
+      </head>
       <body>{children}</body>
     </html>
   );

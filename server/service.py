@@ -404,13 +404,14 @@ class MarketService:
                 }
             )
             if result["status"] == "matched":
-                scored.append({**common, **{k: v for k, v in result.items() if k != "matches"}})
+                scored.append({**common, **result})
                 for match in result["matches"]:
                     category_scored[match["category"]].append(
                         {
                             **common,
                             "close": result.get("close"),
                             "pct_chg": result.get("pct_chg"),
+                            "matches": copy.deepcopy(result["matches"]),
                             **match,
                         }
                     )

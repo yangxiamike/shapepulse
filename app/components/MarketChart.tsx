@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
@@ -43,6 +44,13 @@ export type DrawingMode = DrawingKind | "select";
 
 export type ChartPoint = { x: number; y: number };
 
+export type FibonacciLevel = {
+  id: string;
+  value: number;
+  enabled: boolean;
+  custom?: boolean;
+};
+
 export type ChartDrawing = {
   kind: DrawingKind;
   x1: number;
@@ -56,6 +64,7 @@ export type ChartDrawing = {
   control?: ChartPoint;
   color?: string;
   lineWidth?: number;
+  fibonacciLevels?: FibonacciLevel[];
 };
 
 export type MarketChartHandle = {
@@ -77,10 +86,12 @@ type Props = {
   onDrawingChange?: (index: number, drawing: ChartDrawing) => void;
   onDrawingDelete?: (index: number) => void;
   onDrawingsChange?: (drawings: ChartDrawing[]) => void;
+  onDrawingDoubleClick?: (index: number, point: { clientX: number; clientY: number }) => void;
   onRendered?: (durationMs: number) => void;
   drawingColor?: string;
   drawingLineWidth?: number;
   drawingText?: string;
+  fibonacciLevels?: FibonacciLevel[];
   /** Called as the visible window approaches the earliest loaded bar. */
   onNeedMoreHistory?: () => void;
   /** Same boundary notification with the oldest loaded date for paged loaders. */
@@ -108,8 +119,20 @@ const FIBONACCI_RETRACEMENT_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as 
 const FIBONACCI_EXTENSION_LEVELS = [0, 0.618, 1, 1.272, 1.618, 2, 2.618] as const;
 const HIT_DISTANCE = 8;
 
+export function defaultFibonacciLevels(kind: "fibonacci" | "fibonacci-extension"): FibonacciLevel[] {
+  const levels = kind === "fibonacci-extension" ? FIBONACCI_EXTENSION_LEVELS : FIBONACCI_RETRACEMENT_LEVELS;
+  return levels.map(value => ({ id: `default-${value}`, value, enabled: true }));
+}
+
 function finitePositive(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function uiFontAdjustment() {
+  if (typeof document === "undefined") return 0;
+  return document.documentElement.dataset.fontSize === "large"
+    ? 2
+    : document.documentElement.dataset.fontSize === "small" ? -1 : 0;
 }
 
 function normalizeDate(value: unknown): string | null {
@@ -237,8 +260,20 @@ function distanceToCurve(point: ChartPoint, drawing: ScreenDrawing) {
   return closest;
 }
 
-function fibonacciLevels(kind: DrawingKind) {
-  return kind === "fibonacci-extension" ? FIBONACCI_EXTENSION_LEVELS : FIBONACCI_RETRACEMENT_LEVELS;
+function fibonacciLevels(drawing: ScreenDrawing) {
+  if (drawing.fibonacciLevels?.length) return drawing.fibonacciLevels.filter(level => level.enabled).map(level => level.value);
+  return drawing.kind === "fibonacci-extension" ? FIBONACCI_EXTENSION_LEVELS : FIBONACCI_RETRACEMENT_LEVELS;
+}
+
+function usesTwoPointPlacement(kind: DrawingKind) {
+  return kind === "line"
+    || kind === "trend"
+    || kind === "segment"
+    || kind === "ray"
+    || kind === "fibonacci"
+    || kind === "fibonacci-extension"
+    || kind === "curve"
+    || kind === "measure";
 }
 
 function extendedLine(drawing: ScreenDrawing, width: number, height: number, ray: boolean): [ChartPoint, ChartPoint] {
@@ -287,7 +322,7 @@ function hitDrawing(point: ChartPoint, drawing: ScreenDrawing, width: number, he
     return null;
   }
   if (drawing.kind === "fibonacci" || drawing.kind === "fibonacci-extension") {
-    for (const level of fibonacciLevels(drawing.kind)) {
+    for (const level of fibonacciLevels(drawing)) {
       const y = drawing.y1 + (drawing.y2 - drawing.y1) * level;
       if (distanceToSegment(point, { x: drawing.x1, y }, { x: drawing.x2, y }) <= HIT_DISTANCE) return "move" as const;
     }
@@ -327,7 +362,7 @@ function paintOneDrawing(ctx: CanvasRenderingContext2D, drawing: ScreenDrawing, 
     ctx.arc(drawing.x1, drawing.y1, 3, 0, Math.PI * 2);
     ctx.fill();
   } else if (drawing.kind === "fibonacci" || drawing.kind === "fibonacci-extension") {
-    for (const level of fibonacciLevels(drawing.kind)) {
+    for (const level of fibonacciLevels(drawing)) {
       const y = drawing.y1 + (drawing.y2 - drawing.y1) * level;
       ctx.beginPath();
       ctx.moveTo(drawing.x1, y);
@@ -398,10 +433,12 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   onDrawingChange,
   onDrawingDelete,
   onDrawingsChange,
+  onDrawingDoubleClick,
   onRendered,
   drawingColor = "#2864ff",
   drawingLineWidth = 2,
   drawingText = "文本标记",
+  fibonacciLevels: incomingFibonacciLevels,
   onNeedMoreHistory,
   onNeedOlder,
   historyLoadThreshold = 8,
@@ -419,6 +456,8 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   const startPoint = useRef<ChartPoint | null>(null);
   const previewDrawing = useRef<ScreenDrawing | null>(null);
   const editState = useRef<EditState | null>(null);
+  const placementGesture = useRef<{ phase: "first" | "second"; origin: ChartPoint; moved: boolean } | null>(null);
+  const previousDrawingMode = useRef<DrawingMode | null | undefined>(drawingMode);
   const drawingsRef = useRef(drawings);
   const selectedRef = useRef<number | null>(selectedDrawingIndex ?? null);
   const onNeedMoreHistoryRef = useRef(onNeedMoreHistory);
@@ -427,6 +466,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   const earliestRequestRef = useRef<string | null>(null);
   const resizeFrame = useRef<number | null>(null);
   const previousTimeline = useRef<string[]>([]);
+  const fontAdjustmentRef = useRef(0);
   const [internalSelected, setInternalSelected] = useState<number | null>(null);
   const activeSelected = selectedDrawingIndex === undefined ? internalSelected : selectedDrawingIndex;
   const normalizedBars = useMemo(() => normalizeChartBars(bars), [bars]);
@@ -448,7 +488,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     if (!ctx) return;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    ctx.font = '13px "Microsoft YaHei UI", sans-serif';
+    ctx.font = `${13 + fontAdjustmentRef.current}px "Microsoft YaHei UI", sans-serif`;
     drawingsRef.current.forEach((drawing, index) => paintOneDrawing(ctx, toScreenDrawing(drawing, width, height), width, height, index === selectedRef.current));
     if (previewDrawing.current) paintOneDrawing(ctx, previewDrawing.current, width, height, false);
   }, []);
@@ -489,10 +529,12 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   useEffect(() => {
     if (!host.current) return;
     const container = host.current;
+    fontAdjustmentRef.current = uiFontAdjustment();
+    container.dataset.uiFontSize = String(12 + fontAdjustmentRef.current);
     const chart = createChart(container, {
       width: Math.max(1, container.clientWidth),
       height: Math.max(1, container.clientHeight),
-      layout: { background: { type: ColorType.Solid, color: "#fcfbf8" }, textColor: "#4f5354", fontFamily: '"Microsoft YaHei UI", sans-serif', fontSize: 12 },
+      layout: { background: { type: ColorType.Solid, color: "#fcfbf8" }, textColor: "#4f5354", fontFamily: '"Microsoft YaHei UI", sans-serif', fontSize: 12 + fontAdjustmentRef.current },
       grid: { vertLines: { color: "#ece9e2", style: 1 }, horzLines: { color: "#e8e5de", style: 1 } },
       crosshair: { mode: CrosshairMode.Normal, vertLine: { color: "#656868", style: 3 }, horzLine: { color: "#656868", style: 3 } },
       rightPriceScale: { borderColor: "#d8d5cd", autoScale: true, scaleMargins: { top: 0.08, bottom: 0.28 } },
@@ -548,6 +590,18 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   }, [resize]);
 
   useEffect(() => {
+    const syncFontSize = () => {
+      fontAdjustmentRef.current = uiFontAdjustment();
+      if (host.current) host.current.dataset.uiFontSize = String(12 + fontAdjustmentRef.current);
+      chartRef.current?.applyOptions({ layout: { fontSize: 12 + fontAdjustmentRef.current } });
+      resize();
+    };
+    syncFontSize();
+    window.addEventListener("ui-font-size-change", syncFontSize);
+    return () => window.removeEventListener("ui-font-size-change", syncFontSize);
+  }, [resize]);
+
+  useEffect(() => {
     const started = performance.now();
     const timeline = normalizedBars.map(bar => bar.time);
     const previous = previousTimeline.current;
@@ -592,12 +646,22 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   }, [activeSelected, drawingMode, drawings, paintDrawings, selectDrawing]);
 
   useEffect(() => {
+    if (previousDrawingMode.current === drawingMode) return;
+    previousDrawingMode.current = drawingMode;
+    startPoint.current = null;
+    previewDrawing.current = null;
+    placementGesture.current = null;
+    if (overlay.current) delete overlay.current.dataset.drawingPhase;
+    paintDrawings();
+  }, [drawingMode, paintDrawings]);
+
+  useEffect(() => {
     onNeedMoreHistoryRef.current = onNeedMoreHistory;
     onNeedOlderRef.current = onNeedOlder;
     historyLoadThresholdRef.current = historyLoadThreshold;
   }, [historyLoadThreshold, onNeedMoreHistory, onNeedOlder]);
 
-  function point(event: ReactPointerEvent<HTMLCanvasElement>) {
+  function point(event: { currentTarget: HTMLCanvasElement; clientX: number; clientY: number }) {
     const rect = event.currentTarget.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
@@ -639,6 +703,15 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       return;
     }
     if (!drawingMode) return;
+    if (usesTwoPointPlacement(drawingMode) && startPoint.current && previewDrawing.current) {
+      previewDrawing.current.x2 = current.x;
+      previewDrawing.current.y2 = current.y;
+      placementGesture.current = { phase: "second", origin: current, moved: false };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.currentTarget.dataset.drawingPhase = "placing-second-point";
+      paintDrawings();
+      return;
+    }
     startPoint.current = current;
     previewDrawing.current = {
       kind: drawingMode,
@@ -650,8 +723,13 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       points: drawingMode === "freehand" ? [current] : undefined,
       color: drawingColor,
       lineWidth: drawingLineWidth,
+      fibonacciLevels: drawingMode === "fibonacci" || drawingMode === "fibonacci-extension"
+        ? (incomingFibonacciLevels || defaultFibonacciLevels(drawingMode)).map(level => ({ ...level }))
+        : undefined,
     };
+    placementGesture.current = { phase: "first", origin: current, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.dataset.drawingPhase = usesTwoPointPlacement(drawingMode) ? "placing-first-point" : "drawing";
     paintDrawings();
   }
 
@@ -709,6 +787,8 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       return;
     }
     if (!drawingMode || !startPoint.current || !previewDrawing.current) return;
+    const gesture = placementGesture.current;
+    if (gesture && distance(gesture.origin, current) >= 5) gesture.moved = true;
     previewDrawing.current.x2 = current.x;
     previewDrawing.current.y2 = drawingMode === "horizontal" ? startPoint.current.y : current.y;
     if (drawingMode === "vertical") previewDrawing.current.x2 = startPoint.current.x;
@@ -725,10 +805,20 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       return;
     }
     if (!drawingMode || !startPoint.current || !previewDrawing.current) return;
+    const gesture = placementGesture.current;
+    if (usesTwoPointPlacement(drawingMode) && gesture?.phase === "first" && !gesture.moved) {
+      placementGesture.current = null;
+      event.currentTarget.dataset.drawingPhase = "awaiting-second-point";
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      paintDrawings();
+      return;
+    }
     const completed = fromScreenDrawing(previewDrawing.current, event.currentTarget.clientWidth, event.currentTarget.clientHeight);
     onDrawComplete?.(completed);
     startPoint.current = null;
     previewDrawing.current = null;
+    placementGesture.current = null;
+    delete event.currentTarget.dataset.drawingPhase;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     paintDrawings();
   }
@@ -741,6 +831,14 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   }
 
   function keyDown(event: ReactKeyboardEvent<HTMLCanvasElement>) {
+    if (event.key === "Escape" && drawingMode !== "select") {
+      startPoint.current = null;
+      previewDrawing.current = null;
+      placementGesture.current = null;
+      delete event.currentTarget.dataset.drawingPhase;
+      paintDrawings();
+      return;
+    }
     if (drawingMode !== "select") return;
     if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
@@ -748,6 +846,22 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
     } else if (event.key === "Escape") {
       selectDrawing(null);
       paintDrawings();
+    }
+  }
+
+  function doubleClick(event: ReactMouseEvent<HTMLCanvasElement>) {
+    if (drawingMode !== "select") return;
+    const current = point(event);
+    const width = event.currentTarget.clientWidth;
+    const height = event.currentTarget.clientHeight;
+    for (let index = drawingsRef.current.length - 1; index >= 0; index -= 1) {
+      const drawing = toScreenDrawing(drawingsRef.current[index], width, height);
+      if (drawing.kind !== "fibonacci" && drawing.kind !== "fibonacci-extension") continue;
+      if (!hitDrawing(current, drawing, width, height)) continue;
+      selectDrawing(index);
+      onDrawingDoubleClick?.(index, { clientX: event.clientX, clientY: event.clientY });
+      event.preventDefault();
+      return;
     }
   }
 
@@ -779,6 +893,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       onPointerUp={pointerUp}
       onPointerCancel={pointerUp}
       onPointerLeave={pointerLeave}
+      onDoubleClick={doubleClick}
     />
   </div>;
 });
