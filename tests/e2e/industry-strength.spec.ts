@@ -197,12 +197,45 @@ test("industry rotation heatmap, preview, trend focus, selector and ranking stay
   await expect(page.getByTestId("industry-stock-detail")).toBeVisible();
   await expect(page.getByRole("link", { name: "行业强弱" })).toHaveAttribute("href", "/industry-strength");
 
-  const infoButton = page.getByRole("button", { name: "趋势图交互说明" });
-  await infoButton.focus();
-  await expect(infoButton).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator(".industry-info-tip.open [role=tooltip]")).toContainText("默认所有展示线条同等清晰");
+  const tooltip = page.getByRole("tooltip");
+  const fixedScopeButton = page.getByRole("button", { name: "固定统计口径" });
+  await fixedScopeButton.hover();
+  await expect(tooltip).toContainText("本地 zer0share");
+  await assertTooltipReadable(page, tooltip);
+  await page.locator(".industry-page-head p").hover();
+  await expect(tooltip).toBeHidden();
+
+  const analysisButton = page.getByRole("button", { name: "轮动分析口径" });
+  await analysisButton.click();
+  await expect(tooltip).toBeVisible();
+  await assertTooltipReadable(page, tooltip);
+  await analysisButton.click();
+  await expect(tooltip).toBeHidden();
+
+  const heatmapButton = page.getByRole("button", { name: "热力图阅读说明" });
+  await heatmapButton.focus();
+  await expect(heatmapButton).toHaveAttribute("aria-expanded", "true");
+  await expect(tooltip).toContainText("近 4 个采样点");
+  await assertTooltipReadable(page, tooltip);
+  await page.getByRole("button", { name: "刷新截面" }).focus();
+  await expect(tooltip).toBeHidden();
+
+  const trendButton = page.getByRole("button", { name: "趋势图交互说明" });
+  await trendButton.click();
+  await expect(tooltip).toContainText("默认所有展示线条同等清晰");
+  await assertTooltipReadable(page, tooltip);
+  await page.locator(".trend-chart-wrap").click({ position: { x: 20, y: 20 } });
+  await expect(tooltip).toBeHidden();
+
+  const rankingButton = page.getByRole("button", { name: "排名口径说明" });
+  await rankingButton.focus();
+  await expect(rankingButton).toHaveAttribute("aria-expanded", "true");
+  await expect(tooltip).toContainText("分母固定为 100");
+  await assertTooltipReadable(page, tooltip);
   await page.keyboard.press("Escape");
-  await expect(infoButton).toHaveAttribute("aria-expanded", "false");
+  await expect(rankingButton).toHaveAttribute("aria-expanded", "false");
+  await expect(rankingButton).toBeFocused();
+  await expect(tooltip).toBeHidden();
 
   await page.getByRole("button", { name: "刷新截面" }).click();
   await expect(page.getByRole("status")).toContainText("旧结果保持可读");
@@ -210,3 +243,27 @@ test("industry rotation heatmap, preview, trend focus, selector and ranking stay
   await expect(page.locator(".industry-ranking-table tbody tr")).toHaveCount(15);
   await expect(page.getByRole("status")).toBeHidden();
 });
+
+async function assertTooltipReadable(page: import("@playwright/test").Page, tooltip: import("@playwright/test").Locator) {
+  await expect(tooltip).toBeVisible();
+  const geometry = await tooltip.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const center = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      viewportWidth: document.documentElement.clientWidth,
+      viewportHeight: document.documentElement.clientHeight,
+      fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+      topmost: center === element || element.contains(center),
+    };
+  });
+  expect(geometry.left).toBeGreaterThanOrEqual(0);
+  expect(geometry.top).toBeGreaterThanOrEqual(0);
+  expect(geometry.right).toBeLessThanOrEqual(geometry.viewportWidth);
+  expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight);
+  expect(geometry.fontSize).toBeGreaterThanOrEqual(15);
+  expect(geometry.topmost).toBe(true);
+}

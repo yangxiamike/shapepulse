@@ -570,9 +570,15 @@ button.top-card { color: inherit; }
 .industry-info-tip > button { width: 36px; height: 36px; padding: 0; display: grid; place-items: center; color: #40504b; background: #f4f2ec; border: 1px solid #a9ada8; border-radius: 50%; }
 .industry-info-tip > button:hover, .industry-info-tip > button:focus-visible, .industry-info-tip.open > button { color: #063f6e; background: #e8f1f7; border-color: #4b7798; box-shadow: 0 0 0 3px rgba(75,119,152,.16); outline: 0; }
 .industry-info-tip svg { width: 20px; height: 20px; }
-.industry-info-popover { position: absolute; z-index: 30; top: calc(100% + 9px); right: 0; width: min(390px,calc(100vw - 126px)); padding: 12px 14px; visibility: hidden; color: #202724 !important; background: #fffefb; border: 1px solid #5f6864; border-radius: 9px; box-shadow: 0 12px 28px rgba(18,25,22,.2); opacity: 0; transform: translateY(-4px); transition: opacity .12s ease,transform .12s ease,visibility .12s; font-size: calc(14px + var(--ui-font-adjust)) !important; font-weight: 550 !important; line-height: 1.58; text-align: left; }
-.industry-info-tip.open .industry-info-popover { visibility: visible; opacity: 1; transform: translateY(0); }
-.industry-page-title-row .industry-info-popover { right: auto; left: 0; }
+.industry-info-popover { position: fixed; z-index: 1000; width: min(420px,calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 13px 15px; overflow-x: hidden; overflow-y: auto; color: #202724 !important; background: #fffefb; border: 1px solid #5f6864; border-radius: 9px; box-shadow: 0 12px 28px rgba(18,25,22,.24); font-size: calc(15px + var(--ui-font-adjust)) !important; font-weight: 550 !important; line-height: 1.62; overflow-wrap: anywhere; text-align: left; }
+.industry-info-popover[data-ready="false"] { visibility: hidden; opacity: 0; }
+.industry-info-popover[data-ready="true"] { visibility: visible; opacity: 1; animation: industry-info-in .12s ease-out; }
+@keyframes industry-info-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.industry-info-popover[data-placement="above"] { transform-origin: bottom right; }
+.industry-info-popover[data-placement="below"] { transform-origin: top right; }
 .analysis-card { display: grid; grid-template-columns: 285px 1fr; }
 .analysis-card .industry-section-head { min-height: 130px; border-right: 1px solid var(--line); border-bottom: 0; border-radius: 13px 0 0 13px; }
 .analysis-card .industry-section-head { align-items: flex-start; flex-direction: column; justify-content: center; }

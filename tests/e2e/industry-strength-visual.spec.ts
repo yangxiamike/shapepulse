@@ -1,9 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
-const screenshotDir = "docs/qa/screenshots/industry-strength-v2.2.1";
-const evidenceDir = "docs/qa/evidence/industry-strength-v2.2.1";
+const screenshotDir = "docs/qa/screenshots/industry-strength-v2.2.1-tooltip-fix";
+const evidenceDir = "docs/qa/evidence/industry-strength-v2.2.1-tooltip-fix";
 const results: Array<Record<string, unknown>> = [];
+const infoLabels = ["固定统计口径", "轮动分析口径", "热力图阅读说明", "趋势图交互说明", "排名口径说明"];
 
 test.describe.serial("industry strength real-data visual acceptance", () => {
   test.beforeAll(async () => {
@@ -60,14 +61,32 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
       await page.locator(".trend-hit-line").first().blur();
       await expect(page.locator(".trend-series.muted")).toHaveCount(0);
 
-      const infoButton = page.getByRole("button", { name: "热力图阅读说明" });
-      await infoButton.focus();
-      const tip = page.locator(".industry-info-tip.open [role=tooltip]");
-      await expect(tip).toBeVisible();
-      const tipBox = await tip.boundingBox();
-      expect(tipBox?.x ?? -1).toBeGreaterThanOrEqual(0);
-      expect((tipBox?.x ?? 0) + (tipBox?.width ?? 0)).toBeLessThanOrEqual(viewport.width);
-      await page.keyboard.press("Escape");
+      const tooltipAudit = [];
+      for (const label of infoLabels) {
+        const infoButton = page.getByRole("button", { name: label });
+        await infoButton.scrollIntoViewIfNeeded();
+        await infoButton.focus();
+        const tip = page.getByRole("tooltip");
+        await expect(tip).toBeVisible();
+        const geometry = await tooltipGeometry(tip);
+        expect(geometry.left).toBeGreaterThanOrEqual(0);
+        expect(geometry.top).toBeGreaterThanOrEqual(0);
+        expect(geometry.right).toBeLessThanOrEqual(viewport.width);
+        expect(geometry.bottom).toBeLessThanOrEqual(viewport.height);
+        expect(geometry.fontSize).toBeGreaterThanOrEqual(15);
+        expect(geometry.topmost).toBe(true);
+        expect(geometry.contentComplete).toBe(true);
+        tooltipAudit.push({ label, ...geometry });
+        if (label === "热力图阅读说明") {
+          await page.screenshot({
+            path: `${screenshotDir}/tooltip-heatmap-${viewport.width}.png`,
+            animations: "disabled",
+            caret: "hide",
+          });
+        }
+        await page.keyboard.press("Escape");
+        await expect(tip).toBeHidden();
+      }
 
       await page.locator(".industry-ranking-table tbody tr").first().getByRole("button", { name: /查看/ }).click();
       await expect(page.getByTestId("industry-stock-detail")).toBeVisible();
@@ -78,12 +97,6 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
         elements.map(element => element.textContent?.replace(/\s+/g, " ").trim()),
       );
 
-      await page.screenshot({
-        path: `${screenshotDir}/industry-strength-${viewport.width}.png`,
-        fullPage: true,
-        animations: "disabled",
-        caret: "hide",
-      });
       results.push({
         viewport,
         real_industries: 31,
@@ -99,6 +112,8 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
         minimum_audited_font_px: Math.min(...Object.values(fontSizes)),
         audited_font_px: fontSizes,
         accessible_info_tooltip: true,
+        info_tooltip_count: tooltipAudit.length,
+        info_tooltips: tooltipAudit,
         page_overflow: false,
         heatmap_internal_scroll: scrollState.scrollWidth > scrollState.clientWidth,
         console_errors: errors,
@@ -156,5 +171,22 @@ async function fontAudit(page: Page) {
       const element = document.querySelector(selector);
       return [name, element ? Number.parseFloat(getComputedStyle(element).fontSize) : 0];
     }));
+  });
+}
+
+async function tooltipGeometry(tooltip: import("@playwright/test").Locator) {
+  return tooltip.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const center = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+      topmost: center === element || element.contains(center),
+      contentComplete: element.scrollHeight <= element.clientHeight + 1,
+      placement: element.getAttribute("data-placement"),
+    };
   });
 }

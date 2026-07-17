@@ -44,10 +44,9 @@ test("server-renders the industry strength page and fixed scope", async () => {
   assert.match(html, /<title>行业强弱 \| 手动跟踪市场<\/title>/i);
   assert.match(html, /行业强弱/);
   assert.match(html, /Top 100/);
-  assert.match(html, /回看 120 个交易日/);
-  assert.match(html, /每 5 个交易日采样/);
-  assert.match(html, /共 24 个节点/);
-  assert.match(html, /固定统计口径/);
+  assert.match(html, /正在计算 24 个真实历史截面/);
+  assert.match(html, /aria-label="固定统计口径"/);
+  assert.match(html, /aria-expanded="false"/);
 });
 
 test("starter preview has been removed", async () => {

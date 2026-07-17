@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -11,6 +12,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   CalendarDays,
@@ -420,16 +422,89 @@ function Metric({
 
 function InfoTip({ label, text }: { label: string; text: string }) {
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ left: 12, top: 12, placement: "below", ready: false });
   const tipId = useId();
   const wrapperRef = useRef<HTMLSpanElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLSpanElement>(null);
+  const pointerStartedOpenRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    let frame = 0;
+    const placePopover = () => {
+      const button = buttonRef.current;
+      const popover = popoverRef.current;
+      if (!button || !popover) return;
+      const anchor = button.getBoundingClientRect();
+      const popoverBox = popover.getBoundingClientRect();
+      const margin = 12;
+      const gap = 10;
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const maxLeft = Math.max(margin, viewportWidth - popoverBox.width - margin);
+      const left = Math.min(Math.max(anchor.right - popoverBox.width, margin), maxLeft);
+      const spaceAbove = anchor.top - gap - margin;
+      const spaceBelow = viewportHeight - anchor.bottom - gap - margin;
+      const placement = spaceAbove >= popoverBox.height || spaceAbove > spaceBelow ? "above" : "below";
+      const idealTop = placement === "above"
+        ? anchor.top - popoverBox.height - gap
+        : anchor.bottom + gap;
+      const maxTop = Math.max(margin, viewportHeight - popoverBox.height - margin);
+      const top = Math.min(Math.max(idealTop, margin), maxTop);
+      setPosition({ left, top, placement, ready: true });
+    };
+    const schedulePopover = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(placePopover);
+    };
+    placePopover();
+    window.addEventListener("resize", schedulePopover);
+    window.addEventListener("scroll", schedulePopover, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedulePopover);
+      window.removeEventListener("scroll", schedulePopover, true);
+    };
+  }, [open, text]);
+
   useEffect(() => {
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!wrapperRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(false);
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+      }
     };
     document.addEventListener("pointerdown", closeOutside);
-    return () => document.removeEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
   }, [open]);
+
+  const popover = open && typeof document !== "undefined"
+    ? createPortal(
+      <span
+        ref={popoverRef}
+        id={tipId}
+        className="industry-info-popover"
+        role="tooltip"
+        data-placement={position.placement}
+        data-ready={position.ready ? "true" : "false"}
+        style={{ left: position.left, top: position.top }}
+      >
+        {text}
+      </span>,
+      document.body,
+    )
+    : null;
+
   return (
     <span
       ref={wrapperRef}
@@ -443,23 +518,22 @@ function InfoTip({ label, text }: { label: string; text: string }) {
       }}
     >
       <button
+        ref={buttonRef}
         type="button"
         aria-label={label}
         aria-expanded={open}
         aria-describedby={open ? tipId : undefined}
         onFocus={() => setOpen(true)}
-        onClick={() => setOpen(true)}
-        onKeyDown={event => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            setOpen(false);
-            event.currentTarget.blur();
-          }
+        onPointerDown={() => {
+          pointerStartedOpenRef.current = open;
+        }}
+        onClick={event => {
+          setOpen(event.detail === 0 ? true : !pointerStartedOpenRef.current);
         }}
       >
         <CircleHelp aria-hidden="true" />
       </button>
-      <span id={tipId} className="industry-info-popover" role="tooltip">{text}</span>
+      {popover}
     </span>
   );
 }
