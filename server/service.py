@@ -42,6 +42,9 @@ class MarketService:
         self._screen_cache: dict[tuple, dict[str, Any]] = {}
         self._completed_screens: dict[str, dict[str, Any]] = {}
         self._industry_strength_cache: dict[tuple, dict[str, Any]] = {}
+        self._industry_strength_input_cache: dict[tuple, dict[str, Any]] = {}
+        self._industry_strength_inflight: dict[tuple, threading.Event] = {}
+        self._industry_strength_lock = threading.RLock()
 
     def health(self) -> dict[str, Any]:
         payload = self.repository.health()
@@ -78,6 +81,7 @@ class MarketService:
     def industry_strength(
         self, pattern: str, end_date: str | None = None
     ) -> dict[str, Any]:
+        request_started = time.perf_counter()
         pattern = str(pattern or "breakout").strip()
         if pattern not in CATEGORY_ORDER:
             raise ValueError(
@@ -92,15 +96,119 @@ class MarketService:
             self._validate_date(requested, "end_date")
         cutoff = min(requested or latest, latest)
         threshold_mtime = self.settings.thresholds_path.stat().st_mtime_ns
-        cache_key = (latest, snapshots.stock_st, threshold_mtime, pattern, cutoff)
-        cache = getattr(self, "_industry_strength_cache", {})
-        cached = cache.get(cache_key)
-        if cached is not None:
-            payload = copy.deepcopy(cached)
-            payload["cache_hit"] = True
-            return payload
+        source_token = self._industry_strength_source_token(snapshots)
+        cache_key = (source_token, threshold_mtime, pattern, requested, cutoff)
+        lock = getattr(self, "_industry_strength_lock", None)
+        if lock is None:
+            lock = threading.RLock()
+            self._industry_strength_lock = lock
+        with lock:
+            cache = getattr(self, "_industry_strength_cache", {})
+            cached = cache.get(cache_key)
+            if cached is not None:
+                payload = copy.deepcopy(cached)
+                payload["cache_hit"] = True
+                payload["timings"] = {
+                    "prepare_ms": 0.0,
+                    "scoring_ms": 0.0,
+                    "assembly_ms": 0.0,
+                    "total_ms": round(
+                        (time.perf_counter() - request_started) * 1000, 1
+                    ),
+                }
+                return payload
+            inflight = getattr(self, "_industry_strength_inflight", {})
+            event = inflight.get(cache_key)
+            owns_request = event is None
+            if event is None:
+                event = threading.Event()
+                inflight[cache_key] = event
+                self._industry_strength_inflight = inflight
+        if not owns_request:
+            event.wait()
+            with lock:
+                cached = getattr(self, "_industry_strength_cache", {}).get(cache_key)
+            if cached is not None:
+                payload = copy.deepcopy(cached)
+                payload["cache_hit"] = True
+                payload["timings"] = {
+                    "prepare_ms": 0.0,
+                    "scoring_ms": 0.0,
+                    "assembly_ms": 0.0,
+                    "total_ms": round(
+                        (time.perf_counter() - request_started) * 1000, 1
+                    ),
+                }
+                return payload
+            return self.industry_strength(pattern, requested)
 
-        started = time.perf_counter()
+        try:
+            payload = self._calculate_industry_strength(
+                pattern=pattern,
+                requested=requested,
+                cutoff=cutoff,
+                snapshots=snapshots,
+                source_token=source_token,
+                request_started=request_started,
+            )
+            with lock:
+                cache = getattr(self, "_industry_strength_cache", {})
+                cache[cache_key] = copy.deepcopy(payload)
+                while len(cache) > 6:
+                    cache.pop(next(iter(cache)))
+                self._industry_strength_cache = cache
+            return payload
+        finally:
+            with lock:
+                pending = getattr(self, "_industry_strength_inflight", {})
+                pending.pop(cache_key, None)
+                event.set()
+
+    def _industry_strength_source_token(self, snapshots) -> tuple:
+        def token(path) -> int | None:
+            return path.stat().st_mtime_ns if path.is_file() else None
+
+        daily = (
+            self.repository.data_dir
+            / "stock"
+            / "daily_kline"
+            / f"date={snapshots.daily_kline}"
+            / "data.parquet"
+        )
+        st = (
+            self.repository.data_dir
+            / "stock"
+            / "stock_st"
+            / f"date={snapshots.stock_st}"
+            / "data.parquet"
+        )
+        basic = self.repository.data_dir / "stock" / "basic" / "data.parquet"
+        industry = (
+            self.repository.data_dir
+            / "stock"
+            / "industry"
+            / "sw_member"
+            / "data.parquet"
+        )
+        return (
+            snapshots.daily_kline,
+            token(daily),
+            snapshots.stock_st,
+            token(st),
+            token(basic),
+            token(industry),
+        )
+
+    def _prepare_industry_strength_inputs(
+        self, cutoff: str, snapshots, source_token: tuple
+    ) -> dict[str, Any]:
+        cache_key = (source_token, cutoff)
+        lock = self._industry_strength_lock
+        with lock:
+            cached = getattr(self, "_industry_strength_input_cache", {}).get(cache_key)
+        if cached is not None:
+            return cached
+
         trade_dates = self.repository.trading_dates(cutoff, 240)
         sample_dates = fixed_sample_dates(trade_dates)
         if not sample_dates:
@@ -172,22 +280,64 @@ class MarketService:
             ].to_dict("index")
             contexts[date] = {"eligible": eligible, "membership": membership}
 
-        grouped = [
-            (str(code), frame.reset_index(drop=True))
-            for code, frame in daily.groupby("ts_code", sort=False)
-        ]
+        grouped = []
+        for code, frame in daily.groupby("ts_code", sort=False):
+            dates = frame["trade_date"].astype(str).tolist()
+            matrix = frame[["close", "high", "low", "vol"]].to_numpy(dtype=float)
+            close, high, low, volume = matrix.T
+            grouped.append(
+                (
+                    str(code),
+                    dates,
+                    close,
+                    high,
+                    low,
+                    np.nan_to_num(volume, nan=0.0),
+                )
+            )
+        prepared = {
+            "trade_date_count": len(trade_dates),
+            "sample_dates": sample_dates,
+            "industries": industries,
+            "contexts": contexts,
+            "grouped": grouped,
+            "names": names,
+        }
+        with lock:
+            cache = getattr(self, "_industry_strength_input_cache", {})
+            cache[cache_key] = prepared
+            while len(cache) > 3:
+                cache.pop(next(iter(cache)))
+            self._industry_strength_input_cache = cache
+        return prepared
+
+    def _calculate_industry_strength(
+        self,
+        *,
+        pattern: str,
+        requested: str | None,
+        cutoff: str,
+        snapshots,
+        source_token: tuple,
+        request_started: float,
+    ) -> dict[str, Any]:
+        prepare_started = time.perf_counter()
+        prepared = self._prepare_industry_strength_inputs(
+            cutoff, snapshots, source_token
+        )
+        prepare_ms = (time.perf_counter() - prepare_started) * 1000
+        sample_dates = prepared["sample_dates"]
+        contexts = prepared["contexts"]
+        names = prepared["names"]
+        grouped = prepared["grouped"]
         top_by_date: dict[str, list[dict[str, Any]]] = {
             date: [] for date in sample_dates
         }
 
         def score_code(
-            pair: tuple[str, pd.DataFrame]
+            pair: tuple[str, list[str], np.ndarray, np.ndarray, np.ndarray, np.ndarray]
         ) -> list[tuple[str, dict[str, Any]]]:
-            code, frame = pair
-            dates = frame["trade_date"].astype(str).tolist()
-            matrix = frame[["close", "high", "low", "vol"]].to_numpy(dtype=float)
-            close, high, low, volume = matrix.T
-            volume = np.nan_to_num(volume, nan=0.0)
+            code, dates, close, high, low, volume = pair
             matches: list[tuple[str, dict[str, Any]]] = []
             for date in sample_dates:
                 context = contexts[date]
@@ -223,6 +373,7 @@ class MarketService:
                 )
             return matches
 
+        scoring_started = time.perf_counter()
         with ThreadPoolExecutor(
             max_workers=4, thread_name_prefix="industry-strength"
         ) as pool:
@@ -235,11 +386,13 @@ class MarketService:
                 key=lambda item: (-float(item["score"]), str(item["ts_code"]))
             )
             top_by_date[date] = top_by_date[date][:TOP_N]
+        scoring_ms = (time.perf_counter() - scoring_started) * 1000
 
+        assembly_started = time.perf_counter()
         warnings: list[str] = []
-        if len(trade_dates) < LOOKBACK_TRADING_DAYS:
+        if prepared["trade_date_count"] < LOOKBACK_TRADING_DAYS:
             warnings.append(
-                f"截止日期前仅有 {len(trade_dates)} 个可用交易日。"
+                f"截止日期前仅有 {prepared['trade_date_count']} 个可用交易日。"
             )
         if len(sample_dates) < SAMPLE_COUNT:
             warnings.append(
@@ -250,14 +403,20 @@ class MarketService:
             pattern_label=str(self.thresholds[pattern]["label"]),
             requested_end_date=requested,
             sample_dates=sample_dates,
-            industries=industries,
+            industries=prepared["industries"],
             top_by_date=top_by_date,
             warnings=warnings,
         )
+        assembly_ms = (time.perf_counter() - assembly_started) * 1000
         payload["cache_hit"] = False
-        payload["elapsed_ms"] = round(
-            (time.perf_counter() - started) * 1000, 1
-        )
+        total_ms = (time.perf_counter() - request_started) * 1000
+        payload["elapsed_ms"] = round(total_ms, 1)
+        payload["timings"] = {
+            "prepare_ms": round(prepare_ms, 1),
+            "scoring_ms": round(scoring_ms, 1),
+            "assembly_ms": round(assembly_ms, 1),
+            "total_ms": round(total_ms, 1),
+        }
         payload["as_of"] = {
             "daily": snapshots.daily_kline,
             "st": snapshots.stock_st,
@@ -271,10 +430,6 @@ class MarketService:
                 ).stat().st_mtime
             ).astimezone().date().isoformat(),
         }
-        cache[cache_key] = copy.deepcopy(payload)
-        while len(cache) > 6:
-            cache.pop(next(iter(cache)))
-        self._industry_strength_cache = cache
         return payload
 
     def stock(self, code: str, mark_viewed: bool = False) -> dict[str, Any] | None:

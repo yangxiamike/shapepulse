@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
-const screenshotDir = "docs/qa/screenshots/industry-strength-v2.2";
-const evidenceDir = "docs/qa/evidence/industry-strength-v2.2";
+const screenshotDir = "docs/qa/screenshots/industry-strength-v2.2.1";
+const evidenceDir = "docs/qa/evidence/industry-strength-v2.2.1";
 const results: Array<Record<string, unknown>> = [];
 
 test.describe.serial("industry strength real-data visual acceptance", () => {
@@ -34,6 +34,8 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
       await expect(page.getByRole("listbox", { name: "行业选择器" })).toBeVisible();
 
       expect(await horizontalOverflow(page)).toBe(false);
+      const fontSizes = await fontAudit(page);
+      expect(Math.min(...Object.values(fontSizes))).toBeGreaterThanOrEqual(13);
       const sidebar = await page.locator(".app-sidebar").boundingBox();
       const main = await page.locator(".industry-main").boundingBox();
       expect(sidebar && main ? main.x >= sidebar.x + sidebar.width - 1 : false).toBe(true);
@@ -48,8 +50,25 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
       await expect(page.getByTestId("industry-point-detail")).toBeVisible();
       await firstCell.focus();
       await expect(page.getByTestId("industry-point-detail")).toContainText("完整 24 节点");
-      await page.locator(".trend-hit-line").first().hover({ force: true });
+      await page.locator(".trend-hit-line").first().dispatchEvent("pointerover");
       await expect(page.locator(".trend-series.muted")).toHaveCount(4);
+      await expect(page.locator(".trend-series.active")).toHaveCount(1);
+      await page.locator(".trend-hit-line").first().dispatchEvent("pointerout");
+      await expect(page.locator(".trend-series.muted")).toHaveCount(0);
+      await page.locator(".trend-hit-line").first().focus();
+      await expect(page.locator(".trend-series.muted")).toHaveCount(4);
+      await page.locator(".trend-hit-line").first().blur();
+      await expect(page.locator(".trend-series.muted")).toHaveCount(0);
+
+      const infoButton = page.getByRole("button", { name: "热力图阅读说明" });
+      await infoButton.focus();
+      const tip = page.locator(".industry-info-tip.open [role=tooltip]");
+      await expect(tip).toBeVisible();
+      const tipBox = await tip.boundingBox();
+      expect(tipBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+      expect((tipBox?.x ?? 0) + (tipBox?.width ?? 0)).toBeLessThanOrEqual(viewport.width);
+      await page.keyboard.press("Escape");
+
       await page.locator(".industry-ranking-table tbody tr").first().getByRole("button", { name: /查看/ }).click();
       await expect(page.getByTestId("industry-stock-detail")).toBeVisible();
       await page.locator(".industry-table-wrap").evaluate(element => { element.scrollLeft = 0; });
@@ -75,6 +94,11 @@ test.describe.serial("industry strength real-data visual acceptance", () => {
         ranking_rows: 15,
         keyboard_preview: true,
         trend_hover_focus: true,
+        trend_leave_restores_all: true,
+        trend_keyboard_focus_blur: true,
+        minimum_audited_font_px: Math.min(...Object.values(fontSizes)),
+        audited_font_px: fontSizes,
+        accessible_info_tooltip: true,
         page_overflow: false,
         heatmap_internal_scroll: scrollState.scrollWidth > scrollState.clientWidth,
         console_errors: errors,
@@ -112,4 +136,25 @@ function audit(page: Page) {
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+}
+
+async function fontAudit(page: Page) {
+  return page.evaluate(() => {
+    const selectors = {
+      heatIndustry: ".heat-row-label b",
+      heatStatus: ".heat-row-label small",
+      heatSlope: ".heat-row-label em",
+      heatCell: ".heat-cell",
+      heatAxis: ".heat-time-axis time",
+      trendLegend: ".trend-legend button",
+      trendSelector: ".industry-selector-list > button b",
+      rankingBody: ".industry-ranking-table td",
+      rankingStatus: ".industry-status",
+      rankingButton: ".stock-detail-button",
+    };
+    return Object.fromEntries(Object.entries(selectors).map(([name, selector]) => {
+      const element = document.querySelector(selector);
+      return [name, element ? Number.parseFloat(getComputedStyle(element).fontSize) : 0];
+    }));
+  });
 }

@@ -341,6 +341,14 @@ export type IndustryStrengthResponse = {
   missing_industry_by_date: Record<string, number>;
   warnings: string[];
   cache_hit: boolean;
+  client_cache_hit?: boolean;
   elapsed_ms: number;
+  http_ms?: number;
+  timings?: {
+    prepare_ms: number;
+    scoring_ms: number;
+    assembly_ms: number;
+    total_ms: number;
+  };
   as_of: DataDates;
 };

@@ -23,6 +23,8 @@ type Raw = Record<string, unknown>;
 
 const barsCache = new Map<string, BarsResponse>();
 const stockCache = new Map<string, Stock>();
+const industryStrengthCache = new Map<string, IndustryStrengthResponse>();
+const industryStrengthRequests = new Map<string, Promise<IndustryStrengthResponse>>();
 
 async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; httpMs: number }> {
   const started = performance.now();
@@ -315,10 +317,29 @@ export const api = {
   industryStrength: async (
     pattern: PatternKey,
     endDate?: string | null,
+    force = false,
   ): Promise<IndustryStrengthResponse> => {
     const query = new URLSearchParams({ pattern });
     if (endDate) query.set("end_date", endDate.replace(/-/g, ""));
-    return (await request<IndustryStrengthResponse>(`/industry-strength?${query}`)).data;
+    const key = query.toString();
+    if (!force && industryStrengthCache.has(key)) {
+      return { ...industryStrengthCache.get(key)!, client_cache_hit: true, http_ms: 0 };
+    }
+    if (!force && industryStrengthRequests.has(key)) {
+      return industryStrengthRequests.get(key)!;
+    }
+    const pending = request<IndustryStrengthResponse>(`/industry-strength?${query}`)
+      .then(({ data, httpMs }) => {
+        const result = { ...data, client_cache_hit: false, http_ms: httpMs };
+        industryStrengthCache.set(key, result);
+        while (industryStrengthCache.size > 8) {
+          industryStrengthCache.delete(industryStrengthCache.keys().next().value!);
+        }
+        return result;
+      })
+      .finally(() => industryStrengthRequests.delete(key));
+    industryStrengthRequests.set(key, pending);
+    return pending;
   },
   saveScreenSnapshot: async (screen: ScreenResponse, filters: ScreenFilters) => {
     const body = screen.screen_token ? { screen_token: screen.screen_token } : { filters: normalizeScreenFilters(filters) };

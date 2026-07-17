@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import threading
 import uuid
@@ -108,9 +109,17 @@ def make_handler(service: MarketService):
 
         def _send(self, status: int, payload: dict[str, Any]) -> None:
             body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            compressed = len(body) >= 32_768 and "gzip" in self.headers.get(
+                "Accept-Encoding", ""
+            ).lower()
+            if compressed:
+                body = gzip.compress(body, compresslevel=1)
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            if compressed:
+                self.send_header("Content-Encoding", "gzip")
+                self.send_header("Vary", "Accept-Encoding")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")

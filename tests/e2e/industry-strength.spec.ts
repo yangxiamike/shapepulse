@@ -73,9 +73,13 @@ test("industry rotation heatmap, preview, trend focus, selector and ranking stay
   selected.sort((a, b) => b.recent_slope - a.recent_slope || a.code.localeCompare(b.code));
   const defaultVisibleCodes = selected.map(row => row.code);
 
-  await page.route("**/api/industry-strength?**", route => route.fulfill({
-    contentType: "application/json",
-    body: JSON.stringify({
+  let requestCount = 0;
+  await page.route("**/api/industry-strength?**", async route => {
+    requestCount += 1;
+    if (requestCount > 1) await new Promise(resolve => setTimeout(resolve, 300));
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
       pattern: "breakout",
       pattern_label: "突破启动",
       requested_end_date: null,
@@ -128,9 +132,11 @@ test("industry rotation heatmap, preview, trend focus, selector and ranking stay
       warnings: [],
       cache_hit: false,
       elapsed_ms: 1200,
-      as_of: { daily: dates.at(-1), st: dates.at(-1) },
-    }),
-  }));
+        timings: { prepare_ms: 400, scoring_ms: 700, assembly_ms: 5, total_ms: 1105 },
+        as_of: { daily: dates.at(-1), st: dates.at(-1) },
+      }),
+    });
+  });
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/industry-strength");
@@ -150,14 +156,30 @@ test("industry rotation heatmap, preview, trend focus, selector and ranking stay
   await expect(page.getByTestId("industry-point-detail")).toContainText("完整 24 节点");
 
   const trendLine = page.locator(".trend-hit-line").first();
-  await trendLine.hover({ force: true });
+  await expect(page.locator(".industry-trend-chart")).toHaveAttribute("data-focus-mode", "all");
+  await expect(page.locator(".trend-series.muted")).toHaveCount(0);
+  await expect(page.locator(".trend-series.active")).toHaveCount(0);
+  await trendLine.dispatchEvent("pointerover");
   await expect(page.locator(".trend-series.muted")).toHaveCount(4);
+  await expect(page.locator(".trend-series.active")).toHaveCount(1);
+  await expect(page.locator(".industry-trend-chart")).toHaveAttribute("data-focus-mode", "single");
   await expect(page.locator(".trend-focus-summary")).toContainText(rising[0].name);
+  await trendLine.dispatchEvent("pointerout");
+  await expect(page.locator(".trend-series.muted")).toHaveCount(0);
+  await expect(page.locator(".industry-trend-chart")).toHaveAttribute("data-focus-mode", "all");
+
+  await trendLine.focus();
+  await expect(page.locator(".trend-series.muted")).toHaveCount(4);
+  await expect(page.locator(".trend-series.active")).toHaveCount(1);
+  await trendLine.blur();
+  await expect(page.locator(".trend-series.muted")).toHaveCount(0);
+  await expect(page.locator(".trend-series.active")).toHaveCount(0);
 
   const selector = page.getByRole("listbox", { name: "行业选择器" });
   const arbitrary = ranking[10];
   await page.getByRole("option", { name: new RegExp(arbitrary.name) }).click();
   await expect(page.getByRole("option", { name: new RegExp(arbitrary.name) })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".trend-series.muted")).toHaveCount(0);
   await selector.focus();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("Enter");
@@ -174,4 +196,17 @@ test("industry rotation heatmap, preview, trend focus, selector and ranking stay
   await linkedRow.getByRole("button", { name: /查看/ }).click();
   await expect(page.getByTestId("industry-stock-detail")).toBeVisible();
   await expect(page.getByRole("link", { name: "行业强弱" })).toHaveAttribute("href", "/industry-strength");
+
+  const infoButton = page.getByRole("button", { name: "趋势图交互说明" });
+  await infoButton.focus();
+  await expect(infoButton).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator(".industry-info-tip.open [role=tooltip]")).toContainText("默认所有展示线条同等清晰");
+  await page.keyboard.press("Escape");
+  await expect(infoButton).toHaveAttribute("aria-expanded", "false");
+
+  await page.getByRole("button", { name: "刷新截面" }).click();
+  await expect(page.getByRole("status")).toContainText("旧结果保持可读");
+  await expect(page.locator(".heat-row-label")).toHaveCount(12);
+  await expect(page.locator(".industry-ranking-table tbody tr")).toHaveCount(15);
+  await expect(page.getByRole("status")).toBeHidden();
 });
