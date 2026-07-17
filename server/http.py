@@ -154,6 +154,14 @@ def make_handler(service: MarketService):
                     self._send(HTTPStatus.OK, service.search(term, limit))
                 elif path == "/api/industries":
                     self._send(HTTPStatus.OK, service.industries())
+                elif path == "/api/industry-strength":
+                    self._send(
+                        HTTPStatus.OK,
+                        service.industry_strength(
+                            _first(query, "pattern", "breakout"),
+                            _first(query, "end_date"),
+                        ),
+                    )
                 elif path == "/api/pattern/pool":
                     self._send(
                         HTTPStatus.OK,

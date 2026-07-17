@@ -37,6 +37,18 @@ test("server-renders the independent market terminal", async () => {
   assert.doesNotMatch(html, /今日推荐|筛选进度|上一只|下一只/);
 });
 
+test("server-renders the industry strength page and fixed scope", async () => {
+  const response = await render("/industry-strength");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /<title>行业强弱 \| 手动跟踪市场<\/title>/i);
+  assert.match(html, /行业强弱/);
+  assert.match(html, /Top 100/);
+  assert.match(html, /过去 120 个交易日/);
+  assert.match(html, /每 5 个交易日采样/);
+  assert.match(html, /固定 24 个节点/);
+});
+
 test("starter preview has been removed", async () => {
   const [page, layout, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

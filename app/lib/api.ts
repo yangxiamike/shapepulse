@@ -3,6 +3,7 @@ import type {
   BarsResponse,
   DataDates,
   HistoryRecommendation,
+  IndustryStrengthResponse,
   PatternKey,
   PatternPool,
   PatternResponse,
@@ -310,6 +311,14 @@ export const api = {
     const { data } = await request<Raw>("/industries");
     const names = Array.isArray(data.names) ? data.names.map(String) : Array.isArray(data.items) ? (data.items as Raw[]).map(item => String(item.name || "")).filter(Boolean) : [];
     return { items: names, as_of: data.as_of ? String(data.as_of) : null };
+  },
+  industryStrength: async (
+    pattern: PatternKey,
+    endDate?: string | null,
+  ): Promise<IndustryStrengthResponse> => {
+    const query = new URLSearchParams({ pattern });
+    if (endDate) query.set("end_date", endDate.replace(/-/g, ""));
+    return (await request<IndustryStrengthResponse>(`/industry-strength?${query}`)).data;
   },
   saveScreenSnapshot: async (screen: ScreenResponse, filters: ScreenFilters) => {
     const body = screen.screen_token ? { screen_token: screen.screen_token } : { filters: normalizeScreenFilters(filters) };

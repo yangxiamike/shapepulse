@@ -10,7 +10,19 @@ import numpy as np
 import pandas as pd
 
 from server.config import PROJECT_ROOT, load_settings, load_thresholds
-from server.patterns import _breakout, _pullback, _range_bounce, score_stock
+from server.industry_strength import (
+    build_industry_strength,
+    fixed_sample_dates,
+    heat_level,
+    industry_status,
+)
+from server.patterns import (
+    _breakout,
+    _pullback,
+    _range_bounce,
+    score_category_arrays,
+    score_stock,
+)
 from server.repository import LocalMarketRepository, SnapshotDates
 from server.service import MarketService
 from server.state import StateStore
@@ -57,6 +69,31 @@ class ThresholdTests(unittest.TestCase):
         self.assertEqual(result["status"], "matched")
         self.assertEqual([item["category"] for item in result["matches"]], ["breakout", "pullback", "range_bounce"])
         self.assertEqual(result["category"], "breakout")
+
+    def test_array_fast_path_matches_the_existing_category_scores(self):
+        length = 120
+        frame = pd.DataFrame(
+            {
+                "trade_date": [f"2026{index:04d}" for index in range(length)],
+                "close": np.linspace(10, 13, length),
+                "high": np.linspace(10.2, 13.2, length),
+                "low": np.linspace(9.8, 12.8, length),
+                "vol": np.linspace(900, 1300, length),
+                "pct_chg": np.zeros(length),
+            }
+        )
+        full = score_stock(frame, self.thresholds)
+        expected = {item["category"]: item["score"] for item in full["matches"]}
+        matrix = frame[["close", "high", "low", "vol"]].to_numpy(float)
+        close, high, low, volume = matrix.T
+        for category in ("breakout", "pullback", "range_bounce"):
+            with self.subTest(category=category):
+                self.assertEqual(
+                    score_category_arrays(
+                        category, close, high, low, volume, self.thresholds
+                    ),
+                    expected.get(category),
+                )
 
 
 class AggregationTests(unittest.TestCase):
@@ -110,6 +147,99 @@ class AggregationTests(unittest.TestCase):
         self.assertGreaterEqual(row["high"], max(row["open"], row["close"]))
         self.assertLessEqual(row["low"], min(row["open"], row["close"]))
         self.assertGreaterEqual(row["vol"], 0)
+
+
+class IndustryStrengthTests(unittest.TestCase):
+    def test_sampling_is_exactly_120_days_at_five_day_intervals(self):
+        dates = [f"2026{index:04d}" for index in range(1, 121)]
+        samples = fixed_sample_dates(dates)
+        self.assertEqual(len(samples), 24)
+        self.assertEqual(samples[0], dates[4])
+        self.assertEqual(samples[-1], dates[-1])
+        self.assertEqual(
+            [int(samples[index]) - int(samples[index - 1]) for index in range(1, 24)],
+            [5] * 23,
+        )
+
+    def test_heat_scale_caps_visually_but_preserves_real_value(self):
+        self.assertEqual([heat_level(value) for value in [0, 1, 3, 5, 8, 10, 17]], [0, 1, 2, 3, 4, 4, 5])
+        self.assertEqual(17.0, float(17))
+
+    def test_status_boundaries_are_stable(self):
+        self.assertEqual(industry_status([0, 0, 3], 12), "新进入行业")
+        self.assertEqual(industry_status([0, 0, 2], 12), "相对稳定")
+        self.assertEqual(industry_status([1, 2, 3, 4], 8), "持续增强")
+        self.assertEqual(industry_status([6, 5, 4], 3), "高位退潮")
+        self.assertEqual(industry_status([6, 5, 4], 8), "正在走弱")
+
+    def test_top100_percent_sorting_clip_and_current_top10_promotion(self):
+        dates = [f"2026{index:04d}" for index in range(5, 121, 5)]
+        industries = [
+            {"code": f"I{index:02d}", "name": f"行业{index:02d}"}
+            for index in range(31)
+        ]
+        top_by_date: dict[str, list[dict[str, object]]] = {}
+        for date_index, date in enumerate(dates):
+            items: list[dict[str, object]] = []
+            for stock_index in range(100):
+                industry_index = stock_index % 20
+                if date_index == len(dates) - 1 and stock_index < 8:
+                    industry_index = 30
+                items.append(
+                    {
+                        "ts_code": f"{stock_index:06d}.SZ",
+                        "name": f"股票{stock_index}",
+                        "score": 100 - stock_index,
+                        "industry_code": f"I{industry_index:02d}",
+                        "industry_name": f"行业{industry_index:02d}",
+                    }
+                )
+            top_by_date[date] = items
+        result = build_industry_strength(
+            pattern="breakout",
+            pattern_label="突破启动",
+            requested_end_date=None,
+            sample_dates=dates,
+            industries=industries,
+            top_by_date=top_by_date,
+        )
+        self.assertEqual(result["sampling"]["sample_count"], 24)
+        self.assertEqual(result["scope"]["industry_count"], 31)
+        self.assertEqual(result["actual_top_by_date"][dates[-1]], 100)
+        self.assertEqual(result["display"]["default_visible_count"], 16)
+        self.assertEqual(result["display"]["folded_count"], 15)
+        self.assertIn("I30", result["display"]["default_visible_codes"])
+        current_total = sum(row["current_count"] for row in result["ranking"])
+        self.assertEqual(current_total, 100)
+        self.assertTrue(all(row["current_percent"] == float(row["current_count"]) for row in result["ranking"]))
+        self.assertEqual(
+            [row["rank"] for row in result["ranking"]],
+            list(range(1, 32)),
+        )
+
+    def test_incomplete_top_and_missing_industry_are_explicit(self):
+        date = "20260716"
+        result = build_industry_strength(
+            pattern="pullback",
+            pattern_label="上升趋势回调",
+            requested_end_date=date,
+            sample_dates=[date],
+            industries=[{"code": "I01", "name": "电子"}],
+            top_by_date={
+                date: [
+                    {
+                        "ts_code": "000001.SZ",
+                        "name": "测试",
+                        "score": 80,
+                        "industry_code": None,
+                    }
+                ]
+            },
+        )
+        self.assertEqual(result["actual_top_by_date"][date], 1)
+        self.assertEqual(result["missing_industry_by_date"][date], 1)
+        self.assertTrue(any("固定以 100 为分母" in item for item in result["warnings"]))
+        self.assertTrue(any("缺少可追溯" in item for item in result["warnings"]))
 
 
 class ScreenSemanticsTests(unittest.TestCase):

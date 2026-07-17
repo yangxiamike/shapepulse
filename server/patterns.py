@@ -256,3 +256,32 @@ def score_stock(
         return base
     primary = max(matches, key=lambda item: item["score"])
     return {**base, **primary}
+
+
+def score_category_arrays(
+    category: str,
+    close: np.ndarray,
+    high: np.ndarray,
+    low: np.ndarray,
+    volume: np.ndarray,
+    thresholds: dict,
+) -> float | None:
+    """Run one existing pattern rule on prepared arrays without repeated DataFrame work."""
+    lookback = int(thresholds["screen"]["lookback_bars"])
+    close = close[-lookback:]
+    high = high[-lookback:]
+    low = low[-lookback:]
+    volume = np.nan_to_num(volume[-lookback:], nan=0.0)
+    if len(close) < int(thresholds["screen"]["minimum_bars"]):
+        return None
+    if category == "breakout":
+        details = _breakout(close, volume, thresholds[category])
+    elif category == "pullback":
+        details = _pullback(close, high, thresholds[category])
+    elif category == "range_bounce":
+        details = _range_bounce(close, high, low, thresholds[category])
+    else:
+        raise ValueError(f"unsupported category: {category}")
+    if details is None or details["score"] < thresholds[category]["minimum_score"]:
+        return None
+    return round(float(details["score"]), 2)

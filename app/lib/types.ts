@@ -237,3 +237,90 @@ export type BarsResponse = {
   history_start?: string | null;
   history_end?: string | null;
 };
+
+export type IndustryStrengthStock = {
+  ts_code: string;
+  code: string;
+  name: string;
+  score: number;
+};
+
+export type IndustryStrengthPoint = {
+  date: string;
+  count: number;
+  percent: number;
+  heat_level: number;
+  change: number;
+  stocks: IndustryStrengthStock[];
+};
+
+export type IndustryStrengthRow = {
+  code: string;
+  name: string;
+  points: IndustryStrengthPoint[];
+  counts: number[];
+  current_count: number;
+  current_percent: number;
+  change_previous: number;
+  change_four_samples: number;
+  cumulative_count: number;
+  rank: number;
+  status: string;
+  stocks: IndustryStrengthStock[];
+};
+
+export type IndustryStrengthResponse = {
+  pattern: PatternKey;
+  pattern_label: string;
+  requested_end_date?: string | null;
+  resolved_end_date: string;
+  sampling: {
+    top_n: 100;
+    industry_level: 1;
+    lookback_trading_days: 120;
+    sample_every_trading_days: 5;
+    sample_count: number;
+    dates: string[];
+    denominator: 100;
+  };
+  scope: {
+    board: string;
+    exclude_st: boolean;
+    industry_count: number;
+    industry_source: string;
+  };
+  metrics: {
+    covered_industries: number;
+    strongest_industry: string | null;
+    strongest_count: number;
+    fastest_strengthening: string | null;
+    fastest_strengthening_change: number;
+    fastest_weakening: string | null;
+    fastest_weakening_change: number;
+    top_three_percent: number;
+    new_top_ten_count: number;
+    concentration_state: string;
+    concentration_change: number;
+  };
+  analysis: string[];
+  rules: {
+    rapid_start_delta: number;
+    rapid_start_explanation: string;
+    high_rank_cutoff: number;
+  };
+  display: {
+    default_visible_count: number;
+    default_visible_codes: string[];
+    folded_count: number;
+    folded_current_count: number;
+    folded_current_percent: number;
+  };
+  industries: IndustryStrengthRow[];
+  ranking: IndustryStrengthRow[];
+  actual_top_by_date: Record<string, number>;
+  missing_industry_by_date: Record<string, number>;
+  warnings: string[];
+  cache_hit: boolean;
+  elapsed_ms: number;
+  as_of: DataDates;
+};
