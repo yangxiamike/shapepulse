@@ -1,15 +1,18 @@
-"""Deterministic calculations for the A-share industry fund-flow radar.
+"""Deterministic calculations for the A-share large active fund-flow radar.
 
 This module deliberately has no database or PDF dependency.  Its input is the
 stock-day panel produced from the research universe, an industry mapping, and
-institutional money flow.  Keeping calculation here makes the report
+large-order active net flow.  Keeping calculation here makes the report
 reproducible and prevents presentation code from silently changing a score.
 
 Required columns are ``trade_date, ts_code, <level>_code, <level>_name,
 inst_net_flow, amount, circ_mv, close``.  Amount, market value, and flow must
-use a consistent monetary unit. ``inst_net_flow`` is directional.  Five-day
-and twenty-day radars use the same formula independently, so a score always
-has one explicit horizon and never blends short- and medium-term evidence.
+use a consistent monetary unit. ``inst_net_flow`` is retained as the upstream
+field name for compatibility; semantically it is large-order plus
+extra-large-order active buys minus active sells.  It is not an account
+identity or a position measure.  Five-day and twenty-day radars use the same
+formula independently, so a score always has one explicit horizon and never
+blends short- and medium-term evidence.
 """
 from __future__ import annotations
 
@@ -30,6 +33,7 @@ CONFIRMATION_DECAY = 0.30
 COMPREHENSIVE_SCORE_SCALE = 10_000
 SCORE_ROUND_DECIMALS = 12
 FLOW_TIE_ROUND_DECIMALS = 6
+MIN_L2_VALID_STOCKS = 10
 Level = Literal["l1", "l2"]
 Horizon = Literal[5, 20]
 
@@ -62,6 +66,52 @@ def _require_columns(frame: pd.DataFrame, level: Level) -> tuple[str, str]:
     if missing:
         raise ValueError(f"radar input is missing columns: {', '.join(sorted(missing))}")
     return code, name
+
+
+def effective_stock_mask(frame: pd.DataFrame) -> pd.Series:
+    """Return rows with normal trading and complete calculation inputs.
+
+    ``amount > 0`` and ``close > 0`` are the portable normal-trading checks.
+    When an upstream ``is_trading`` or ``trade_status`` field exists it is
+    additionally respected.  Missing large active flow is never filled with
+    zero.
+    """
+    numeric = {
+        column: pd.to_numeric(frame[column], errors="coerce")
+        for column in ("inst_net_flow", "amount", "circ_mv", "close")
+    }
+    mask = pd.Series(True, index=frame.index, dtype=bool)
+    for values in numeric.values():
+        mask &= np.isfinite(values)
+    mask &= numeric["amount"].gt(0)
+    mask &= numeric["circ_mv"].gt(0)
+    mask &= numeric["close"].gt(0)
+    if "is_trading" in frame:
+        trading = frame["is_trading"]
+        if trading.dtype == bool:
+            mask &= trading.fillna(False)
+        else:
+            normalized = trading.astype(str).str.strip().str.lower()
+            mask &= normalized.isin(
+                {"1", "1.0", "true", "yes", "y", "正常", "交易", "交易中"}
+            )
+    elif "trade_status" in frame:
+        normalized = frame["trade_status"].astype(str).str.strip().str.lower()
+        mask &= normalized.isin(
+            {
+                "1",
+                "1.0",
+                "true",
+                "yes",
+                "y",
+                "正常",
+                "交易",
+                "交易中",
+                "trading",
+                "normal",
+            }
+        )
+    return mask
 
 
 def _quantized_sign(value: float) -> int:
@@ -150,7 +200,11 @@ def _weighted_return(group: pd.DataFrame, start_index: int) -> float:
 def _industry_daily(work: pd.DataFrame, code_column: str, name_column: str) -> pd.DataFrame:
     return (
         work.groupby(["trade_date", code_column, name_column], as_index=False)
-        .agg(inst_net_flow=("inst_net_flow", "sum"), amount=("amount", "sum"))
+        .agg(
+            inst_net_flow=("inst_net_flow", lambda values: values.sum(min_count=1)),
+            amount=("amount", lambda values: values.sum(min_count=1)),
+            valid_stock_count=("ts_code", "nunique"),
+        )
         .sort_values([code_column, "trade_date"])
     )
 
@@ -169,9 +223,11 @@ def analyze_industries(
     """Calculate one independent 5- or 20-day SW level ranking.
 
     The latest common date in ``frame`` is the report date.  Rows with missing
-    money-flow, amount, market value, or close are retained for coverage
-    accounting but excluded from the relevant ratio calculation.  This is
-    intentional: zero is a real value, missing is not silently converted to it.
+    large active flow, amount, market value, or close are retained for coverage
+    accounting but excluded from calculations.  For SW level 2, industries
+    with fewer than ten effective report-date constituents are completely
+    excluded from the ranking universe.  Zero is a real value; missing is
+    never silently converted to it.
     """
     if horizon not in SCORING_HORIZONS:
         raise ValueError(f"horizon must be one of {SCORING_HORIZONS}")
@@ -184,14 +240,52 @@ def analyze_industries(
         raise ValueError("radar input has duplicate stock-day rows")
     for column in ("inst_net_flow", "amount", "circ_mv", "close"):
         work[column] = pd.to_numeric(work[column], errors="coerce")
-    work = work[work[code_column].notna() & work[name_column].notna()].copy()
-    dates = sorted(work["trade_date"].unique())
+    mapped = work[work[code_column].notna() & work[name_column].notna()].copy()
+    dates = sorted(mapped["trade_date"].unique())
     if not dates:
         raise ValueError("radar input has no mapped industry rows")
     as_of = dates[-1]
     available_days = len(dates)
-    daily = _industry_daily(work, code_column, name_column)
-    latest = work[work["trade_date"].eq(as_of)].copy()
+    latest_mapped = mapped[mapped["trade_date"].eq(as_of)].copy()
+    valid_mask = effective_stock_mask(mapped)
+    valid_work = mapped[valid_mask].copy()
+    latest_valid = valid_work[valid_work["trade_date"].eq(as_of)].copy()
+    excluded_industries = pd.DataFrame(columns=[code_column, name_column, "valid_stock_count"])
+    if level == "l2":
+        counted = (
+            latest_valid.groupby([code_column, name_column], as_index=False)["ts_code"]
+            .nunique()
+            .rename(columns={"ts_code": "valid_stock_count"})
+        )
+        latest_counts = (
+            latest_mapped[[code_column, name_column]]
+            .drop_duplicates()
+            .merge(
+                counted,
+                on=[code_column, name_column],
+                how="left",
+                validate="one_to_one",
+            )
+        )
+        latest_counts["valid_stock_count"] = (
+            latest_counts["valid_stock_count"].fillna(0).astype(int)
+        )
+        excluded_industries = latest_counts[
+            latest_counts["valid_stock_count"] < MIN_L2_VALID_STOCKS
+        ].copy()
+        eligible = latest_counts[
+            latest_counts["valid_stock_count"] >= MIN_L2_VALID_STOCKS
+        ][[code_column, name_column]]
+        if eligible.empty:
+            raise ValueError(
+                "no l2 industries have at least "
+                f"{MIN_L2_VALID_STOCKS} effective report-date stocks"
+            )
+        valid_work = valid_work.merge(
+            eligible, on=[code_column, name_column], how="inner", validate="many_to_one"
+        )
+        latest_valid = valid_work[valid_work["trade_date"].eq(as_of)].copy()
+    daily = _industry_daily(valid_work, code_column, name_column)
     records: list[dict] = []
     contributor_frames: list[pd.DataFrame] = []
 
@@ -227,8 +321,9 @@ def analyze_industries(
                 scoring_window.map(_quantized_sign).eq(direction_sign).sum()
             )
         persistence_ratio = consistent_day_count / horizon
-        stock_window = work[
-            work[code_column].eq(industry_code) & work["trade_date"].isin(dates[-horizon:])
+        stock_window = valid_work[
+            valid_work[code_column].eq(industry_code)
+            & valid_work["trade_date"].isin(dates[-horizon:])
         ].groupby("ts_code", as_index=False).agg(
             inst_net_flow=("inst_net_flow", lambda values: values.sum(min_count=1)),
             amount=("amount", lambda values: values.sum(min_count=1)),
@@ -263,6 +358,54 @@ def analyze_industries(
             np.exp(-CONFIRMATION_DECAY * (1.0 - confirmation_score))
         )
         score_unrounded = base_strength * confirmation_multiplier
+        latest_industry = latest_valid[latest_valid[code_column].eq(industry_code)]
+        latest_stock_flows = latest_industry[
+            ["ts_code", "inst_net_flow"]
+        ].copy()
+        latest_stock_flows["inst_net_flow"] = pd.to_numeric(
+            latest_stock_flows["inst_net_flow"], errors="coerce"
+        )
+        valid_stock_count = int(len(latest_stock_flows))
+        net_inflow_stock_count = int(
+            latest_stock_flows["inst_net_flow"].map(_quantized_sign).gt(0).sum()
+        )
+        net_inflow_stock_ratio = (
+            net_inflow_stock_count / valid_stock_count if valid_stock_count else np.nan
+        )
+        day_sign = directions[1][1]
+        directional_pool = (
+            latest_stock_flows["inst_net_flow"] * day_sign
+        ).clip(lower=0)
+        directional_denominator = float(directional_pool.sum())
+
+        def top_share(count: int) -> float:
+            if day_sign == 0 or directional_denominator <= 0:
+                return float("nan")
+            share = directional_pool.nlargest(count).sum() / directional_denominator
+            return float(np.clip(share, 0.0, 1.0))
+
+        top1_share = top_share(1)
+        top3_share = top_share(3)
+        top5_share = top_share(5)
+        if day_sign > 0:
+            if net_inflow_stock_ratio >= 0.60 and top3_share <= 0.50:
+                diffusion_label = "普遍扩散"
+            elif top3_share >= 0.70 or (
+                net_inflow_stock_ratio < 0.40 and top3_share >= 0.60
+            ):
+                diffusion_label = "少数个股驱动"
+            else:
+                diffusion_label = "结构性流入"
+        elif day_sign < 0:
+            outflow_ratio = 1.0 - net_inflow_stock_ratio
+            if outflow_ratio >= 0.60 and top3_share <= 0.50:
+                diffusion_label = "普遍流出"
+            elif top3_share >= 0.70:
+                diffusion_label = "少数个股拖累"
+            else:
+                diffusion_label = "结构性流出"
+        else:
+            diffusion_label = "方向持平"
         records.append({
             code_column: industry_code, name_column: industry_name, "as_of": as_of,
             "horizon": horizon, "horizon_label": f"{horizon}日",
@@ -289,11 +432,26 @@ def analyze_industries(
             "confirmation_score": confirmation_score,
             "confirmation_multiplier": confirmation_multiplier,
             "score_unrounded": score_unrounded,
-            "return_5d": _weighted_return(work[work[code_column].eq(industry_code)], 5),
-            "return_20d": _weighted_return(work[work[code_column].eq(industry_code)], 20),
+            "valid_stock_count_1d": valid_stock_count,
+            "net_inflow_stock_count_1d": net_inflow_stock_count,
+            "net_inflow_stock_ratio_1d": net_inflow_stock_ratio,
+            "top1_direction_contribution_1d": top1_share,
+            "top3_direction_contribution_1d": top3_share,
+            "top5_direction_contribution_1d": top5_share,
+            "direction_contribution_side_1d": (
+                "inflow" if day_sign > 0 else "outflow" if day_sign < 0 else "flat"
+            ),
+            "diffusion_label_1d": diffusion_label,
+            "return_5d": _weighted_return(
+                valid_work[valid_work[code_column].eq(industry_code)], 5
+            ),
+            "return_20d": _weighted_return(
+                valid_work[valid_work[code_column].eq(industry_code)], 20
+            ),
         })
-        contributor_window = work[
-            work[code_column].eq(industry_code) & work["trade_date"].isin(dates[-horizon:])
+        contributor_window = valid_work[
+            valid_work[code_column].eq(industry_code)
+            & valid_work["trade_date"].isin(dates[-horizon:])
         ]
         stock_flows = contributor_window.groupby("ts_code", as_index=False).agg(
             inst_net_flow=("inst_net_flow", lambda values: values.sum(min_count=1)),
@@ -307,21 +465,37 @@ def analyze_industries(
             ["_direction_contribution", "ts_code"],
             ascending=[False, True],
             kind="stable",
-        ).head(3)
+        ).head(5)
+        stock_flows["contribution_rank"] = np.arange(1, len(stock_flows) + 1)
         stock_flows["contribution_share"] = (
             stock_flows["_direction_contribution"].clip(lower=0) / denominator
             if denominator
             else np.nan
         )
+        stock_flows["contribution_share"] = stock_flows[
+            "contribution_share"
+        ].clip(lower=0, upper=1)
         stock_flows[code_column] = industry_code
         stock_flows[name_column] = industry_name
-        contributor_frames.append(stock_flows[[code_column, name_column, *(["stock_name"] if "stock_name" in stock_flows else []), "ts_code", "inst_net_flow", "contribution_share"]])
+        contributor_frames.append(
+            stock_flows[
+                [
+                    code_column,
+                    name_column,
+                    *(["stock_name"] if "stock_name" in stock_flows else []),
+                    "ts_code",
+                    "inst_net_flow",
+                    "contribution_rank",
+                    "contribution_share",
+                ]
+            ]
+        )
 
     rankings = pd.DataFrame(records)
     # Keep supporting ratios for auditability.  Only selected-window
     # flow/turnover enters the score; market value, returns, and anomaly z do
     # not enter the formula or rank.
-    latest_mv = latest.groupby(code_column)["circ_mv"].sum()
+    latest_mv = latest_valid.groupby(code_column)["circ_mv"].sum()
     for period in LOOKBACKS:
         turnover = rankings[f"flow_{period}d"] / rankings[f"amount_{period}d"].replace(0, np.nan)
         rankings[f"flow_to_turnover_{period}d"] = turnover
@@ -344,11 +518,28 @@ def analyze_industries(
         "minimum_trading_days": minimum_required_trading_days(lookback=horizon),
         "has_full_anomaly_history": available_days >= minimum_required_trading_days(lookback=horizon),
         "input_rows": int(len(frame)),
-        "mapped_rows": int(len(work)),
-        "latest_stock_rows": int(len(latest)),
-        "latest_missing_flow_rate": float(latest["inst_net_flow"].isna().mean()),
-        "latest_missing_amount_rate": float(latest["amount"].isna().mean()),
-        "latest_missing_market_value_rate": float(latest["circ_mv"].isna().mean()),
+        "mapped_rows": int(len(mapped)),
+        "effective_rows": int(len(valid_work)),
+        "latest_stock_rows": int(len(latest_mapped)),
+        "latest_effective_stock_rows": int(len(latest_valid)),
+        "latest_missing_flow_rate": float(
+            latest_mapped["inst_net_flow"].isna().mean()
+        ),
+        "latest_missing_amount_rate": float(latest_mapped["amount"].isna().mean()),
+        "latest_missing_market_value_rate": float(
+            latest_mapped["circ_mv"].isna().mean()
+        ),
+        "minimum_l2_valid_stocks": MIN_L2_VALID_STOCKS,
+        "eligible_industry_count": int(len(rankings)),
+        "excluded_small_sample_industry_count": int(len(excluded_industries)),
+        "excluded_small_sample_industries": (
+            "|".join(
+                f"{getattr(row, name_column)}({int(row.valid_stock_count)})"
+                for row in excluded_industries.itertuples(index=False)
+            )
+            if level == "l2"
+            else ""
+        ),
         "market_flow_1d": float(rankings["flow_1d"].sum(min_count=1)),
         "market_flow_5d": float(rankings["flow_5d"].sum(min_count=1)),
         "market_flow_20d": float(rankings["flow_20d"].sum(min_count=1)),
@@ -368,6 +559,13 @@ def analyze_industries(
         "rank_tie_break": (
             "score, base_strength, selected-window flow, 5d flow, 1d flow, "
             "industry code; numeric keys quantized at documented decimals"
+        ),
+        "flow_semantics": (
+            "large+extra-large active buy amount minus active sell amount; "
+            "not real institution identity, holdings, or holding changes"
+        ),
+        "contribution_denominator": (
+            "same-direction positive pool; never the net industry flow"
         ),
     }
     for source_key in ("source_window_start", "source_window_end", "source_request_count", "source_coverage_rate"):

@@ -20,14 +20,33 @@ from server.industry_radar import (
 
 def panel(days: int = 140) -> pd.DataFrame:
     rows = []
+    stocks = [
+        ("000001.SZ", "金融", "银行", 10.0, "平安银行"),
+        ("000002.SZ", "金融", "银行", 8.0, "万科A"),
+        ("000003.SZ", "工业", "工程机械", -7.0, "中联重科"),
+        ("000004.SZ", "工业", "工程机械", -5.0, "国机重装"),
+    ]
+    stocks.extend(
+        [
+            (f"0000{code:02d}.SZ", "金融", "银行", 4.0 + code % 3, f"银行样本{code}")
+            for code in range(11, 19)
+        ]
+    )
+    stocks.extend(
+        [
+            (
+                f"0000{code:02d}.SZ",
+                "工业",
+                "工程机械",
+                -3.0 - code % 3,
+                f"机械样本{code}",
+            )
+            for code in range(21, 29)
+        ]
+    )
     for day in range(days):
         date = f"2026{day // 31 + 1:02d}{day % 31 + 1:02d}"
-        for code, l1, l2, base, name in [
-            ("000001.SZ", "金融", "银行", 10.0, "平安银行"),
-            ("000002.SZ", "金融", "银行", 8.0, "万科A"),
-            ("000003.SZ", "工业", "工程机械", -7.0, "中联重科"),
-            ("000004.SZ", "工业", "工程机械", -5.0, "国机重装"),
-        ]:
+        for code, l1, l2, base, name in stocks:
             flow = base if day >= days - 20 else base * 0.1
             if code == "000001.SZ" and day == days - 1:
                 flow = 80.0
@@ -274,8 +293,20 @@ class IndustryRadarTests(unittest.TestCase):
             source.loc[
                 bank_a & source["trade_date"].eq(date), "inst_net_flow"
             ] = value
+        source.loc[bank_b & source["trade_date"].isin(final_dates), "inst_net_flow"] = -1
+        positive_helpers = bank & source["ts_code"].isin(
+            {"000011.SZ", "000012.SZ", "000013.SZ", "000014.SZ"}
+        )
+        negative_helpers = bank & source["ts_code"].isin(
+            {"000015.SZ", "000016.SZ", "000017.SZ", "000018.SZ"}
+        )
         source.loc[
-            bank_b & source["trade_date"].isin(final_dates), "inst_net_flow"
+            positive_helpers & source["trade_date"].isin(final_dates),
+            "inst_net_flow",
+        ] = 1
+        source.loc[
+            negative_helpers & source["trade_date"].isin(final_dates),
+            "inst_net_flow",
         ] = -1
         weak = analyze_industries(source, "l2", horizon=5).rankings.set_index(
             "l2_name"
@@ -329,9 +360,63 @@ class IndustryRadarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate"):
             analyze_industries(source, "l2")
 
+    def test_l2_small_sample_is_excluded_from_all_published_rows(self):
+        source = panel()
+        as_of = source["trade_date"].max()
+        source.loc[
+            source["trade_date"].eq(as_of)
+            & source["l2_name"].eq("银行")
+            & source["ts_code"].eq("000018.SZ"),
+            "amount",
+        ] = 0
+        result = analyze_industries(source, "l2", horizon=5)
+        self.assertNotIn("银行", result.rankings["l2_name"].tolist())
+        self.assertNotIn("银行", result.daily_flows["l2_name"].tolist())
+        self.assertNotIn("银行", result.contributors["l2_name"].tolist())
+        self.assertEqual(result.quality["excluded_small_sample_industry_count"], 1)
+        self.assertEqual(result.quality["eligible_industry_count"], 1)
+
+        zero_valid = panel()
+        zero_valid.loc[
+            zero_valid["trade_date"].eq(as_of)
+            & zero_valid["l2_name"].eq("银行"),
+            "amount",
+        ] = 0
+        zero_result = analyze_industries(zero_valid, "l2", horizon=5)
+        self.assertNotIn("银行", zero_result.rankings["l2_name"].tolist())
+        self.assertIn("银行(0)", zero_result.quality["excluded_small_sample_industries"])
+
+    def test_internal_contribution_uses_same_direction_pool(self):
+        source = panel()
+        as_of = source["trade_date"].max()
+        bank_latest = source["trade_date"].eq(as_of) & source["l2_name"].eq("银行")
+        source.loc[bank_latest, "inst_net_flow"] = 0
+        source.loc[
+            bank_latest & source["ts_code"].eq("000001.SZ"), "inst_net_flow"
+        ] = 80
+        source.loc[
+            bank_latest & source["ts_code"].eq("000002.SZ"), "inst_net_flow"
+        ] = 20
+        source.loc[
+            bank_latest & source["ts_code"].eq("000011.SZ"), "inst_net_flow"
+        ] = -90
+        row = analyze_industries(source, "l2", horizon=5).rankings.set_index(
+            "l2_name"
+        ).loc["银行"]
+        self.assertAlmostEqual(row["top1_direction_contribution_1d"], 0.8)
+        self.assertAlmostEqual(row["top3_direction_contribution_1d"], 1.0)
+        self.assertAlmostEqual(row["top5_direction_contribution_1d"], 1.0)
+        self.assertTrue(
+            0
+            <= row["top1_direction_contribution_1d"]
+            <= row["top3_direction_contribution_1d"]
+            <= row["top5_direction_contribution_1d"]
+            <= 1
+        )
+
     def test_contributors_use_real_names_and_follow_selected_direction(self):
         result = analyze_industries(panel(), "l2", horizon=5)
-        self.assertTrue((result.contributors.groupby("l2_name").size() <= 3).all())
+        self.assertTrue((result.contributors.groupby("l2_name").size() <= 5).all())
         bank = result.contributors[result.contributors["l2_name"].eq("银行")].iloc[0]
         machinery = result.contributors[
             result.contributors["l2_name"].eq("工程机械")

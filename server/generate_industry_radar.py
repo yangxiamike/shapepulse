@@ -1,4 +1,4 @@
-"""Generate the auditable ten-page A-share industry fund-flow radar.
+"""Generate the auditable A-share industry large active fund-flow radar.
 
 The command accepts only an explicit existing panel.  It never downloads,
 extends, fills, or fabricates source data, and the historical path pages are
@@ -14,12 +14,17 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .industry_radar import RadarResult, analyze_industries
+from .industry_radar import (
+    MIN_L2_VALID_STOCKS,
+    RadarResult,
+    analyze_industries,
+    effective_stock_mask,
+)
 
 
 PAGE_WIDTH, PAGE_HEIGHT = 841.89, 595.28
 MARGIN = 34
-PAGE_COUNT = 10
+PAGE_COUNT = 11
 RED = (0.78, 0.12, 0.14)
 GREEN = (0.08, 0.43, 0.20)
 NAVY = (0.07, 0.15, 0.27)
@@ -42,7 +47,9 @@ STATE_CRITERIA = {
 }
 LINE_COLORS = (RED, BLUE, ORANGE, PURPLE, GREEN)
 MARKET_FLOW_DISPLAY_DAYS = 60
-MARKET_FLOW_MINIMUM_DAYS = MARKET_FLOW_DISPLAY_DAYS + 20 - 1
+MARKET_FLOW_MINIMUM_DAYS = MARKET_FLOW_DISPLAY_DAYS
+ROTATION_STRENGTH_5D_WEIGHT = 0.60
+ROTATION_STRENGTH_20D_WEIGHT = 0.40
 
 
 def load_panel(path: Path) -> pd.DataFrame:
@@ -113,6 +120,256 @@ def _state_name(flow_5d: float, flow_20d: float) -> str:
     return "双窗净流出"
 
 
+def _rotation_history(frame: pd.DataFrame) -> dict[str, Any]:
+    """Build comparable daily L2 strength, rank, migration, and streak data."""
+    required = {
+        "trade_date",
+        "ts_code",
+        "l2_code",
+        "l2_name",
+        "inst_net_flow",
+        "amount",
+        "circ_mv",
+        "close",
+    }
+    missing = required.difference(frame.columns)
+    if missing:
+        raise ValueError(
+            "rotation history is missing columns: " + ", ".join(sorted(missing))
+        )
+    work = frame.copy()
+    work["trade_date"] = work["trade_date"].astype(str)
+    for column in ("inst_net_flow", "amount", "circ_mv", "close"):
+        work[column] = pd.to_numeric(work[column], errors="coerce")
+    work = work[
+        work["l2_code"].notna()
+        & work["l2_name"].notna()
+        & effective_stock_mask(work)
+    ].copy()
+    daily = (
+        work.groupby(["trade_date", "l2_code", "l2_name"], as_index=False)
+        .agg(
+            flow_1d=("inst_net_flow", lambda values: values.sum(min_count=1)),
+            amount_1d=("amount", lambda values: values.sum(min_count=1)),
+            valid_stock_count=("ts_code", "nunique"),
+        )
+        .sort_values(["l2_code", "trade_date"], kind="stable")
+    )
+    dates = sorted(daily["trade_date"].unique())
+    if len(dates) < 20:
+        raise ValueError(
+            f"rotation history requires at least 20 trading days, found {len(dates)}"
+        )
+    records: list[pd.DataFrame] = []
+    for (industry_code, industry_name), group in daily.groupby(
+        ["l2_code", "l2_name"], sort=False
+    ):
+        indexed = group.set_index("trade_date").reindex(dates)
+        flow = pd.to_numeric(indexed["flow_1d"], errors="coerce")
+        amount = pd.to_numeric(indexed["amount_1d"], errors="coerce")
+        count = pd.to_numeric(indexed["valid_stock_count"], errors="coerce").fillna(0)
+        flow_5d = flow.rolling(5, min_periods=5).sum()
+        flow_20d = flow.rolling(20, min_periods=20).sum()
+        amount_5d = amount.rolling(5, min_periods=5).sum()
+        amount_20d = amount.rolling(20, min_periods=20).sum()
+        intensity_5d = 10_000 * flow_5d / amount_5d.replace(0, np.nan)
+        intensity_20d = 10_000 * flow_20d / amount_20d.replace(0, np.nan)
+        strength = (
+            ROTATION_STRENGTH_5D_WEIGHT * intensity_5d
+            + ROTATION_STRENGTH_20D_WEIGHT * intensity_20d
+        )
+        eligible = count.ge(MIN_L2_VALID_STOCKS)
+        state = pd.Series(index=dates, dtype="object")
+        complete = eligible & flow_5d.notna() & flow_20d.notna()
+        state.loc[complete] = [
+            _state_name(five, twenty)
+            for five, twenty in zip(flow_5d.loc[complete], flow_20d.loc[complete])
+        ]
+        records.append(
+            pd.DataFrame(
+                {
+                    "trade_date": dates,
+                    "l2_code": str(industry_code),
+                    "l2_name": str(industry_name),
+                    "valid_stock_count": count.to_numpy(dtype=int),
+                    "eligible": eligible.to_numpy(dtype=bool),
+                    "flow_1d": flow.to_numpy(dtype=float),
+                    "flow_5d": flow_5d.to_numpy(dtype=float),
+                    "flow_20d": flow_20d.to_numpy(dtype=float),
+                    "amount_5d": amount_5d.to_numpy(dtype=float),
+                    "amount_20d": amount_20d.to_numpy(dtype=float),
+                    "intensity_5d_bps": intensity_5d.to_numpy(dtype=float),
+                    "intensity_20d_bps": intensity_20d.to_numpy(dtype=float),
+                    "rotation_strength_bps": strength.to_numpy(dtype=float),
+                    "state": state.to_numpy(),
+                }
+            )
+        )
+    history = pd.concat(records, ignore_index=True)
+    history["rotation_rank"] = np.nan
+    for date, indexes in history.groupby("trade_date").groups.items():
+        day = history.loc[indexes]
+        publishable = day[
+            day["eligible"] & day["rotation_strength_bps"].notna()
+        ].sort_values(
+            ["rotation_strength_bps", "flow_5d", "l2_code"],
+            ascending=[False, False, True],
+            kind="stable",
+        )
+        history.loc[publishable.index, "rotation_rank"] = np.arange(
+            1, len(publishable) + 1
+        )
+
+    as_of = dates[-1]
+    prior_date = dates[-2]
+    five_days_ago = dates[-6] if len(dates) >= 6 else None
+    current = history[
+        history["trade_date"].eq(as_of) & history["eligible"]
+    ].copy()
+    previous = history[history["trade_date"].eq(prior_date)].set_index("l2_code")
+    previous_five = (
+        history[history["trade_date"].eq(five_days_ago)].set_index("l2_code")
+        if five_days_ago
+        else pd.DataFrame()
+    )
+
+    def historical_value(
+        code: str, source: pd.DataFrame, column: str
+    ) -> Any:
+        if source.empty or code not in source.index:
+            return np.nan
+        value = source.loc[code, column]
+        return value.iloc[0] if isinstance(value, pd.Series) else value
+
+    for index, row in current.iterrows():
+        code = str(row["l2_code"])
+        rank_now = float(row["rotation_rank"])
+        rank_prev = historical_value(code, previous, "rotation_rank")
+        rank_5d = historical_value(code, previous_five, "rotation_rank")
+        strength_now = float(row["rotation_strength_bps"])
+        strength_prev = historical_value(code, previous, "rotation_strength_bps")
+        strength_5d = historical_value(
+            code, previous_five, "rotation_strength_bps"
+        )
+        state_prev = historical_value(code, previous, "state")
+        state_5d = historical_value(code, previous_five, "state")
+        flow_5d_prev = historical_value(code, previous, "flow_5d")
+        current.loc[index, "rank_previous"] = rank_prev
+        current.loc[index, "rank_5d_ago"] = rank_5d
+        current.loc[index, "rank_change_1d"] = (
+            rank_prev - rank_now
+            if np.isfinite(rank_now) and np.isfinite(rank_prev)
+            else np.nan
+        )
+        current.loc[index, "rank_change_5d"] = (
+            rank_5d - rank_now
+            if np.isfinite(rank_now) and np.isfinite(rank_5d)
+            else np.nan
+        )
+        current.loc[index, "strength_previous_bps"] = strength_prev
+        current.loc[index, "strength_5d_ago_bps"] = strength_5d
+        current.loc[index, "strength_change_1d_bps"] = (
+            strength_now - strength_prev
+            if np.isfinite(strength_now) and np.isfinite(strength_prev)
+            else np.nan
+        )
+        current.loc[index, "strength_change_5d_per_day_bps"] = (
+            (strength_now - strength_5d) / 5
+            if np.isfinite(strength_now) and np.isfinite(strength_5d)
+            else np.nan
+        )
+        current.loc[index, "improvement_speed_bps"] = (
+            0.40 * current.loc[index, "strength_change_1d_bps"]
+            + 0.60 * current.loc[index, "strength_change_5d_per_day_bps"]
+        )
+        current.loc[index, "state_previous"] = state_prev
+        current.loc[index, "state_5d_ago"] = state_5d
+        current.loc[index, "flow_5d_previous"] = flow_5d_prev
+        current.loc[index, "transition_previous"] = (
+            f"{state_prev}→{row['state']}"
+            if isinstance(state_prev, str)
+            else "数据不足"
+        )
+        current.loc[index, "transition_5d"] = (
+            f"{state_5d}→{row['state']}"
+            if isinstance(state_5d, str)
+            else "数据不足"
+        )
+        streak = 0
+        industry_history = history[
+            history["l2_code"].astype(str).eq(code)
+        ].sort_values("trade_date", ascending=False)
+        for historical_state in industry_history["state"]:
+            if not isinstance(historical_state, str) or historical_state != row["state"]:
+                break
+            streak += 1
+        current.loc[index, "state_streak_days"] = streak
+
+    return {
+        "as_of": as_of,
+        "previous_date": prior_date,
+        "five_days_ago": five_days_ago,
+        "strength_formula": (
+            "rotation_strength_bps=0.60*(10000*flow_5d/amount_5d)"
+            "+0.40*(10000*flow_20d/amount_20d)"
+        ),
+        "improvement_formula": (
+            "0.40*1d_strength_change+0.60*(5d_strength_change/5)"
+        ),
+        "current": current.to_dict("records"),
+        "series": history.to_dict("records"),
+    }
+
+
+def _market_concentration(rankings: pd.DataFrame) -> dict[str, Any]:
+    """Measure current positive industry-flow concentration without netting."""
+    positive = rankings[pd.to_numeric(rankings["flow_1d"], errors="coerce") > 0].copy()
+    positive = positive.sort_values(
+        ["flow_1d", "l2_code"], ascending=[False, True], kind="stable"
+    )
+    total_positive = float(positive["flow_1d"].sum())
+    if total_positive <= 0:
+        return {
+            "positive_industry_count": 0,
+            "eligible_industry_count": int(len(rankings)),
+            "top3_share": np.nan,
+            "top5_share": np.nan,
+            "hhi": np.nan,
+            "normalized_hhi": np.nan,
+            "effective_industry_count": np.nan,
+            "label": "当日无净流入行业",
+        }
+    shares = positive["flow_1d"].astype(float) / total_positive
+    hhi = float((shares**2).sum())
+    count = len(positive)
+    normalized_hhi = (
+        1.0 if count == 1 else float((hhi - 1 / count) / (1 - 1 / count))
+    )
+    top3 = float(shares.head(3).sum())
+    top5 = float(shares.head(5).sum())
+    if count <= 3 or top3 >= 0.60 or normalized_hhi >= 0.25:
+        label = "集中于少数行业"
+    elif top3 < 0.45 and normalized_hhi < 0.15:
+        label = "较为分散"
+    else:
+        label = "中等集中"
+    return {
+        "positive_industry_count": int(count),
+        "eligible_industry_count": int(len(rankings)),
+        "positive_flow_pool": total_positive,
+        "top3_share": top3,
+        "top5_share": top5,
+        "hhi": hhi,
+        "normalized_hhi": normalized_hhi,
+        "effective_industry_count": float(1 / hhi),
+        "label": label,
+        "top_industries": positive[
+            ["l2_code", "l2_name", "flow_1d"]
+        ].head(5).to_dict("records"),
+        "denominator": "sum(max(industry_flow_1d,0)) over eligible L2 industries",
+    }
+
+
 def _state_frame(report: dict[str, Any]) -> pd.DataFrame:
     frame = _comparison_frame(report, "l2")
     frame["state"] = [
@@ -128,6 +385,33 @@ def _state_frame(report: dict[str, Any]) -> pd.DataFrame:
     frame["deepest_score"] = frame[
         ["comprehensive_score_5d", "comprehensive_score_20d"]
     ].min(axis=1)
+    rotation = pd.DataFrame(report.get("rotation_history", {}).get("current", []))
+    if not rotation.empty:
+        dynamic_columns = [
+            "l2_code",
+            "rotation_rank",
+            "rank_previous",
+            "rank_5d_ago",
+            "rank_change_1d",
+            "rank_change_5d",
+            "rotation_strength_bps",
+            "strength_change_1d_bps",
+            "strength_change_5d_per_day_bps",
+            "improvement_speed_bps",
+            "state_previous",
+            "state_5d_ago",
+            "transition_previous",
+            "transition_5d",
+            "state_streak_days",
+            "flow_5d_previous",
+        ]
+        available = [column for column in dynamic_columns if column in rotation]
+        frame = frame.merge(
+            rotation[available],
+            on="l2_code",
+            how="left",
+            validate="one_to_one",
+        )
     return frame
 
 
@@ -202,7 +486,23 @@ def _state_payload(report: dict[str, Any]) -> dict[str, Any]:
         "score_20d",
         "comprehensive_score_5d",
         "comprehensive_score_20d",
+        "rotation_rank",
+        "rank_previous",
+        "rank_5d_ago",
+        "rank_change_1d",
+        "rank_change_5d",
+        "rotation_strength_bps",
+        "strength_change_1d_bps",
+        "strength_change_5d_per_day_bps",
+        "improvement_speed_bps",
+        "state_previous",
+        "state_5d_ago",
+        "transition_previous",
+        "transition_5d",
+        "state_streak_days",
     ]
+    state_frame = _state_frame(report)
+    columns = [column for column in columns if column in state_frame.columns]
     for state, details in groups.items():
         representatives = {
             label: rows[columns].to_dict("records")
@@ -217,6 +517,186 @@ def _state_payload(report: dict[str, Any]) -> dict[str, Any]:
             "representatives": representatives,
         }
     return payload
+
+
+def _daily_answers(report: dict[str, Any]) -> dict[str, Any]:
+    """Answer the nine required daily rotation questions with auditable rows."""
+    states = _state_frame(report)
+    rotation = pd.DataFrame(report["rotation_history"]["series"])
+    current_date = str(report["rotation_history"]["as_of"])
+    previous_date = str(report["rotation_history"]["previous_date"])
+    current_daily = rotation[
+        rotation["trade_date"].astype(str).eq(current_date) & rotation["eligible"]
+    ]
+    previous_daily = rotation[
+        rotation["trade_date"].astype(str).eq(previous_date) & rotation["eligible"]
+    ]
+
+    def inflow_share(rows: pd.DataFrame) -> float:
+        if rows.empty:
+            return float("nan")
+        return float((pd.to_numeric(rows["flow_1d"], errors="coerce") > 0).mean())
+
+    current_share = inflow_share(current_daily)
+    previous_share = inflow_share(previous_daily)
+    share_change = (
+        current_share - previous_share
+        if np.isfinite(current_share) and np.isfinite(previous_share)
+        else np.nan
+    )
+    if not np.isfinite(share_change) or abs(share_change) < 0.01:
+        share_direction = "基本持平"
+    elif share_change > 0:
+        share_direction = "扩大"
+    else:
+        share_direction = "收缩"
+
+    def industry_names(rows: pd.DataFrame, maximum: int = 4) -> list[str]:
+        if rows.empty:
+            return []
+        return rows["l2_name"].astype(str).head(maximum).tolist()
+
+    def names_text(names: list[str]) -> str:
+        return "、".join(names) if names else "无符合条件行业"
+
+    persistent_inflow = states[
+        states["state"].eq("双窗净流入")
+        & pd.to_numeric(states.get("state_streak_days"), errors="coerce").ge(3)
+    ].sort_values(
+        ["rotation_strength_bps", "l2_code"],
+        ascending=[False, True],
+        kind="stable",
+    )
+    recently_turned = states[
+        pd.to_numeric(states["flow_5d"], errors="coerce").gt(0)
+        & pd.to_numeric(states.get("flow_5d_previous"), errors="coerce").le(0)
+    ].sort_values(
+        ["improvement_speed_bps", "l2_code"],
+        ascending=[False, True],
+        kind="stable",
+    )
+    cooling = states[states["state"].eq("趋势仍流入")].sort_values(
+        ["comprehensive_score_20d", "l2_code"],
+        ascending=[False, True],
+        kind="stable",
+    )
+    persistent_outflow = states[
+        states["state"].eq("双窗净流出")
+        & pd.to_numeric(states.get("state_streak_days"), errors="coerce").ge(3)
+    ].sort_values(
+        ["rotation_strength_bps", "l2_code"],
+        ascending=[True, True],
+        kind="stable",
+    )
+    improved = states.dropna(subset=["improvement_speed_bps"]).sort_values(
+        ["improvement_speed_bps", "rank_change_1d", "l2_code"],
+        ascending=[False, False, True],
+        kind="stable",
+    ).head(5)
+    worsened = states.dropna(subset=["improvement_speed_bps"]).sort_values(
+        ["improvement_speed_bps", "rank_change_1d", "l2_code"],
+        ascending=[True, True, True],
+        kind="stable",
+    ).head(5)
+    latest_rankings = report["horizons"][5]["l2"].rankings
+    inflow_quality = latest_rankings[
+        pd.to_numeric(latest_rankings["flow_1d"], errors="coerce") > 0
+    ]
+    broad = inflow_quality[
+        inflow_quality["diffusion_label_1d"].eq("普遍扩散")
+    ].sort_values(["flow_1d", "l2_code"], ascending=[False, True])
+    narrow = inflow_quality[
+        inflow_quality["diffusion_label_1d"].eq("少数个股驱动")
+    ].sort_values(["flow_1d", "l2_code"], ascending=[False, True])
+    concentration = report["market_concentration"]
+
+    persistent_inflow_names = industry_names(persistent_inflow)
+    recently_turned_names = industry_names(recently_turned)
+    cooling_names = industry_names(cooling)
+    persistent_outflow_names = industry_names(persistent_outflow)
+    improved_names = industry_names(improved)
+    worsened_names = industry_names(worsened)
+    broad_names = industry_names(broad)
+    narrow_names = industry_names(narrow)
+    return {
+        "inflow_industry_share": {
+            "current": current_share,
+            "previous": previous_share,
+            "change_percentage_points": (
+                share_change * 100 if np.isfinite(share_change) else np.nan
+            ),
+            "direction": share_direction,
+            "text": (
+                f"净流入行业占比{share_direction}：{current_share:.1%}，"
+                f"较前一日{share_change:+.1%}。"
+            ),
+        },
+        "market_concentration": {
+            **concentration,
+            "text": (
+                f"流入{concentration['label']}：Top3 "
+                f"{concentration['top3_share']:.0%} · Top5 "
+                f"{concentration['top5_share']:.0%} · HHI "
+                f"{concentration['normalized_hhi']:.2f}。"
+                if np.isfinite(concentration["top3_share"])
+                else "当日无净流入行业，集中度不适用。"
+            ),
+        },
+        "persistent_inflow": {
+            "industries": persistent_inflow_names,
+            "text": f"持续流入：{names_text(persistent_inflow_names)}。",
+        },
+        "recently_turned_in": {
+            "industries": recently_turned_names,
+            "text": f"最近刚转入：{names_text(recently_turned_names)}。",
+        },
+        "medium_strong_short_cooling": {
+            "industries": cooling_names,
+            "text": f"中期强势但短期降温：{names_text(cooling_names)}。",
+        },
+        "persistent_outflow": {
+            "industries": persistent_outflow_names,
+            "text": f"持续流出：{names_text(persistent_outflow_names)}。",
+        },
+        "inflow_diffusion": {
+            "broad_diffusion": broad_names,
+            "few_stocks_driven": narrow_names,
+            "text": (
+                f"普遍扩散：{names_text(broad_names)}；"
+                f"少数个股驱动：{names_text(narrow_names)}。"
+            ),
+        },
+        "fastest_improving": {
+            "industries": improved_names,
+            "rows": improved[
+                [
+                    "l2_code",
+                    "l2_name",
+                    "improvement_speed_bps",
+                    "rank_change_1d",
+                    "rank_change_5d",
+                    "transition_previous",
+                    "state_streak_days",
+                ]
+            ].to_dict("records"),
+            "text": f"改善最快：{names_text(improved_names)}。",
+        },
+        "fastest_worsening": {
+            "industries": worsened_names,
+            "rows": worsened[
+                [
+                    "l2_code",
+                    "l2_name",
+                    "improvement_speed_bps",
+                    "rank_change_1d",
+                    "rank_change_5d",
+                    "transition_previous",
+                    "state_streak_days",
+                ]
+            ].to_dict("records"),
+            "text": f"恶化最快：{names_text(worsened_names)}。",
+        },
+    }
 
 
 def _history_payload(report: dict[str, Any], level: str) -> dict[str, Any]:
@@ -276,7 +756,7 @@ def _market_flow_history(
     market_flow_5d: float,
     market_flow_20d: float,
 ) -> dict[str, Any]:
-    """Return 60 real-date trailing market flows from the frozen report pool."""
+    """Return a 60-date first-day-zero cumulative market flow series."""
     required = {
         "trade_date",
         "l2_code",
@@ -304,49 +784,56 @@ def _market_flow_history(
             f"{MARKET_FLOW_MINIMUM_DAYS} existing trading days, found "
             f"{len(dates)}"
         )
-    rolling: dict[int, list[pd.Series]] = {5: [], 20: []}
-    for _, group in work.groupby(["l2_code", "l2_name"], sort=False):
-        series = (
-            group.set_index("trade_date")["inst_net_flow"]
-            .reindex(dates)
-            .astype(float)
-        )
-        for horizon in (5, 20):
-            rolling[horizon].append(
-                series.rolling(horizon, min_periods=horizon).sum()
-            )
-    market_5d = pd.concat(rolling[5], axis=1).sum(axis=1, min_count=1)
-    market_20d = pd.concat(rolling[20], axis=1).sum(axis=1, min_count=1)
+    market_daily = (
+        work.groupby("trade_date")["inst_net_flow"]
+        .sum(min_count=1)
+        .reindex(dates)
+        .astype(float)
+    )
     history = pd.DataFrame(
         {
             "trade_date": dates,
-            "market_inst_flow_5d": market_5d.to_numpy(),
-            "market_inst_flow_20d": market_20d.to_numpy(),
+            "market_large_active_flow_daily": market_daily.to_numpy(),
         }
-    ).tail(MARKET_FLOW_DISPLAY_DAYS)
+    ).tail(MARKET_FLOW_DISPLAY_DAYS).reset_index(drop=True)
     if len(history) != MARKET_FLOW_DISPLAY_DAYS or history[
-        ["market_inst_flow_5d", "market_inst_flow_20d"]
-    ].isna().any().any():
+        "market_large_active_flow_daily"
+    ].isna().any():
         raise ValueError("market flow history could not produce 60 full points")
-    raw_last_5d = float(history.iloc[-1]["market_inst_flow_5d"])
-    raw_last_20d = float(history.iloc[-1]["market_inst_flow_20d"])
+    cumulative = history["market_large_active_flow_daily"].cumsum()
+    history["market_large_active_flow_cumulative"] = (
+        cumulative - float(cumulative.iloc[0])
+    )
+    raw_last_5d = float(
+        history.iloc[-1]["market_large_active_flow_cumulative"]
+        - history.iloc[-6]["market_large_active_flow_cumulative"]
+    )
+    raw_last_20d = float(
+        history.iloc[-1]["market_large_active_flow_cumulative"]
+        - history.iloc[-21]["market_large_active_flow_cumulative"]
+    )
     matches = bool(
         np.isclose(raw_last_5d, market_flow_5d, rtol=0, atol=1e-6)
         and np.isclose(raw_last_20d, market_flow_20d, rtol=0, atol=1e-6)
     )
     if not matches:
-        raise ValueError("market flow history endpoint does not match cards")
-    history.loc[history.index[-1], "market_inst_flow_5d"] = market_flow_5d
-    history.loc[history.index[-1], "market_inst_flow_20d"] = market_flow_20d
+        raise ValueError("market cumulative recent changes do not match cards")
     return {
         "unit": "source_thousand_yuan",
         "display_unit": "亿元",
-        "window_definition": "trailing existing trading days, inclusive",
-        "frozen_universe": "same frozen mapped research-stock panel as cards",
+        "window_definition": "last 60 existing trading days; first point reset to zero",
+        "frozen_universe": (
+            "same report-date eligible L2 industry universe as 5d/20d cards"
+        ),
+        "flow_semantics": (
+            "large+extra-large active buy amount minus active sell amount"
+        ),
         "display_points": MARKET_FLOW_DISPLAY_DAYS,
         "minimum_input_trading_days": MARKET_FLOW_MINIMUM_DAYS,
         "available_input_trading_days": len(dates),
         "endpoint_matches_cards": matches,
+        "recent_5d_change": market_flow_5d,
+        "recent_20d_change": market_flow_20d,
         "endpoint_raw_delta_5d": raw_last_5d - market_flow_5d,
         "endpoint_raw_delta_20d": raw_last_20d - market_flow_20d,
         "series": history.to_dict("records"),
@@ -387,7 +874,12 @@ def build_report_data(
         float(horizons[5]["l2"].quality["market_flow_5d"]),
         float(horizons[20]["l2"].quality["market_flow_20d"]),
     )
+    report["rotation_history"] = _rotation_history(frame)
+    report["market_concentration"] = _market_concentration(
+        horizons[5]["l2"].rankings
+    )
     report["fund_states"] = _state_payload(report)
+    report["daily_answers"] = _daily_answers(report)
     report["history"] = {
         "l1": _history_payload(report, "l1"),
         "l2": _history_payload(report, "l2"),
@@ -459,7 +951,15 @@ def write_datasets(
     combined: dict[str, Any] = {
         "as_of": as_of,
         "comprehensive_score_formula": "comprehensive_score=10000*S_H",
+        "fund_label": "大额主动资金",
+        "fund_definition": (
+            "大单+特大单主动买入额−主动卖出额；反映大额主动成交方向，"
+            "不代表真实机构账户身份、实际持仓或持仓变化"
+        ),
         "fund_states": report["fund_states"],
+        "daily_answers": report["daily_answers"],
+        "market_concentration": report["market_concentration"],
+        "rotation_history": report["rotation_history"],
         "history": report["history"],
         "market_flow_history": report["market_flow_history"],
         "horizons": {},
@@ -503,8 +1003,16 @@ def write_datasets(
         )
         paths.append(history_path)
 
+    rotation_path = (
+        output_dir / f"industry_radar_l2_rotation_changes_{as_of}.csv"
+    )
+    pd.DataFrame(report["rotation_history"]["current"]).to_csv(
+        rotation_path, index=False, encoding="utf-8-sig"
+    )
+    paths.append(rotation_path)
+
     market_history_path = (
-        output_dir / f"industry_radar_market_inst_flow_60d_{as_of}.csv"
+        output_dir / f"industry_radar_market_large_active_flow_60d_{as_of}.csv"
     )
     pd.DataFrame(report["market_flow_history"]["series"]).to_csv(
         market_history_path, index=False, encoding="utf-8-sig"
@@ -621,8 +1129,10 @@ def _short_date(value: str) -> str:
 def _header(c, as_of: str, page: int, title: str) -> None:
     c.setFillColorRGB(*NAVY)
     c.rect(0, PAGE_HEIGHT - 42, PAGE_WIDTH, 42, fill=1, stroke=0)
-    _draw_text(c, MARGIN, PAGE_HEIGHT - 27, "A股行业资金雷达", 16, (1, 1, 1))
-    _draw_text(c, MARGIN + 160, PAGE_HEIGHT - 25, title, 10, (0.86, 0.90, 0.95))
+    _draw_text(
+        c, MARGIN, PAGE_HEIGHT - 27, "A股行业大额主动资金雷达", 14.5, (1, 1, 1)
+    )
+    _draw_text(c, MARGIN + 218, PAGE_HEIGHT - 25, title, 10, (0.86, 0.90, 0.95))
     _right_text(
         c,
         PAGE_WIDTH - MARGIN,
@@ -798,6 +1308,53 @@ def _draw_state_card(
         )
 
 
+def _draw_daily_answers(
+    c, x: float, y: float, width: float, height: float, answers: dict[str, Any]
+) -> None:
+    """Draw the nine required daily conclusions in three compact columns."""
+    _box(c, x, y, width, height, (0.985, 0.99, 1.0))
+    columns = (
+        (
+            "市场扩散",
+            [
+                answers["inflow_industry_share"]["text"],
+                answers["market_concentration"]["text"],
+                answers["persistent_inflow"]["text"],
+            ],
+        ),
+        (
+            "状态轮动",
+            [
+                answers["recently_turned_in"]["text"],
+                answers["medium_strong_short_cooling"]["text"],
+                answers["persistent_outflow"]["text"],
+            ],
+        ),
+        (
+            "质量变化",
+            [
+                answers["inflow_diffusion"]["text"],
+                answers["fastest_improving"]["text"],
+                answers["fastest_worsening"]["text"],
+            ],
+        ),
+    )
+    column_width = (width - 28) / 3
+    for column_index, (title, lines) in enumerate(columns):
+        left = x + 12 + column_index * column_width
+        _draw_text(c, left, y + height - 17, title, 7.2, BLUE)
+        for line_index, line in enumerate(lines):
+            compact = str(line).replace("。", "")
+            _draw_text(
+                c,
+                left,
+                y + height - 34 - line_index * 14,
+                compact[:39],
+                5.2,
+                MUTED,
+            )
+
+
 def _history_bounds(paths: list[dict[str, Any]]) -> tuple[float, float]:
     values = [
         float(value)
@@ -844,7 +1401,7 @@ def _draw_history_chart(
         c,
         x + 14,
         y + height - 43,
-        "机构净流入逐日累计，首日归零；阴影为最后20个交易日",
+        "大额主动资金净流入逐日累计，首日归零；阴影为最后20个交易日",
         6.2,
         MUTED,
     )
@@ -922,18 +1479,33 @@ def _draw_history_chart(
 def _draw_market_flow_chart(
     c, x: float, y: float, width: float, height: float, payload: dict[str, Any]
 ) -> None:
-    """Draw 5/20-day market flows on one comparable billion-yuan axis."""
+    """Draw the 60-date first-day-zero cumulative large active flow."""
     _box(c, x, y, width, height)
-    _draw_text(c, x + 14, y + height - 20, "市场机构资金：最近60个交易日滚动净额", 10.5)
-    _draw_text(c, x + 14, y + height - 38, "同一纵轴 · 单位：亿元 · 仅使用各历史点及以前数据", 6.4, MUTED)
+    _draw_text(
+        c,
+        x + 14,
+        y + height - 20,
+        "市场大额主动资金：近60个交易日累计净流入",
+        10.5,
+    )
+    _draw_text(
+        c,
+        x + 14,
+        y + height - 38,
+        "近60个交易日 · 首日归零 · 单位：亿元 · 上升=净流入 / 下降=净流出 · 斜率=强弱",
+        6.2,
+        MUTED,
+    )
     series = pd.DataFrame(payload["series"])
     dates = series["trade_date"].astype(str).tolist()
-    five = series["market_inst_flow_5d"].astype(float).to_numpy() / 100_000
-    twenty = series["market_inst_flow_20d"].astype(float).to_numpy() / 100_000
-    values = np.concatenate((five, twenty, np.array([0.0])))
+    cumulative = (
+        series["market_large_active_flow_cumulative"].astype(float).to_numpy()
+        / 100_000
+    )
+    values = np.concatenate((cumulative, np.array([0.0])))
     low, high = float(np.nanmin(values)), float(np.nanmax(values))
     span = high - low
-    padding = max(span * 0.10, 1.0)
+    padding = max(span * 0.10, max(abs(low), abs(high)) * 0.05, 1.0)
     low -= padding
     high += padding
     chart_x, chart_y = x + 50, y + 25
@@ -945,48 +1517,54 @@ def _draw_market_flow_chart(
     def py(value: float) -> float:
         return chart_y + chart_h * (value - low) / (high - low)
 
+    zero_y = py(0.0)
+    c.setFillColorRGB(1.0, 0.965, 0.965)
+    c.rect(chart_x, zero_y, chart_w, chart_y + chart_h - zero_y, fill=1, stroke=0)
+    c.setFillColorRGB(0.96, 0.985, 0.965)
+    c.rect(chart_x, chart_y, chart_w, zero_y - chart_y, fill=1, stroke=0)
     c.setLineWidth(0.35)
     for value in np.linspace(low, high, 5):
         position = py(float(value))
         c.setStrokeColorRGB(0.86, 0.88, 0.91)
         c.line(chart_x, position, chart_x + chart_w, position)
         _right_text(c, chart_x - 5, position - 2, f"{value:+.0f}", 5.4, MUTED)
-    zero_y = py(0.0)
     c.setStrokeColorRGB(*MUTED)
-    c.setLineWidth(0.8)
+    c.setLineWidth(1.0)
     c.line(chart_x, zero_y, chart_x + chart_w, zero_y)
-    for values_line, color in ((five, BLUE), (twenty, ROSE)):
-        c.setStrokeColorRGB(*color)
-        c.setLineWidth(1.35)
-        path = c.beginPath()
-        path.moveTo(px(0), py(float(values_line[0])))
-        for index, value in enumerate(values_line[1:], 1):
-            path.lineTo(px(index), py(float(value)))
-        c.drawPath(path, stroke=1, fill=0)
+    c.setStrokeColorRGB(*BLUE)
+    c.setLineWidth(1.55)
+    path = c.beginPath()
+    path.moveTo(px(0), py(float(cumulative[0])))
+    for index, value in enumerate(cumulative[1:], 1):
+        path.lineTo(px(index), py(float(value)))
+    c.drawPath(path, stroke=1, fill=0)
     tick_indexes = (0, 14, 29, 44, 59)
     for index in tick_indexes:
         _center_text(c, px(index), chart_y - 13, _short_date(dates[index]), 5.4, MUTED)
-    legend_x = x + width - 203
-    for offset, color, label in (
-        (0, BLUE, "5日滚动净额"),
-        (92, ROSE, "20日滚动净额"),
-    ):
-        c.setStrokeColorRGB(*color)
-        c.setLineWidth(1.5)
-        c.line(legend_x + offset, y + height - 25, legend_x + 18 + offset, y + height - 25)
-        _draw_text(c, legend_x + 23 + offset, y + height - 28, label, 5.8, color)
+    _right_text(
+        c,
+        x + width - 15,
+        y + height - 21,
+        (
+            f"近5日 {_money(payload['recent_5d_change'])} · "
+            f"近20日 {_money(payload['recent_20d_change'])}"
+        ),
+        6.0,
+        MUTED,
+    )
     end_x = px(59)
-    end5_y, end20_y = py(float(five[-1])), py(float(twenty[-1]))
-    if abs(end5_y - end20_y) < 12:
-        end5_y += 7
-        end20_y -= 7
-    for endpoint_y, color, label, value in (
-        (end5_y, BLUE, "5日", five[-1]),
-        (end20_y, ROSE, "20日", twenty[-1]),
-    ):
-        c.setFillColorRGB(*color)
-        c.circle(end_x, endpoint_y, 2.2, fill=1, stroke=0)
-        _right_text(c, end_x - 5, endpoint_y + 2, f"{label} {value:+.1f}亿", 5.8, color)
+    endpoint_y = py(float(cumulative[-1]))
+    endpoint_color = RED if cumulative[-1] >= 0 else GREEN
+    c.setFillColorRGB(*endpoint_color)
+    c.circle(end_x, endpoint_y, 2.5, fill=1, stroke=0)
+    _right_text(
+        c,
+        end_x - 5,
+        min(endpoint_y + 4, chart_y + chart_h - 5),
+        f"累计 {cumulative[-1]:+.1f}亿",
+        5.9,
+        endpoint_color,
+    )
 
 
 def _focus_rows(report: dict[str, Any]) -> list[pd.Series]:
@@ -1010,6 +1588,104 @@ def _focus_rows(report: dict[str, Any]) -> list[pd.Series]:
     return rows[:4]
 
 
+def _draw_rotation_table(
+    c,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    title: str,
+    rows: pd.DataFrame,
+    accent: tuple[float, float, float],
+) -> None:
+    """Draw one improvement/deterioration table with migration evidence."""
+    _box(c, x, y, width, height)
+    _draw_text(c, x + 14, y + height - 24, title, 11, accent)
+    headers = (
+        (x + 14, "行业", "left"),
+        (x + 145, "可比强度", "right"),
+        (x + 244, "Δ1日 / Δ5日均", "right"),
+        (x + 350, "当前名次 / Δ1 / Δ5", "right"),
+        (x + 503, "昨日→今日", "left"),
+        (x + 639, "连续", "right"),
+        (x + width - 14, "内部流入质量", "right"),
+    )
+    for hx, label, align in headers:
+        if align == "right":
+            _right_text(c, hx, y + height - 47, label, 5.7, MUTED)
+        else:
+            _draw_text(c, hx, y + height - 47, label, 5.7, MUTED)
+    for row_index, row in enumerate(rows.head(5).itertuples(index=False)):
+        row_y = y + height - 78 - row_index * 33
+        if row_index % 2 == 0:
+            c.setFillColorRGB(0.958, 0.972, 0.988)
+            c.rect(x + 8, row_y - 9, width - 16, 24, fill=1, stroke=0)
+        _draw_text(c, x + 14, row_y, str(row.l2_name)[:10], 7.0)
+        _right_text(
+            c,
+            x + 145,
+            row_y,
+            f"{float(row.rotation_strength_bps):+.1f}bp",
+            6.3,
+            _flow_color(row.rotation_strength_bps),
+        )
+        _right_text(
+            c,
+            x + 244,
+            row_y,
+            (
+                f"{float(row.strength_change_1d_bps):+.1f} / "
+                f"{float(row.strength_change_5d_per_day_bps):+.1f}bp"
+            ),
+            6.0,
+            accent,
+        )
+        _right_text(
+            c,
+            x + 350,
+            row_y,
+            (
+                f"{int(row.rotation_rank)} / "
+                f"{float(row.rank_change_1d):+g} / "
+                f"{float(row.rank_change_5d):+g}"
+            ),
+            6.0,
+        )
+        _draw_text(c, x + 503, row_y, str(row.transition_previous)[:18], 5.8)
+        _right_text(
+            c,
+            x + 639,
+            row_y,
+            f"{int(row.state_streak_days)}日",
+            6.0,
+        )
+        _right_text(
+            c,
+            x + width - 14,
+            row_y,
+            (
+                f"净流入股{float(row.net_inflow_stock_ratio_1d):.0%} · "
+                f"Top3 {float(row.top3_direction_contribution_1d):.0%} · "
+                f"{row.diffusion_label_1d}"
+            ),
+            5.7,
+            MUTED,
+        )
+
+
+def _rotation_change_frame(report: dict[str, Any]) -> pd.DataFrame:
+    dynamic = _state_frame(report)
+    quality = report["horizons"][5]["l2"].rankings[
+        [
+            "l2_code",
+            "net_inflow_stock_ratio_1d",
+            "top3_direction_contribution_1d",
+            "diffusion_label_1d",
+        ]
+    ]
+    return dynamic.merge(quality, on="l2_code", how="left", validate="one_to_one")
+
+
 def _merged_detail(report: dict[str, Any]) -> pd.DataFrame:
     five = report["horizons"][5]["l2"].rankings
     twenty = report["horizons"][20]["l2"].rankings
@@ -1024,7 +1700,17 @@ def _merged_detail(report: dict[str, Any]) -> pd.DataFrame:
         "score",
         "comprehensive_score",
     ]
-    five_columns = ["l2_code", "l2_name", "flow_5d", *common]
+    five_columns = [
+        "l2_code",
+        "l2_name",
+        "flow_5d",
+        "net_inflow_stock_ratio_1d",
+        "top1_direction_contribution_1d",
+        "top3_direction_contribution_1d",
+        "top5_direction_contribution_1d",
+        "diffusion_label_1d",
+        *common,
+    ]
     twenty_columns = ["l2_code", "flow_20d", *common]
     return five[five_columns].merge(
         twenty[twenty_columns],
@@ -1035,7 +1721,7 @@ def _merged_detail(report: dict[str, Any]) -> pd.DataFrame:
 
 
 def _write_pdf_reportlab(report: dict[str, Any], path: Path) -> None:
-    """Render the final ten-page report using only ReportLab primitives."""
+    """Render the final eleven-page report using only ReportLab primitives."""
     c = _pdf_canvas(path)
     as_of = str(report["as_of"])
     five_l1: RadarResult = report["horizons"][5]["l1"]
@@ -1053,11 +1739,11 @@ def _write_pdf_reportlab(report: dict[str, Any], path: Path) -> None:
     # 1. Market overview.
     page(1, "市场总览")
     market_history = report["market_flow_history"]
-    market5 = float(market_history["series"][-1]["market_inst_flow_5d"])
-    market20 = float(market_history["series"][-1]["market_inst_flow_20d"])
+    market5 = float(market_history["recent_5d_change"])
+    market20 = float(market_history["recent_20d_change"])
     for x, label, value, subtitle in (
-        (MARGIN, "5日市场机构资金", market5, "短线资金底色"),
-        (PAGE_WIDTH / 2 + 8, "20日市场机构资金", market20, "趋势资金底色"),
+        (MARGIN, "5日市场大额主动资金", market5, "短线资金底色"),
+        (PAGE_WIDTH / 2 + 8, "20日市场大额主动资金", market20, "趋势资金底色"),
     ):
         _box(c, x, 455, 383, 66)
         _draw_text(c, x + 18, 494, label, 9, MUTED)
@@ -1090,21 +1776,34 @@ def _write_pdf_reportlab(report: dict[str, Any], path: Path) -> None:
                 y - 13,
                 (
                     f"同向天数 {row.consistent_day_count}/{horizon}天 · "
-                    f"同向个股 {row.consistent_stock_count}/{row.breadth_stock_count}只"
+                    f"净流入股 {row.net_inflow_stock_ratio_1d:.0%} · "
+                    f"Top3贡献 {row.top3_direction_contribution_1d:.0%}"
                 ),
                 6.1,
                 MUTED,
             )
-    finish("机构资金为大单+特大单订单规模代理，并非真实机构账户身份；同期涨跌不参与评分。")
+    finish(
+        "大额主动资金=大单+特大单主动买入额−主动卖出额；仅反映大额主动成交方向，"
+        "不代表真实机构账户身份、实际持仓或持仓变化。"
+    )
 
     # 2. Complete four-state list.
-    page(2, "四类资金状态清单")
+    page(2, "每日结论与四类资金状态")
     state_groups = _state_groups(_state_frame(report))
+    _draw_daily_answers(
+        c, MARGIN, 447, PAGE_WIDTH - 2 * MARGIN, 74, report["daily_answers"]
+    )
     positions = {
-        "双窗净流入": (MARGIN, 302),
-        "短线转入": (PAGE_WIDTH / 2 + 8, 302),
+        "双窗净流入": (MARGIN, 278),
+        "短线转入": (PAGE_WIDTH / 2 + 8, 278),
         "趋势仍流入": (MARGIN, 65),
         "双窗净流出": (PAGE_WIDTH / 2 + 8, 65),
+    }
+    heights = {
+        "双窗净流入": 155,
+        "短线转入": 155,
+        "趋势仍流入": 199,
+        "双窗净流出": 199,
     }
     accents = {
         "双窗净流入": RED,
@@ -1114,8 +1813,13 @@ def _write_pdf_reportlab(report: dict[str, Any], path: Path) -> None:
     }
     for state in STATE_ORDER:
         x, y = positions[state]
-        _draw_state_card(c, x, y, 383, 217, state, state_groups[state], accents[state])
-    finish("分类严格使用5日/20日实际净流入正负；代表行业按卡片所述确定指标选取，收益率不参与。")
+        _draw_state_card(
+            c, x, y, 383, heights[state], state, state_groups[state], accents[state]
+        )
+    finish(
+        "分类与占比仅使用报告日有效成分股不少于10只的申万二级行业；"
+        "状态迁移、连续天数及改善/恶化明细见导出数据。"
+    )
 
     # 3-6. Symmetric ranking pages.
     ranking_pages = (
@@ -1146,8 +1850,50 @@ def _write_pdf_reportlab(report: dict[str, Any], path: Path) -> None:
             "选择基于报告日20日最终排名；仅复核截至报告日的最近40个现有交易日历史路径，不是回测、预测或投资建议。"
         )
 
-    # 9. Representative calculation chains.
-    page(9, "代表行业完整计算链")
+    # 9. Comparable strength changes, rank changes, migrations, and quality.
+    page(9, "资金状态变化：改善与恶化")
+    rotation_changes = _rotation_change_frame(report)
+    improving = rotation_changes.dropna(
+        subset=["improvement_speed_bps"]
+    ).sort_values(
+        ["improvement_speed_bps", "rank_change_1d", "l2_code"],
+        ascending=[False, False, True],
+        kind="stable",
+    )
+    worsening = rotation_changes.dropna(
+        subset=["improvement_speed_bps"]
+    ).sort_values(
+        ["improvement_speed_bps", "rank_change_1d", "l2_code"],
+        ascending=[True, True, True],
+        kind="stable",
+    )
+    _draw_rotation_table(
+        c,
+        MARGIN,
+        294,
+        PAGE_WIDTH - 2 * MARGIN,
+        226,
+        "改善最快 Top 5",
+        improving,
+        RED,
+    )
+    _draw_rotation_table(
+        c,
+        MARGIN,
+        55,
+        PAGE_WIDTH - 2 * MARGIN,
+        226,
+        "恶化最快 Top 5",
+        worsening,
+        GREEN,
+    )
+    finish(
+        "改善/恶化按可比资金强度变化排序，排名变化仅作辅助；"
+        "排名变化=历史名次−当前名次，正数表示上升。"
+    )
+
+    # 10. Representative calculation chains.
+    page(10, "代表行业完整计算链")
     detail = _merged_detail(report)
     cards = [(34, 302), (430, 302), (34, 65), (430, 65)]
     for focus, (x, y) in zip(_focus_rows(report), cards):
@@ -1192,11 +1938,25 @@ def _write_pdf_reportlab(report: dict[str, Any], path: Path) -> None:
                 6.1,
                 MUTED,
             )
-        _draw_text(c, x + 14, y + 22, "综合分恒等于 10,000×原始 S_H；本卡完整保留原始值供复核。", 5.9, MUTED)
+        _draw_text(
+            c,
+            x + 14,
+            y + 22,
+            (
+                f"当日净流入股 {row['net_inflow_stock_ratio_1d']:.0%} · "
+                f"Top1/3/5方向贡献 "
+                f"{row['top1_direction_contribution_1d']:.0%}/"
+                f"{row['top3_direction_contribution_1d']:.0%}/"
+                f"{row['top5_direction_contribution_1d']:.0%} · "
+                f"{row['diffusion_label_1d']}"
+            ),
+            5.7,
+            MUTED,
+        )
     finish()
 
-    # 10. Formula, semantics, coverage, and reproducibility.
-    page(10, "公式、数据覆盖与复核说明")
+    # 11. Formula, semantics, coverage, and reproducibility.
+    page(11, "公式、数据覆盖与复核说明")
     _draw_text(c, MARGIN, 516, "唯一、对称、有符号公式", 16)
     _box(c, MARGIN, 337, PAGE_WIDTH - 2 * MARGIN, 151)
     method_lines = [
@@ -1214,9 +1974,9 @@ def _write_pdf_reportlab(report: dict[str, Any], path: Path) -> None:
     semantic_lines = [
         "确认乘数恒正，范围 exp(-0.3)≈0.741 到 1；没有流入/流出分支，也不会翻转原始资金方向。",
         "净流入为正、净流出为负、零流量为零；零流量时同向天数与同向个股比例均明确定义为0。",
-        f"原始 S_H 量化到 {quality['score_round_decimals']} 位后排序；并列依次使用 I_H、本窗口/5日/1日净流入及行业代码。",
-        "同期涨跌为行业成分股流通市值加权涨跌；收益率、流通市值和异常度均不参与评分与排序。",
-        "40日轨迹只使用面板最后40个现有交易日，首日归零；Top/Bottom 5来自报告日20日最终排名。",
+        f"申万二级仅纳入报告日有效成分股不少于{quality['minimum_l2_valid_stocks']}只的行业；停牌、成交额≤0或关键字段缺失不计。",
+        "Top1/3/5方向贡献以行业同方向股票资金池为分母，不以正负抵消后的行业净额为分母，比例范围0–100%。",
+        "可比资金强度=0.60×5日净额/成交额+0.40×20日净额/成交额；改善榜看强度变化，排名变化仅辅助。",
     ]
     for index, line in enumerate(semantic_lines):
         _draw_text(c, MARGIN + 18, 281 - index * 23, line, 7.4, MUTED)
@@ -1238,19 +1998,24 @@ def _write_pdf_reportlab(report: dict[str, Any], path: Path) -> None:
         MARGIN,
         92,
         (
-            f"报告日缺失率：机构资金 {quality['latest_missing_flow_rate']:.2%} · "
+            f"报告日缺失率：大额主动资金 {quality['latest_missing_flow_rate']:.2%} · "
             f"成交额 {quality['latest_missing_amount_rate']:.2%} · "
-            f"流通市值 {quality['latest_missing_market_value_rate']:.2%}"
+            f"流通市值 {quality['latest_missing_market_value_rate']:.2%} · "
+            f"二级行业纳入 {quality['eligible_industry_count']} / "
+            f"小样本剔除 {quality['excluded_small_sample_industry_count']}"
         ),
         7.2,
         MUTED,
     )
-    finish("本报告为报告日资金观察与历史路径复核，不构成回测、预测或投资建议。")
+    finish(
+        "大额主动资金反映大单+特大单主动成交方向，不代表真实机构账户身份、"
+        "实际持仓或持仓变化；本报告不构成投资建议。"
+    )
     c.save()
 
 
 def write_pdf(report: dict[str, Any], path: Path) -> None:
-    """Write the single combined ten-page report."""
+    """Write the single combined eleven-page report."""
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_pdf_reportlab(report, path)
 

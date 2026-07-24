@@ -17,6 +17,7 @@ from server.generate_industry_radar import (
     STATE_ORDER,
     _comprehensive,
     _history_csv,
+    _market_concentration,
     _market_flow_history,
     _money,
     _ranking_rows,
@@ -106,15 +107,18 @@ class ReportDatasetTests(unittest.TestCase):
         )
         self.assertTrue(payload["endpoint_matches_cards"])
         self.assertEqual(
-            history.iloc[-1]["market_inst_flow_5d"],
+            payload["recent_5d_change"],
             report["horizons"][5]["l2"].quality["market_flow_5d"],
         )
         self.assertEqual(
-            history.iloc[-1]["market_inst_flow_20d"],
+            payload["recent_20d_change"],
             report["horizons"][20]["l2"].quality["market_flow_20d"],
         )
+        self.assertEqual(
+            history.iloc[0]["market_large_active_flow_cumulative"], 0
+        )
 
-    def test_market_flow_history_uses_only_each_point_and_earlier_data(self):
+    def test_market_flow_history_daily_and_cumulative_are_consistent(self):
         source = panel()
         report = build_report_data(source)
         history = pd.DataFrame(report["market_flow_history"]["series"])
@@ -130,22 +134,66 @@ class ReportDatasetTests(unittest.TestCase):
             .sum()
             .sort_index()
         )
-        for row in history.itertuples(index=False):
-            prefix = daily.loc[: row.trade_date]
-            self.assertAlmostEqual(row.market_inst_flow_5d, prefix.tail(5).sum())
-            self.assertAlmostEqual(row.market_inst_flow_20d, prefix.tail(20).sum())
+        expected_daily = daily.reindex(history["trade_date"]).to_numpy()
+        np.testing.assert_allclose(
+            history["market_large_active_flow_daily"], expected_daily
+        )
+        cumulative = history["market_large_active_flow_cumulative"].to_numpy()
+        np.testing.assert_allclose(np.diff(cumulative), expected_daily[1:])
+        self.assertAlmostEqual(cumulative[-1] - cumulative[-6], expected_daily[-5:].sum())
+        self.assertAlmostEqual(cumulative[-1] - cumulative[-21], expected_daily[-20:].sum())
 
-    def test_market_flow_history_rejects_less_than_79_dates(self):
+    def test_market_flow_history_rejects_less_than_60_dates(self):
         source = panel(days=MARKET_FLOW_MINIMUM_DAYS - 1)
         daily = analyze_industries(source, "l2", horizon=20).daily_flows
-        with self.assertRaisesRegex(ValueError, "at least 79"):
+        with self.assertRaisesRegex(ValueError, "at least 60"):
             _market_flow_history(daily, 0.0, 0.0)
+
+    def test_market_concentration_uses_positive_pool_not_net_market_flow(self):
+        rankings = pd.DataFrame(
+            {
+                "l2_code": ["A", "B", "C"],
+                "l2_name": ["甲", "乙", "丙"],
+                "flow_1d": [100.0, -99.999, 50.0],
+            }
+        )
+        concentration = _market_concentration(rankings)
+        self.assertAlmostEqual(concentration["top3_share"], 1.0)
+        self.assertAlmostEqual(concentration["top5_share"], 1.0)
+        self.assertAlmostEqual(concentration["top_industries"][0]["flow_1d"], 100)
+        self.assertTrue(0 <= concentration["normalized_hhi"] <= 1)
 
     def test_builds_both_levels_horizons_states_and_history(self):
         report = build_report_data(panel())
         self.assertEqual(report["as_of"], report["l1"].quality["as_of"])
         self.assertEqual(set(report["horizons"]), {5, 20})
         self.assertEqual(set(report["fund_states"]), set(STATE_ORDER))
+        self.assertEqual(
+            set(report["daily_answers"]),
+            {
+                "inflow_industry_share",
+                "market_concentration",
+                "persistent_inflow",
+                "recently_turned_in",
+                "medium_strong_short_cooling",
+                "persistent_outflow",
+                "inflow_diffusion",
+                "fastest_improving",
+                "fastest_worsening",
+            },
+        )
+        rotation = pd.DataFrame(report["rotation_history"]["current"])
+        for column in (
+            "rank_change_1d",
+            "rank_change_5d",
+            "strength_change_1d_bps",
+            "transition_previous",
+            "transition_5d",
+            "state_streak_days",
+        ):
+            self.assertIn(column, rotation)
+        self.assertGreaterEqual(report["market_concentration"]["top3_share"], 0)
+        self.assertLessEqual(report["market_concentration"]["top5_share"], 1)
         for horizon in (5, 20):
             for level in ("l1", "l2"):
                 result = report["horizons"][horizon][level]
@@ -273,9 +321,13 @@ class ReportDatasetTests(unittest.TestCase):
                 names,
             )
             market_name = (
-                f"industry_radar_market_inst_flow_60d_{report['as_of']}.csv"
+                f"industry_radar_market_large_active_flow_60d_{report['as_of']}.csv"
             )
             self.assertIn(market_name, names)
+            self.assertIn(
+                f"industry_radar_l2_rotation_changes_{report['as_of']}.csv",
+                names,
+            )
             payload = json.loads(combined.read_text(encoding="utf-8"))
             self.assertEqual(payload["market_flow_history"]["display_points"], 60)
             self.assertTrue(payload["market_flow_history"]["endpoint_matches_cards"])
@@ -290,7 +342,7 @@ class ReportDatasetTests(unittest.TestCase):
                 ranking["comprehensive_score"], ranking["score"] * 10_000
             )
 
-    def test_pdf_has_ten_pages_titles_and_manifest_ranking_text(self):
+    def test_pdf_has_all_pages_titles_and_manifest_ranking_text(self):
         try:
             from pypdf import PdfReader
         except ImportError:
@@ -304,20 +356,22 @@ class ReportDatasetTests(unittest.TestCase):
             texts = [page.extract_text() or "" for page in reader.pages]
             expected_titles = [
                 "市场总览",
-                "四类资金状态清单",
+                "每日结论与四类资金状态",
                 "申万一级前15",
                 "申万一级后15",
                 "申万二级前15",
                 "申万二级后15",
                 "申万一级：20日Top/Bottom 5最近40日累计资金",
                 "申万二级：20日Top/Bottom 5最近40日累计资金",
+                "资金状态变化：改善与恶化",
                 "代表行业完整计算链",
                 "公式、数据覆盖与复核说明",
             ]
             for text, title in zip(texts, expected_titles):
                 self.assertIn(title, text)
             all_text = "\n".join(texts)
-            self.assertNotIn("bp", all_text.lower())
+            self.assertIn("可比强度", all_text)
+            self.assertIn("bp", all_text.lower())
             top_name = report["horizons"][5]["l2"].rankings.sort_values(
                 "rank"
             ).iloc[0]["l2_name"]
@@ -325,6 +379,8 @@ class ReportDatasetTests(unittest.TestCase):
             self.assertIn("综合分", all_text)
             self.assertIn("同向天数", all_text)
             self.assertIn("同向个股", all_text)
+            self.assertIn("大额主动资金", all_text)
+            self.assertNotIn("市场机构资金", all_text)
 
     def test_cli_writes_one_combined_pdf(self):
         fake_report = {"as_of": "20260722"}
