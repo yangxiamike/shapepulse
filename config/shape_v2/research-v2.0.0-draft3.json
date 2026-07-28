@@ -60,7 +60,7 @@
     {
       "key": "fresh_breakout",
       "label": "刚突破",
-      "definition": "价格正在或刚刚越过一段可辨认的压力区、前高或整理范围；突破当天原则上最高2分，突破后1至3根K线仍守住突破位才可能达到3分，随后随时间和结构变化逐步衰减。",
+      "definition": "原来没有处于上升趋势的价格，在长期横盘、底部震荡、区间低位或持续阴跌后突然打破原有结构并转强；突破当天原则上最高2分，突破后1至3根K线仍守住突破位才可能达到3分。",
       "rating_anchors": {
         "0": "没有突破有意义的结构，或只是区间内波动、弱反弹和明显假突破。",
         "1": "有局部突破影子，但突破对象、力度、背景或时效性存在明显缺陷。",
@@ -69,6 +69,7 @@
       },
       "core_contradictions": [
         "没有可辨认的压力区、前高或整理范围",
+        "突破前已经形成持续上升趋势，只是短暂调整后再次创新高",
         "突破后已经明显跌回突破位下方",
         "只是普通下跌反弹且没有打破局部结构",
         "突破发生已久并已演化为其他形态"
@@ -88,6 +89,14 @@
         "pre_breakout_trend_slope_40",
         "pre_breakout_trend_fit_40",
         "pre_breakout_range_width_40",
+        "pre_breakout_return_60",
+        "pre_breakout_trend_slope_60",
+        "pre_breakout_trend_fit_60",
+        "pre_breakout_return_100",
+        "pre_breakout_trend_slope_100",
+        "pre_breakout_trend_fit_100",
+        "pre_breakout_range_position_100",
+        "pre_breakout_drawdown_from_high_100",
         "largest_up_day_share_20",
         "breakout_vs_prior_20",
         "breakout_vs_prior_60",

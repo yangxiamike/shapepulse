@@ -115,6 +115,14 @@ def breakout_segment_prefilter(
     pre_slope = f("pre_breakout_trend_slope_40")
     pre_fit = f("pre_breakout_trend_fit_40")
     pre_range = f("pre_breakout_range_width_40")
+    pre_return_60 = f("pre_breakout_return_60")
+    pre_slope_60 = f("pre_breakout_trend_slope_60")
+    pre_fit_60 = f("pre_breakout_trend_fit_60")
+    pre_return_100 = f("pre_breakout_return_100")
+    pre_slope_100 = f("pre_breakout_trend_slope_100")
+    pre_fit_100 = f("pre_breakout_trend_fit_100")
+    pre_position_100 = f("pre_breakout_range_position_100", 0.5)
+    pre_drawdown_100 = f("pre_breakout_drawdown_from_high_100")
     consolidation_quality = (
         _band(pre_return, -0.12, 0.08, 0.10)
         * (1.0 - _ramp(abs(pre_slope), 0.08, 0.22))
@@ -125,12 +133,59 @@ def breakout_segment_prefilter(
         * _ramp(-pre_slope, 0.04, 0.24)
     )
     setup_quality = max(consolidation_quality, decline_quality)
+    recent_rise_strength = max(pre_return_60, pre_slope_60)
+    long_rise_strength = max(pre_return_100, pre_slope_100)
+    recent_non_rising = 1.0 - _ramp(recent_rise_strength, 0.08, 0.18)
+    long_non_rising = 1.0 - _ramp(long_rise_strength, 0.15, 0.30)
+    bottom_context = 1.0 - _ramp(pre_position_100, 0.70, 0.92)
+    reset_drawdown = _ramp(pre_drawdown_100, 0.04, 0.12)
+    reset_quality = max(
+        long_non_rising,
+        bottom_context,
+        reset_drawdown,
+        decline_quality,
+    )
+    raw_transition_quality = max(
+        decline_quality,
+        consolidation_quality * recent_non_rising * reset_quality,
+    )
+    recent_mature_uptrend = (
+        pre_return > 0.06
+        and pre_slope > 0.045
+        and pre_fit > 0.70
+    )
+    long_mature_uptrend = (
+        pre_return_100 > 0.08
+        and pre_slope_100 > 0.07
+        and pre_fit_100 > 0.60
+    )
     established_uptrend = (
-        pre_return > 0.12 and pre_slope > 0.10 and pre_fit > 0.55
+        recent_mature_uptrend
+        or long_mature_uptrend
+        or (
+            raw_transition_quality < 0.40
+            and (
+                (
+                    pre_return_60 > 0.10
+                    and pre_slope_60 > 0.10
+                    and pre_fit_60 > 0.50
+                )
+                or (
+                    pre_return_100 > 0.18
+                    and pre_slope_100 > 0.15
+                    and pre_fit_100 > 0.50
+                )
+            )
+        )
+    )
+    transition_quality = min(
+        raw_transition_quality,
+        0.20 if established_uptrend else 1.0,
     )
     components = {
         "fresh_stage": freshness,
         "long_consolidation_or_decline": setup_quality,
+        "clear_state_transition": transition_quality,
         "not_already_uptrend": 0.0 if established_uptrend else 1.0,
         "confirmed_hold": _ramp(f("breakout_hold_margin"), -0.018, 0.015),
         "still_above_resistance": _band(
@@ -171,8 +226,9 @@ def breakout_segment_prefilter(
     }
     weights = {
         "fresh_stage": 3.0,
-        "long_consolidation_or_decline": 4.0,
-        "not_already_uptrend": 3.0,
+        "long_consolidation_or_decline": 3.0,
+        "clear_state_transition": 5.0,
+        "not_already_uptrend": 4.0,
         "confirmed_hold": 2.5,
         "still_above_resistance": 2.5,
         "small_post_event_drawdown": 2.0,
@@ -210,6 +266,8 @@ def breakout_segment_prefilter(
         hard_findings.append("pre_breakout_setup_too_short")
     if setup_quality < 0.40:
         hard_findings.append("no_long_consolidation_or_decline")
+    if transition_quality < 0.40:
+        hard_findings.append("no_clear_state_transition")
     if established_uptrend:
         hard_findings.append("already_established_uptrend")
     if hard_findings:
@@ -235,9 +293,26 @@ def breakout_segment_prefilter(
         "pre_breakout_trend_slope_40": pre_slope,
         "pre_breakout_trend_fit_40": pre_fit,
         "pre_breakout_range_width_40": pre_range,
+        "pre_breakout_return_60": pre_return_60,
+        "pre_breakout_trend_slope_60": pre_slope_60,
+        "pre_breakout_trend_fit_60": pre_fit_60,
+        "pre_breakout_return_100": pre_return_100,
+        "pre_breakout_trend_slope_100": pre_slope_100,
+        "pre_breakout_trend_fit_100": pre_fit_100,
+        "pre_breakout_range_position_100": pre_position_100,
+        "pre_breakout_drawdown_from_high_100": pre_drawdown_100,
         "consolidation_quality": consolidation_quality,
         "decline_quality": decline_quality,
         "setup_quality": setup_quality,
+        "recent_non_rising": recent_non_rising,
+        "long_non_rising": long_non_rising,
+        "bottom_context": bottom_context,
+        "reset_drawdown": reset_drawdown,
+        "reset_quality": reset_quality,
+        "raw_transition_quality": raw_transition_quality,
+        "transition_quality": transition_quality,
+        "recent_mature_uptrend": float(recent_mature_uptrend),
+        "long_mature_uptrend": float(long_mature_uptrend),
         "already_established_uptrend": float(established_uptrend),
         "max_drawdown_120": float(path["max_drawdown_120"]),
     }

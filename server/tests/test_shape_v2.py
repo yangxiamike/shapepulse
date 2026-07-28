@@ -164,6 +164,14 @@ class ShapeV2DatasetTests(unittest.TestCase):
                 "pre_breakout_trend_slope_40",
                 "pre_breakout_trend_fit_40",
                 "pre_breakout_range_width_40",
+                "pre_breakout_return_60",
+                "pre_breakout_trend_slope_60",
+                "pre_breakout_trend_fit_60",
+                "pre_breakout_return_100",
+                "pre_breakout_trend_slope_100",
+                "pre_breakout_trend_fit_100",
+                "pre_breakout_range_position_100",
+                "pre_breakout_drawdown_from_high_100",
             }.issubset(available)
         )
 
@@ -553,10 +561,27 @@ class ShapeV2DatasetTests(unittest.TestCase):
             "pre_breakout_trend_slope_40": 0.30,
             "pre_breakout_trend_fit_40": 0.90,
             "pre_breakout_range_width_40": 0.30,
+            "pre_breakout_return_60": 0.25,
+            "pre_breakout_trend_slope_60": 0.30,
+            "pre_breakout_trend_fit_60": 0.90,
+            "pre_breakout_return_100": 0.40,
+            "pre_breakout_trend_slope_100": 0.45,
+            "pre_breakout_trend_fit_100": 0.90,
+            "pre_breakout_range_position_100": 0.95,
+            "pre_breakout_drawdown_from_high_100": 0.01,
             "pre_breakout_context_bars": 40.0,
         }
         established_uptrend = breakout_segment_prefilter(
             established_uptrend_facts, path_risk_metrics(held_bars)
+        )
+        recent_trend_facts = {
+            **held_facts,
+            "pre_breakout_return_40": 0.08,
+            "pre_breakout_trend_slope_40": 0.07,
+            "pre_breakout_trend_fit_40": 0.80,
+        }
+        recent_trend = breakout_segment_prefilter(
+            recent_trend_facts, path_risk_metrics(held_bars)
         )
         self.assertFalse(held["hard_findings"])
         self.assertTrue(
@@ -569,6 +594,14 @@ class ShapeV2DatasetTests(unittest.TestCase):
         self.assertIn(
             "already_established_uptrend",
             established_uptrend["hard_findings"],
+        )
+        self.assertIn(
+            "no_clear_state_transition",
+            established_uptrend["hard_findings"],
+        )
+        self.assertIn(
+            "already_established_uptrend",
+            recent_trend["hard_findings"],
         )
 
     def test_pullback_template_prefilter_requires_prior_rise_and_turn(self):

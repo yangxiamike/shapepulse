@@ -203,40 +203,57 @@ def extract_shared_facts(bars: Iterable[dict[str, Any]], minimum_bars: int = 120
         )
         pre_breakout_close = close[max(0, breakout_index - 21) : breakout_index]
     context_end = breakout_index if breakout_index is not None else len(close)
-    context_start = max(0, context_end - 40)
-    pre_breakout_context_close = close[context_start:context_end]
-    pre_breakout_context_high = high[context_start:context_end]
-    pre_breakout_context_low = low[context_start:context_end]
-    if len(pre_breakout_context_close) >= 20:
-        context_slope, context_fit = _linear_fit(pre_breakout_context_close)
-        facts["pre_breakout_return_40"] = (
+    for period in (40, 60, 100):
+        context_start = max(0, context_end - period)
+        context_close = close[context_start:context_end]
+        context_high_values = high[context_start:context_end]
+        context_low_values = low[context_start:context_end]
+        facts[f"pre_breakout_context_bars_{period}"] = float(
+            len(context_close)
+        )
+        if len(context_close) < 20:
+            facts[f"pre_breakout_return_{period}"] = 0.0
+            facts[f"pre_breakout_trend_slope_{period}"] = 0.0
+            facts[f"pre_breakout_trend_fit_{period}"] = 0.0
+            facts[f"pre_breakout_range_width_{period}"] = 0.0
+            facts[f"pre_breakout_range_position_{period}"] = 0.5
+            facts[f"pre_breakout_drawdown_from_high_{period}"] = 0.0
+            continue
+        context_slope, context_fit = _linear_fit(context_close)
+        facts[f"pre_breakout_return_{period}"] = (
             _safe_ratio(
-                float(pre_breakout_context_close[-1]),
-                float(pre_breakout_context_close[0]),
+                float(context_close[-1]),
+                float(context_close[0]),
                 1.0,
             )
             - 1.0
         )
-        facts["pre_breakout_trend_slope_40"] = context_slope
-        facts["pre_breakout_trend_fit_40"] = context_fit
-        context_high = float(np.nanmax(pre_breakout_context_high))
-        context_low = float(np.nanmin(pre_breakout_context_low))
-        facts["pre_breakout_range_width_40"] = _safe_ratio(
+        facts[f"pre_breakout_trend_slope_{period}"] = context_slope
+        facts[f"pre_breakout_trend_fit_{period}"] = context_fit
+        context_high = float(np.nanmax(context_high_values))
+        context_low = float(np.nanmin(context_low_values))
+        facts[f"pre_breakout_range_width_{period}"] = _safe_ratio(
             context_high - context_low,
-            float(np.nanmean(pre_breakout_context_close)),
+            float(np.nanmean(context_close)),
             0.0,
         )
-        facts["pre_breakout_context_bars"] = float(
-            len(pre_breakout_context_close)
+        facts[f"pre_breakout_range_position_{period}"] = _safe_ratio(
+            float(context_close[-1]) - context_low,
+            context_high - context_low,
+            0.5,
         )
-    else:
-        facts["pre_breakout_return_40"] = 0.0
-        facts["pre_breakout_trend_slope_40"] = 0.0
-        facts["pre_breakout_trend_fit_40"] = 0.0
-        facts["pre_breakout_range_width_40"] = 0.0
-        facts["pre_breakout_context_bars"] = float(
-            len(pre_breakout_context_close)
+        facts[f"pre_breakout_drawdown_from_high_{period}"] = max(
+            0.0,
+            1.0
+            - _safe_ratio(
+                float(context_close[-1]),
+                context_high,
+                1.0,
+            ),
         )
+    facts["pre_breakout_context_bars"] = facts[
+        "pre_breakout_context_bars_40"
+    ]
     facts["breakout_approach_return_5"] = (
         _safe_ratio(
             float(pre_breakout_close[-1]),
