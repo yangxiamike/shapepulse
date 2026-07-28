@@ -24,6 +24,11 @@ from server.shape_v2.scoring import CATEGORY_WEIGHT_PRIORS, score_all
 from server.shape_v2.facts import extract_shared_facts
 from server.patterns import CATEGORY_ORDER as V1_CATEGORY_ORDER
 from scripts.shape_v2_template_discovery import healthy_visual_prefilter
+from scripts.shape_v2_segment_mining import (
+    _candidate_endpoint_indices,
+    healthy_segment_prefilter,
+    path_risk_metrics,
+)
 from server.shape_v2.selection import (
     BREAKOUT_STAGE_QUOTAS,
     PROFILE_QUOTAS,
@@ -450,6 +455,56 @@ class ShapeV2DatasetTests(unittest.TestCase):
         self.assertGreater(
             smooth["components"]["rise_exists_before_tail"],
             tail["components"]["rise_exists_before_tail"],
+        )
+
+    def test_historical_segment_mining_downgrades_large_path_drawdown(self):
+        smooth_close = np.linspace(100.0, 150.0, 120) * (
+            1.0 + np.sin(np.arange(120) / 8.0) * 0.008
+        )
+        deep_pullback_close = np.concatenate(
+            [
+                np.linspace(100.0, 125.0, 40),
+                np.linspace(125.0, 96.0, 12),
+                np.linspace(96.0, 150.0, 68),
+            ]
+        )
+
+        def bars_for(close_values):
+            return [
+                {
+                    "t": index - 119,
+                    "open": float(value * 0.998),
+                    "high": float(value * 1.006),
+                    "low": float(value * 0.994),
+                    "close": float(value),
+                    "volume": 1.0,
+                }
+                for index, value in enumerate(close_values)
+            ]
+
+        smooth_bars = bars_for(smooth_close)
+        deep_bars = bars_for(deep_pullback_close)
+        smooth = healthy_segment_prefilter(
+            extract_shared_facts(smooth_bars), path_risk_metrics(smooth_bars)
+        )
+        deep = healthy_segment_prefilter(
+            extract_shared_facts(deep_bars), path_risk_metrics(deep_bars)
+        )
+        self.assertLess(path_risk_metrics(smooth_bars)["max_drawdown_120"], 0.05)
+        self.assertGreater(path_risk_metrics(deep_bars)["max_drawdown_120"], 0.20)
+        self.assertIn("full_path_drawdown_too_large", deep["hard_findings"])
+        self.assertGreater(smooth["score"], deep["score"])
+
+    def test_historical_segment_endpoints_are_spaced_and_include_latest(self):
+        indices = _candidate_endpoint_indices(167, 15)
+        self.assertEqual(indices[0], 119)
+        self.assertEqual(indices[-1], 166)
+        self.assertEqual(len(indices), len(set(indices)))
+        self.assertTrue(
+            all(
+                right - left >= 15
+                for left, right in zip(indices, indices[1:-1])
+            )
         )
 
 
