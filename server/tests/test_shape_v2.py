@@ -23,6 +23,7 @@ from server.shape_v2.metrics import calibration_diagnostics
 from server.shape_v2.scoring import CATEGORY_WEIGHT_PRIORS, score_all
 from server.shape_v2.facts import extract_shared_facts
 from server.patterns import CATEGORY_ORDER as V1_CATEGORY_ORDER
+from scripts.shape_v2_template_discovery import healthy_visual_prefilter
 from server.shape_v2.selection import (
     BREAKOUT_STAGE_QUOTAS,
     PROFILE_QUOTAS,
@@ -420,6 +421,36 @@ class ShapeV2DatasetTests(unittest.TestCase):
             ("fresh_breakout", "healthy_uptrend", "pullback_strengthening"),
         )
         self.assertNotIn("range_bounce", CATEGORY_WEIGHT_PRIORS)
+
+    def test_healthy_template_prefilter_prefers_full_window_rise_over_tail_spike(self):
+        smooth_close = np.linspace(100.0, 155.0, 120) * (
+            1.0 + np.sin(np.arange(120) / 7.0) * 0.012
+        )
+        tail_close = np.concatenate(
+            [np.linspace(100.0, 96.0, 110), np.linspace(96.0, 155.0, 10)]
+        )
+
+        def facts_for(close_values):
+            bars = [
+                {
+                    "t": index - 119,
+                    "open": float(value * 0.998),
+                    "high": float(value * 1.006),
+                    "low": float(value * 0.994),
+                    "close": float(value),
+                    "volume": 1.0,
+                }
+                for index, value in enumerate(close_values)
+            ]
+            return extract_shared_facts(bars)
+
+        smooth = healthy_visual_prefilter(facts_for(smooth_close))
+        tail = healthy_visual_prefilter(facts_for(tail_close))
+        self.assertGreater(smooth["score"], tail["score"])
+        self.assertGreater(
+            smooth["components"]["rise_exists_before_tail"],
+            tail["components"]["rise_exists_before_tail"],
+        )
 
 
 if __name__ == "__main__":
