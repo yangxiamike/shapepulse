@@ -29,6 +29,10 @@ from scripts.shape_v2_segment_mining import (
     healthy_segment_prefilter,
     path_risk_metrics,
 )
+from scripts.shape_v2_remaining_template_mining import (
+    breakout_segment_prefilter,
+    pullback_segment_prefilter,
+)
 from server.shape_v2.selection import (
     BREAKOUT_STAGE_QUOTAS,
     PROFILE_QUOTAS,
@@ -506,6 +510,108 @@ class ShapeV2DatasetTests(unittest.TestCase):
                 for left, right in zip(indices, indices[1:-1])
             )
         )
+
+    def test_breakout_template_prefilter_requires_hold_after_event(self):
+        base = np.concatenate(
+            [
+                np.linspace(95.0, 100.0, 100),
+                100.0 + np.sin(np.arange(16)) * 0.25,
+            ]
+        )
+        held_close = np.concatenate([base, [103.0, 104.0, 104.5, 105.0]])
+        failed_close = np.concatenate([base, [103.0, 99.0, 98.0, 98.0]])
+
+        def bars_for(close_values):
+            return [
+                {
+                    "t": index - 119,
+                    "open": float(value * 0.999),
+                    "high": float(value * 1.002),
+                    "low": float(value * 0.998),
+                    "close": float(value),
+                    "volume": 1.5 if index == 116 else 1.0,
+                }
+                for index, value in enumerate(close_values)
+            ]
+
+        held_bars = bars_for(held_close)
+        failed_bars = bars_for(failed_close)
+        held_facts = extract_shared_facts(held_bars)
+        held = breakout_segment_prefilter(
+            held_facts, path_risk_metrics(held_bars)
+        )
+        failed = breakout_segment_prefilter(
+            extract_shared_facts(failed_bars), path_risk_metrics(failed_bars)
+        )
+        trapped_facts = {
+            **held_facts,
+            "range_position_120": 0.40,
+            "breakout_vs_prior_60": -0.20,
+            "old_high_gap_120": -0.30,
+            "return_60": -0.10,
+        }
+        trapped = breakout_segment_prefilter(
+            trapped_facts, path_risk_metrics(held_bars)
+        )
+        self.assertFalse(held["hard_findings"])
+        self.assertTrue(
+            {
+                "fell_back_below_resistance",
+                "failed_to_hold_breakout",
+            }.intersection(failed["hard_findings"])
+        )
+        self.assertGreater(held["score"], failed["score"])
+        self.assertIn(
+            "still_low_inside_large_range", trapped["hard_findings"]
+        )
+        self.assertIn(
+            "ordinary_rebound_in_weak_context", trapped["hard_findings"]
+        )
+
+    def test_pullback_template_prefilter_requires_prior_rise_and_turn(self):
+        healthy_close = np.concatenate(
+            [
+                np.linspace(100.0, 140.0, 100),
+                np.linspace(140.0, 130.0, 10),
+                np.linspace(130.0, 135.0, 10),
+            ]
+        )
+        broken_close = np.concatenate(
+            [
+                np.linspace(100.0, 140.0, 100),
+                np.linspace(140.0, 100.0, 17),
+                np.linspace(100.0, 102.0, 3),
+            ]
+        )
+
+        def bars_for(close_values):
+            return [
+                {
+                    "t": index - 119,
+                    "open": float(value * 0.999),
+                    "high": float(value * 1.003),
+                    "low": float(value * 0.997),
+                    "close": float(value),
+                    "volume": 1.0,
+                }
+                for index, value in enumerate(close_values)
+            ]
+
+        healthy_bars = bars_for(healthy_close)
+        broken_bars = bars_for(broken_close)
+        healthy_path = path_risk_metrics(healthy_bars)
+        healthy = pullback_segment_prefilter(
+            extract_shared_facts(healthy_bars), healthy_path
+        )
+        broken = pullback_segment_prefilter(
+            extract_shared_facts(broken_bars), path_risk_metrics(broken_bars)
+        )
+        self.assertGreater(healthy_path["recent_pullback_depth_40"], 0.05)
+        self.assertLessEqual(healthy_path["recent_pullback_low_age"], 12)
+        self.assertGreater(healthy_path["recent_recovery_fraction"], 0.25)
+        self.assertFalse(healthy["hard_findings"])
+        self.assertIn("pullback_too_deep", broken["hard_findings"])
+        self.assertGreater(healthy["score"], broken["score"])
 
 
 if __name__ == "__main__":

@@ -175,7 +175,7 @@ def main() -> int:
     payload = {
         "schema_version": "shape-v2-template-segment-shortlist/1",
         "category": "healthy_uptrend",
-        "status": "ai_visual_provisional_after_user_drawdown_correction",
+        "status": "user_direction_confirmed_20260728",
         "source_role": "template",
         "source_dataset": "shape-v2.0.0-template-segments2-healthy-uptrend",
         "review_rules": [

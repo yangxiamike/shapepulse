@@ -94,12 +94,28 @@ def path_risk_metrics(bars: list[dict[str, float]]) -> dict[str, float]:
     anchor_indices = np.arange(0, 120, 10)
     anchors = close[anchor_indices]
     anchor_up_ratio = float(np.mean(anchors[1:] > anchors[:-1]))
+    recent = close[-40:]
+    running_peaks = np.maximum.accumulate(recent)
+    recent_drawdowns = 1.0 - recent / running_peaks
+    trough_index = int(np.argmax(recent_drawdowns))
+    peak_index = int(np.argmax(recent[: trough_index + 1]))
+    recent_peak = float(recent[peak_index])
+    recent_trough = float(recent[trough_index])
+    pullback_span = recent_peak - recent_trough
+    recovery_fraction = (
+        float((recent[-1] - recent_trough) / pullback_span)
+        if pullback_span > 0
+        else 0.0
+    )
     return {
         "max_drawdown_120": max_drawdown(close),
         "max_drawdown_60": max_drawdown(close[-60:]),
         "worst_return_5": worst_return(5),
         "worst_return_10": worst_return(10),
         "anchor_up_ratio": anchor_up_ratio,
+        "recent_pullback_depth_40": float(recent_drawdowns[trough_index]),
+        "recent_pullback_low_age": float(len(recent) - 1 - trough_index),
+        "recent_recovery_fraction": recovery_fraction,
     }
 
 
