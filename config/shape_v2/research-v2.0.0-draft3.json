@@ -1,0 +1,188 @@
+{
+  "schema_version": "shape-v2-research/1",
+  "dataset_version": "shape-v2.0.0-draft3",
+  "status": "breakout_stage_calibration",
+  "formal_scoring_enabled": false,
+  "review_focus": "专项判断“刚突破”的时间阶段。请重点比较突破当天、突破后守住1至3根K线、经过5至15根K线，以及区间假突破或下跌背景中的强反应；另外两个类别仍照常分别打分。",
+  "source": {
+    "provider": "local_zer0share",
+    "network_allowed": false,
+    "price_adjustment": "qfq_as_of_scoring_date"
+  },
+  "sample": {
+    "window_bars": 120,
+    "minimum_bars": 120,
+    "price_anchor": 100.0,
+    "price_normalization": "first_adjusted_close",
+    "volume_normalization": "median_nonzero_volume",
+    "public_fields": [
+      "t",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "hidden_fields": [
+      "ts_code",
+      "symbol",
+      "name",
+      "industry",
+      "trade_date",
+      "score_date",
+      "selection_profile"
+    ]
+  },
+  "split_policy": {
+    "group_unit": "source_security",
+    "calibration_isolated": true,
+    "weights": {
+      "template": 0.5,
+      "tuning": 0.25,
+      "final_evaluation": 0.25
+    },
+    "final_evaluation_policy": "sealed_once"
+  },
+  "targeted_calibration": {
+    "sample_count": 12,
+    "candidate_count": 720,
+    "public_order": "anonymous_hash",
+    "profile_quotas": {
+      "breakout_stage_day": 2,
+      "breakout_stage_hold_1_3": 3,
+      "breakout_stage_aging_5_15": 3,
+      "breakout_stage_range_retest": 2,
+      "breakout_stage_downtrend_surge": 2
+    },
+    "note": "专项分层只用于构造校准题，不是正式分类规则，也不会显示给标注者。"
+  },
+  "categories": [
+    {
+      "key": "fresh_breakout",
+      "label": "刚突破",
+      "definition": "价格正在或刚刚越过一段可辨认的压力区、前高或整理范围；突破当天原则上最高2分，突破后1至3根K线仍守住突破位才可能达到3分，随后随时间和结构变化逐步衰减。",
+      "rating_anchors": {
+        "0": "没有突破有意义的结构，或只是区间内波动、弱反弹和明显假突破。",
+        "1": "有局部突破影子，但突破对象、力度、背景或时效性存在明显缺陷。",
+        "2": "突破结构清楚但仍在当天、确认略弱，或已经离突破时点稍久。",
+        "3": "清晰突破后经过1至3根K线确认，价格守住突破位，量价与接近过程协调。"
+      },
+      "core_contradictions": [
+        "没有可辨认的压力区、前高或整理范围",
+        "突破后已经明显跌回突破位下方",
+        "只是普通下跌反弹且没有打破局部结构",
+        "突破发生已久并已演化为其他形态"
+      ],
+      "feature_keys": [
+        "breakout_age",
+        "breakout_hold_margin",
+        "breakout_current_margin",
+        "breakout_post_event_drawdown",
+        "breakout_confirmed",
+        "breakout_day_return",
+        "breakout_volume_ratio",
+        "breakout_approach_return_5",
+        "breakout_approach_positive_ratio_10",
+        "pre_breakout_volatility_20",
+        "largest_up_day_share_20",
+        "breakout_vs_prior_20",
+        "breakout_vs_prior_60",
+        "old_high_rejection_count",
+        "trend_slope_60",
+        "trend_fit_60",
+        "ma20_extension"
+      ]
+    },
+    {
+      "key": "healthy_uptrend",
+      "label": "健康上升趋势",
+      "definition": "评分日处于持续、有序且不过度失真的上升结构中；高点和低点总体抬高，回撤未破坏主要结构。",
+      "rating_anchors": {
+        "0": "中期趋势转弱、长期横盘或只是下跌后的反弹。",
+        "1": "仅有局部上升，连续性和结构质量较弱。",
+        "2": "健康趋势成立，但存在旧前高受阻、过度延伸或波动偏大等缺陷。",
+        "3": "多周期趋势连续，高低点总体抬高，回撤受控。"
+      },
+      "core_contradictions": [
+        "中期高点与低点持续下移",
+        "价格持续跌破主要趋势支撑且未收复",
+        "结构主要由极端跳涨或单点尖峰构成",
+        "上升已经演化为缺乏方向的大区间"
+      ],
+      "feature_keys": [
+        "return_20",
+        "return_60",
+        "return_119",
+        "trend_slope_20",
+        "trend_slope_60",
+        "trend_slope_120",
+        "trend_fit_20",
+        "trend_fit_60",
+        "trend_fit_120",
+        "ma20_extension",
+        "ma60_extension",
+        "ma_alignment",
+        "drawdown_60",
+        "drawdown_120",
+        "old_high_gap_120",
+        "days_since_old_high",
+        "old_high_rejection_count",
+        "range_staleness_60"
+      ]
+    },
+    {
+      "key": "pullback_strengthening",
+      "label": "回调转强",
+      "definition": "此前已有上升基础，随后发生未完全破坏主结构的真实回调，并在评分日附近出现止跌、收复或动能重新转强。",
+      "rating_anchors": {
+        "0": "回调前没有上升基础、仍在创新低，或已经长期拖成区间。",
+        "1": "能看出上升后回调，但过深、过急、过久或转强证据很弱。",
+        "2": "回调转强结构成立，但深度、时间或确认质量并不理想。",
+        "3": "此前趋势清楚，回调浅至适中、时间受控，且出现明确转强确认。"
+      },
+      "core_contradictions": [
+        "回调前没有可辨认的上升基础",
+        "评分日仍在连续走弱或创阶段新低",
+        "回撤已经破坏中期趋势且只是弱反抽",
+        "回调持续过久并已演化为大区间"
+      ],
+      "feature_keys": [
+        "prior_advance_before_peak",
+        "drawdown_20",
+        "drawdown_60",
+        "pullback_duration_60",
+        "pullback_speed_60",
+        "worst_5day_return_20",
+        "retracement_of_prior_advance",
+        "turn_confirmation",
+        "return_3",
+        "return_5",
+        "rebound_from_10_low",
+        "ma10_extension",
+        "ma20_extension",
+        "trend_slope_60",
+        "trend_fit_60",
+        "range_staleness_60"
+      ]
+    }
+  ],
+  "label_scale": {
+    "0": "不相关或存在核心矛盾；若进入榜单前列属于严重错误",
+    "1": "有局部相似，但缺少关键结构或有明显缺陷",
+    "2": "相关且可用，主要结构成立，但不是理想代表",
+    "3": "高度相关，可作为该类别的代表性模板样本"
+  },
+  "scoring_draft": {
+    "architecture": "shared_facts_plus_three_independent_scorers",
+    "distance": "weighted_euclidean",
+    "template_statistics": [
+      "median",
+      "q25",
+      "q75",
+      "robust_scale"
+    ],
+    "weights": null,
+    "minimum_scores": null,
+    "note": "C3仍只用于人工校准，不启用正式评分。"
+  }
+}
