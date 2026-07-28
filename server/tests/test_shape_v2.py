@@ -160,6 +160,10 @@ class ShapeV2DatasetTests(unittest.TestCase):
                 "breakout_post_event_drawdown",
                 "breakout_approach_return_5",
                 "breakout_approach_positive_ratio_10",
+                "pre_breakout_return_40",
+                "pre_breakout_trend_slope_40",
+                "pre_breakout_trend_fit_40",
+                "pre_breakout_range_width_40",
             }.issubset(available)
         )
 
@@ -543,15 +547,16 @@ class ShapeV2DatasetTests(unittest.TestCase):
         failed = breakout_segment_prefilter(
             extract_shared_facts(failed_bars), path_risk_metrics(failed_bars)
         )
-        trapped_facts = {
+        established_uptrend_facts = {
             **held_facts,
-            "range_position_120": 0.40,
-            "breakout_vs_prior_60": -0.20,
-            "old_high_gap_120": -0.30,
-            "return_60": -0.10,
+            "pre_breakout_return_40": 0.25,
+            "pre_breakout_trend_slope_40": 0.30,
+            "pre_breakout_trend_fit_40": 0.90,
+            "pre_breakout_range_width_40": 0.30,
+            "pre_breakout_context_bars": 40.0,
         }
-        trapped = breakout_segment_prefilter(
-            trapped_facts, path_risk_metrics(held_bars)
+        established_uptrend = breakout_segment_prefilter(
+            established_uptrend_facts, path_risk_metrics(held_bars)
         )
         self.assertFalse(held["hard_findings"])
         self.assertTrue(
@@ -562,10 +567,8 @@ class ShapeV2DatasetTests(unittest.TestCase):
         )
         self.assertGreater(held["score"], failed["score"])
         self.assertIn(
-            "still_low_inside_large_range", trapped["hard_findings"]
-        )
-        self.assertIn(
-            "ordinary_rebound_in_weak_context", trapped["hard_findings"]
+            "already_established_uptrend",
+            established_uptrend["hard_findings"],
         )
 
     def test_pullback_template_prefilter_requires_prior_rise_and_turn(self):

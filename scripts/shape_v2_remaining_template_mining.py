@@ -51,20 +51,22 @@ CATEGORY_SPECS = {
         "audit_name": "template-discovery-v3-pullback-strengthening-segments-audit.json",
     },
 }
-DEFAULT_OUTPUT_ROOT = (
-    PROJECT_ROOT / "outputs" / "shape-v2" / "template-discovery-v3"
-)
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Mine independent fresh-breakout and pullback-strengthening segments."
     )
-    parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
+    parser.add_argument("--output-root", type=Path, default=None)
     parser.add_argument("--count", type=int, default=60)
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--history-bars", type=int, default=620)
     parser.add_argument("--endpoint-step", type=int, default=15)
+    parser.add_argument(
+        "--categories",
+        nargs="+",
+        choices=tuple(CATEGORY_SPECS),
+        default=list(CATEGORY_SPECS),
+    )
+    parser.add_argument("--research-version", type=int, default=3)
     return parser.parse_args()
 
 
@@ -109,8 +111,27 @@ def breakout_segment_prefilter(
     structure_quality = 1.0 if resistance_window >= 60 else (
         0.72 if resistance_window >= 20 else 0.0
     )
+    pre_return = f("pre_breakout_return_40")
+    pre_slope = f("pre_breakout_trend_slope_40")
+    pre_fit = f("pre_breakout_trend_fit_40")
+    pre_range = f("pre_breakout_range_width_40")
+    consolidation_quality = (
+        _band(pre_return, -0.12, 0.08, 0.10)
+        * (1.0 - _ramp(abs(pre_slope), 0.08, 0.22))
+        * _band(pre_range, 0.05, 0.24, 0.16)
+    )
+    decline_quality = (
+        _ramp(-pre_return, 0.05, 0.24)
+        * _ramp(-pre_slope, 0.04, 0.24)
+    )
+    setup_quality = max(consolidation_quality, decline_quality)
+    established_uptrend = (
+        pre_return > 0.12 and pre_slope > 0.10 and pre_fit > 0.55
+    )
     components = {
         "fresh_stage": freshness,
+        "long_consolidation_or_decline": setup_quality,
+        "not_already_uptrend": 0.0 if established_uptrend else 1.0,
         "confirmed_hold": _ramp(f("breakout_hold_margin"), -0.018, 0.015),
         "still_above_resistance": _band(
             f("breakout_current_margin"), 0.004, 0.085, 0.06
@@ -119,12 +140,12 @@ def breakout_segment_prefilter(
         - _ramp(f("breakout_post_event_drawdown"), 0.02, 0.085),
         "meaningful_structure": structure_quality,
         "near_larger_resistance": _ramp(
-            f("breakout_vs_prior_60"), -0.08, 0.018
+            f("breakout_vs_prior_60"), -0.14, 0.018
         ),
         "upper_part_of_full_range": _ramp(
-            f("range_position_120"), 0.66, 0.96
+            f("range_position_120"), 0.50, 0.96
         ),
-        "old_high_context": _ramp(f("old_high_gap_120"), -0.15, 0.025),
+        "old_high_context": _ramp(f("old_high_gap_120"), -0.25, 0.025),
         "coherent_breakout_day": _band(
             f("breakout_day_return"), 0.015, 0.095, 0.075
         ),
@@ -141,24 +162,31 @@ def breakout_segment_prefilter(
         - _ramp(f("pre_breakout_volatility_20"), 0.025, 0.052),
         "not_single_spike": 1.0
         - _ramp(f("largest_up_day_share_20"), 0.34, 0.65),
-        "usable_mid_context": _ramp(f("trend_slope_60"), -0.015, 0.24),
+        "breakout_contrast": _ramp(
+            f("breakout_day_return")
+            / max(f("pre_breakout_volatility_20"), 0.008),
+            1.2,
+            3.5,
+        ),
     }
     weights = {
         "fresh_stage": 3.0,
+        "long_consolidation_or_decline": 4.0,
+        "not_already_uptrend": 3.0,
         "confirmed_hold": 2.5,
         "still_above_resistance": 2.5,
         "small_post_event_drawdown": 2.0,
         "meaningful_structure": 2.0,
-        "near_larger_resistance": 2.5,
-        "upper_part_of_full_range": 2.0,
-        "old_high_context": 1.5,
+        "near_larger_resistance": 0.75,
+        "upper_part_of_full_range": 0.75,
+        "old_high_context": 0.50,
         "coherent_breakout_day": 1.5,
         "supportive_volume": 1.0,
         "controlled_approach": 1.25,
         "balanced_approach": 0.75,
         "quiet_pre_breakout": 1.0,
         "not_single_spike": 1.25,
-        "usable_mid_context": 0.75,
+        "breakout_contrast": 1.5,
     }
     score = _weighted_score(components, weights)
     hard_findings = []
@@ -178,15 +206,12 @@ def breakout_segment_prefilter(
         hard_findings.append("single_spike_dominated")
     if resistance_window < 20:
         hard_findings.append("no_meaningful_resistance")
-    if f("range_position_120") < 0.66:
-        hard_findings.append("still_low_inside_large_range")
-    if (
-        f("breakout_vs_prior_60") < -0.08
-        and f("old_high_gap_120") < -0.12
-    ):
-        hard_findings.append("still_trapped_below_larger_structure")
-    if f("return_60") < -0.05 and f("breakout_vs_prior_60") < -0.05:
-        hard_findings.append("ordinary_rebound_in_weak_context")
+    if f("pre_breakout_context_bars") < 35:
+        hard_findings.append("pre_breakout_setup_too_short")
+    if setup_quality < 0.40:
+        hard_findings.append("no_long_consolidation_or_decline")
+    if established_uptrend:
+        hard_findings.append("already_established_uptrend")
     if hard_findings:
         score *= 0.20
     diagnostics = {
@@ -206,6 +231,14 @@ def breakout_segment_prefilter(
         "range_position_120": f("range_position_120"),
         "breakout_vs_prior_60": f("breakout_vs_prior_60"),
         "old_high_gap_120": f("old_high_gap_120"),
+        "pre_breakout_return_40": pre_return,
+        "pre_breakout_trend_slope_40": pre_slope,
+        "pre_breakout_trend_fit_40": pre_fit,
+        "pre_breakout_range_width_40": pre_range,
+        "consolidation_quality": consolidation_quality,
+        "decline_quality": decline_quality,
+        "setup_quality": setup_quality,
+        "already_established_uptrend": float(established_uptrend),
         "max_drawdown_120": float(path["max_drawdown_120"]),
     }
     return {
@@ -406,12 +439,36 @@ def main() -> int:
         raise ValueError("history-bars must be at least 240")
     if args.endpoint_step < 5:
         raise ValueError("endpoint-step must be at least 5")
-    output_root = args.output_root.resolve()
+    if args.research_version < 1:
+        raise ValueError("research-version must be positive")
+    output_root = (
+        args.output_root
+        or (
+            PROJECT_ROOT
+            / "outputs"
+            / "shape-v2"
+            / f"template-discovery-v{args.research_version}"
+        )
+    ).resolve()
     if PROJECT_ROOT.resolve() not in output_root.parents:
         raise ValueError("output root must stay inside the project")
+    active_specs = {}
+    for category in args.categories:
+        base = CATEGORY_SPECS[category]
+        slug = str(base["slug"])
+        active_specs[category] = {
+            **base,
+            "dataset_version": (
+                f"shape-v2.0.0-template-segments{args.research_version}-"
+                f"{slug.removesuffix('-segments')}"
+            ),
+            "audit_name": (
+                f"template-discovery-v{args.research_version}-{slug}-audit.json"
+            ),
+        }
     outputs = {
         category: output_root / str(spec["slug"])
-        for category, spec in CATEGORY_SPECS.items()
+        for category, spec in active_specs.items()
     }
     for output in outputs.values():
         if output.exists() and any(output.iterdir()):
@@ -455,7 +512,7 @@ def main() -> int:
             for code, frame in history.groupby("ts_code", sort=False)
         }
         best: dict[str, dict[str, dict[str, Any]]] = {
-            category: {} for category in CATEGORY_SPECS
+            category: {} for category in active_specs
         }
         scanned_window_count = 0
         failures: list[str] = []
@@ -479,7 +536,8 @@ def main() -> int:
                     failures.append(f"{code}@{score_date}: {exc}")
                     continue
                 scanned_window_count += 1
-                for category, scorer in SCORERS.items():
+                for category in active_specs:
+                    scorer = SCORERS[category]
                     analysis = scorer(facts, path)
                     item = {
                         "code": code,
@@ -498,7 +556,7 @@ def main() -> int:
                         best[category][code] = item
 
         result_summary: dict[str, Any] = {}
-        for category, spec in CATEGORY_SPECS.items():
+        for category, spec in active_specs.items():
             eligible = [
                 item
                 for item in best[category].values()

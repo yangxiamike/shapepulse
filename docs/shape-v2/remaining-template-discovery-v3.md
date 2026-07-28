@@ -98,3 +98,31 @@
 - `outputs/shape-v2/template-discovery-v3/fresh-breakout-segments/visual-shortlist.html`
 - `outputs/shape-v2/template-discovery-v3/pullback-strengthening-segments/visual-shortlist.html`
 - 私有审计位于 `outputs/shape-v2/.private/audits/template-discovery-v3-*-audit.json`
+
+## 2026-07-28 用户纠正与刚突破 v4
+
+用户对两条图形给出关键纠正：
+
+- `S-BA6BDD717D6E` 不是回调转强反例。它在明显上涨后出现浅、短回调，随后重新向上，
+  应作为回调转强3分代表模子。
+- `S-6B0894760DEA` 不是刚突破。它在突破前已经形成持续上升趋势，末端只是小调整后
+  继续创新高，应由健康上升趋势或回调转强解释。
+
+由此，刚突破的前置结构进一步明确为二选一：
+
+1. 较长时间横盘、调整或震荡，随后突然打破整理压力；
+2. 较长时间阴跌或走弱，随后突然打破局部下降结构。
+
+“已经形成上升趋势，仅在短暂小调整后继续创新高”成为刚突破的核心矛盾。
+
+v4 新增突破前40根K线的涨跌、趋势斜率、拟合度和区间宽度，并把“长整理质量”
+“长阴跌质量”和“是否已是上升趋势”纳入独立刚突破评分器。全量重扫仍只使用
+`87,741` 个无未来历史区间。
+
+当前有效入口：
+
+- `outputs/shape-v2/template-current/index.html`
+- 刚突破 v4：
+  `outputs/shape-v2/template-discovery-v4/fresh-breakout-segments/visual-shortlist.html`
+- 回调转强修正版：
+  `outputs/shape-v2/template-discovery-v3/pullback-strengthening-segments/visual-shortlist.html`
