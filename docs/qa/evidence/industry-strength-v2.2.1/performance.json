@@ -1,0 +1,51 @@
+{
+  "captured_at": "2026-07-17T09:17:00+08:00",
+  "data_source": "local zer0share only",
+  "fixed_scope": {
+    "industries": 31,
+    "sample_nodes": 24,
+    "denominator": 100
+  },
+  "before": {
+    "breakout_cold_wall_ms": 11400.4,
+    "breakout_cold_backend_ms": 10944.1,
+    "breakout_warm_wall_ms": [395.2, 389.1],
+    "pullback_cold_wall_ms": 12795.8,
+    "range_bounce_cold_wall_ms": 8191.9
+  },
+  "after": {
+    "breakout_cold_wall_ms": 11402.8,
+    "breakout_cold_backend_ms": 10993.7,
+    "breakout_cold_phases_ms": {
+      "prepare": 3912.4,
+      "scoring": 6991.0,
+      "assembly": 2.8
+    },
+    "pullback_after_shared_prepare_wall_ms": 10409.7,
+    "range_bounce_after_shared_prepare_wall_ms": 5345.6,
+    "warm_server_request_ms": 103.8,
+    "browser_warm_reload_visible_ms": 248.2,
+    "browser_refresh_response_ms": 143.7,
+    "browser_refresh_render_complete_ms": 201.6,
+    "rows_before_refresh": 12,
+    "rows_during_refresh": 12,
+    "response_identity_bytes": 530582,
+    "response_gzip_bytes": 98547,
+    "response_reduction_percent": 81.4
+  },
+  "concurrent_same_key": {
+    "wall_ms": 8873.5,
+    "cache_hits": [false, true],
+    "same_ranking": true,
+    "result_scope": {
+      "industries": 31,
+      "sample_nodes": 24,
+      "denominator": 100
+    }
+  },
+  "notes": [
+    "首个形态的冷计算仍由既有形态评分主导，未通过修改算法换取虚假提速。",
+    "同一截止日期切换形态时复用行情、资格、行业归属与数组准备结果。",
+    "刷新时旧结果保持可读，接口完成后一次替换，不展示推测进度。"
+  ]
+}

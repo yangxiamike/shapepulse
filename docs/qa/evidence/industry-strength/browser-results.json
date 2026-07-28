@@ -1,0 +1,38 @@
+{
+  "captured_at": "2026-07-17T07:39:53.287Z",
+  "results": [
+    {
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "real_industries": 31,
+      "sample_nodes": 24,
+      "default_visible": 16,
+      "folded": 15,
+      "page_overflow": false,
+      "heatmap_internal_scroll": false,
+      "console_errors": [],
+      "result": "pass"
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 800
+      },
+      "real_industries": 31,
+      "sample_nodes": 24,
+      "default_visible": 16,
+      "folded": 15,
+      "page_overflow": false,
+      "heatmap_internal_scroll": true,
+      "console_errors": [],
+      "result": "pass"
+    },
+    {
+      "scenario": "expand-detail-trend-linkage",
+      "industry": "环保",
+      "result": "pass"
+    }
+  ]
+}

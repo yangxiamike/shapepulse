@@ -1,0 +1,72 @@
+{
+  "captured_at": "2026-07-17T08:33:23.249Z",
+  "results": [
+    {
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "real_industries": 31,
+      "sample_nodes": 24,
+      "default_visible": 12,
+      "active_rows": [
+        "医药生物↑ 持续增强+20.70",
+        "传媒↑ 持续增强+1.60",
+        "计算机↑ 正在增强+1.00",
+        "农林牧渔↑ 正在增强+0.60",
+        "通信↓ 正在走弱-0.90",
+        "建筑装饰↓ 正在走弱-1.00",
+        "纺织服饰↓ 正在走弱-1.20",
+        "非银金融↓ 正在走弱-1.70",
+        "有色金属↓ 正在走弱-2.50",
+        "机械设备↓ 正在走弱-2.60",
+        "电子⇣ 高位退潮-5.30",
+        "基础化工↓ 正在走弱-5.40"
+      ],
+      "latest_on_left": true,
+      "ranking_rows": 15,
+      "keyboard_preview": true,
+      "trend_hover_focus": true,
+      "page_overflow": false,
+      "heatmap_internal_scroll": false,
+      "console_errors": [],
+      "result": "pass"
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 800
+      },
+      "real_industries": 31,
+      "sample_nodes": 24,
+      "default_visible": 12,
+      "active_rows": [
+        "医药生物↑ 持续增强+20.70",
+        "传媒↑ 持续增强+1.60",
+        "计算机↑ 正在增强+1.00",
+        "农林牧渔↑ 正在增强+0.60",
+        "通信↓ 正在走弱-0.90",
+        "建筑装饰↓ 正在走弱-1.00",
+        "纺织服饰↓ 正在走弱-1.20",
+        "非银金融↓ 正在走弱-1.70",
+        "有色金属↓ 正在走弱-2.50",
+        "机械设备↓ 正在走弱-2.60",
+        "电子⇣ 高位退潮-5.30",
+        "基础化工↓ 正在走弱-5.40"
+      ],
+      "latest_on_left": true,
+      "ranking_rows": 15,
+      "keyboard_preview": true,
+      "trend_hover_focus": true,
+      "page_overflow": false,
+      "heatmap_internal_scroll": true,
+      "console_errors": [],
+      "result": "pass"
+    },
+    {
+      "scenario": "selector-detail-trend-linkage",
+      "industry": "美容护理",
+      "result": "pass"
+    }
+  ]
+}

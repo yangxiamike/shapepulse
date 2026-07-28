@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  Activity,
   BarChart3,
   CircleHelp,
   LayoutDashboard,
@@ -25,7 +26,7 @@ function applyFontSize(next: UiFontSize, persist = true) {
   window.dispatchEvent(new CustomEvent("ui-font-size-change", { detail: next }));
 }
 
-export function AppSidebar({ active }: { active: "screen" | "market" }) {
+export function AppSidebar({ active }: { active: "screen" | "market" | "industry-strength" }) {
   const [fontSize, setFontSize] = useState<UiFontSize>("standard");
 
   useEffect(() => {
@@ -47,8 +48,9 @@ export function AppSidebar({ active }: { active: "screen" | "market" }) {
         <span className="brand-name">LC</span>
       </div>
       <nav className="primary-nav" aria-label="主导航">
-        <Link className={`nav-item ${active === "screen" ? "active" : ""}`} href="/"><LayoutDashboard /><span>选股看板</span></Link>
-        <Link className={`nav-item ${active === "market" ? "active" : ""}`} href="/market"><LineChart /><span>本地行情</span></Link>
+        <Link aria-label="选股看板" className={`nav-item ${active === "screen" ? "active" : ""}`} href="/"><LayoutDashboard /><span>选股看板</span></Link>
+        <Link aria-label="本地行情" className={`nav-item ${active === "market" ? "active" : ""}`} href="/market"><LineChart /><span>本地行情</span></Link>
+        <Link aria-label="行业强弱" className={`nav-item ${active === "industry-strength" ? "active" : ""}`} href="/industry-strength"><Activity /><span>行业强弱</span></Link>
       </nav>
       <div className="sidebar-bottom">
         <div className="font-size-control" role="group" aria-label="字体大小">

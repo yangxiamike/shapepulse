@@ -134,6 +134,78 @@ class LocalMarketRepository:
             ),
         )
 
+    def industry_history(self) -> pd.DataFrame:
+        path = self.data_dir / "stock" / "industry" / "sw_member" / "data.parquet"
+        columns = [
+            "l1_code", "l1_name", "ts_code", "name",
+            "in_date", "out_date", "is_new",
+        ]
+        if not path.is_file():
+            return pd.DataFrame(columns=columns)
+        token = path.stat().st_mtime_ns
+        return self._cached(
+            "industry_history",
+            token,
+            lambda: pd.read_parquet(path, columns=columns),
+        )
+
+    def security_history(self) -> pd.DataFrame:
+        path = self.data_dir / "stock" / "basic" / "data.parquet"
+        columns = [
+            "ts_code", "symbol", "name", "market", "exchange",
+            "list_status", "list_date", "delist_date",
+        ]
+        token = path.stat().st_mtime_ns
+        return self._cached(
+            "security_history",
+            token,
+            lambda: pd.read_parquet(path, columns=columns),
+        )
+
+    def trading_dates(self, end_date: str, limit: int = 240) -> list[str]:
+        latest = self.latest_partition("daily_kline")
+        key = f"trading-dates:{end_date}:{limit}"
+        with self._lock:
+            hit = self._cache.get(key)
+            if hit is not None and hit[0] == latest:
+                return list(hit[1])
+        source = str(
+            self.data_dir / "stock" / "daily_kline" / "date=*" / "data.parquet"
+        )
+        with self._query_lock:
+            rows = self._duck.execute(
+                "SELECT DISTINCT trade_date FROM read_parquet(?, hive_partitioning=true) "
+                "WHERE trade_date<=? ORDER BY trade_date DESC LIMIT ?",
+                [source, end_date, limit],
+            ).fetchall()
+        dates = sorted(str(row[0]) for row in rows)
+        with self._lock:
+            self._cache[key] = (latest, dates)
+        return dates
+
+    def st_history(self, start_date: str, end_date: str) -> pd.DataFrame:
+        latest = self.latest_partition("stock_st")
+        key = f"st-history:{start_date}:{end_date}"
+        with self._lock:
+            hit = self._cache.get(key)
+            if hit is not None and hit[0] == latest:
+                return hit[1].copy()
+        source = str(
+            self.data_dir / "stock" / "stock_st" / "date=*" / "data.parquet"
+        )
+        if not (self.data_dir / "stock" / "stock_st").is_dir():
+            return pd.DataFrame(columns=["ts_code", "trade_date"])
+        with self._query_lock:
+            frame = self._duck.execute(
+                "SELECT ts_code,CAST(trade_date AS VARCHAR) AS trade_date "
+                "FROM read_parquet(?, hive_partitioning=true, union_by_name=true) "
+                "WHERE trade_date>=? AND trade_date<=?",
+                [source, start_date, end_date],
+            ).fetchdf()
+        with self._lock:
+            self._cache[key] = (latest, frame.copy())
+        return frame
+
     def daily_basic_snapshot(self) -> tuple[str | None, pd.DataFrame]:
         date = self.latest_partition("daily_basic")
         if date is None:
