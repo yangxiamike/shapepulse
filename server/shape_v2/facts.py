@@ -131,17 +131,27 @@ def extract_shared_facts(bars: Iterable[dict[str, Any]], minimum_bars: int = 120
 
     breakout_index: int | None = None
     breakout_resistance = 0.0
+    breakout_resistance_window = 0
     # Calibration needs to distinguish the breakout day, the 1-3 bar hold,
     # and the later 5-15 bar decay stage. Keep the event search inside that
     # explicit review horizon so an old breakout cannot remain "fresh".
     for index in range(max(20, len(close) - 16), len(close)):
-        prior = high[max(0, index - 60) : index]
-        if not len(prior):
-            continue
-        resistance = float(np.nanmax(prior))
-        if close[index] >= resistance * 1.003:
+        # A meaningful event may break a clear local structure without clearing
+        # an unrelated old 60-day high. Detect both horizons, then leave quality,
+        # continuity and old-high context to the independent breakout scorer.
+        event_candidates: list[tuple[int, float]] = []
+        for resistance_window in (20, 60):
+            prior = high[max(0, index - resistance_window) : index]
+            if len(prior) < min(20, resistance_window):
+                continue
+            resistance = float(np.nanmax(prior))
+            if close[index] >= resistance * 1.003:
+                event_candidates.append((resistance_window, resistance))
+        if event_candidates:
+            breakout_resistance_window, breakout_resistance = min(
+                event_candidates, key=lambda item: item[1]
+            )
             breakout_index = index
-            breakout_resistance = resistance
             break
     if breakout_index is None:
         facts["breakout_age"] = 99.0
@@ -150,6 +160,7 @@ def extract_shared_facts(bars: Iterable[dict[str, Any]], minimum_bars: int = 120
         facts["breakout_post_event_drawdown"] = 1.0
         facts["breakout_confirmed"] = 0.0
         facts["breakout_day_return"] = _return(close, 1)
+        facts["breakout_resistance_window"] = 0.0
         prior_breakout_volume = float(np.nanmean(volume[-21:-1]))
         facts["breakout_volume_ratio"] = _safe_ratio(
             float(volume[-1]), prior_breakout_volume, 1.0
@@ -183,6 +194,7 @@ def extract_shared_facts(bars: Iterable[dict[str, Any]], minimum_bars: int = 120
             _safe_ratio(float(close[breakout_index]), float(close[breakout_index - 1]), 1.0)
             - 1.0
         )
+        facts["breakout_resistance_window"] = float(breakout_resistance_window)
         prior_breakout_volume = float(
             np.nanmean(volume[max(0, breakout_index - 20) : breakout_index])
         )

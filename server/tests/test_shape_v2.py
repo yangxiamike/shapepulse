@@ -18,6 +18,11 @@ from server.shape_v2.dataset import (
     validate_audit_manifest,
     validate_public_payload,
 )
+from server.shape_v2.calibration import build_calibration_summary, public_records
+from server.shape_v2.metrics import calibration_diagnostics
+from server.shape_v2.scoring import CATEGORY_WEIGHT_PRIORS, score_all
+from server.shape_v2.facts import extract_shared_facts
+from server.patterns import CATEGORY_ORDER as V1_CATEGORY_ORDER
 from server.shape_v2.selection import (
     BREAKOUT_STAGE_QUOTAS,
     PROFILE_QUOTAS,
@@ -235,6 +240,186 @@ class ShapeV2DatasetTests(unittest.TestCase):
         }
         findings = validate_audit_manifest(audit)
         self.assertTrue(any("crosses splits" in finding for finding in findings))
+
+    def test_provisional_templates_keep_calibration_role_separate(self):
+        bars, _ = build_public_bars(source_frame(), "20260630", 120)
+        sample = build_public_sample("S-TEST", "draft", "calibration", bars)
+        config_path = (
+            Path(__file__).resolve().parents[2]
+            / "config"
+            / "shape_v2"
+            / "research-v2.0.0-draft3.json"
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        records = []
+        for index in range(8):
+            records.append(
+                {
+                    "round": "C-SYNTHETIC",
+                    "dataset_version": "draft",
+                    "sample_id": f"S-{index}",
+                    "ratings": {
+                        category: 3 if index < 4 else 0
+                        for category in (
+                            "fresh_breakout",
+                            "healthy_uptrend",
+                            "pullback_strengthening",
+                        )
+                    },
+                    "note": "",
+                    "facts": {
+                        key: value + index * 0.0001
+                        for key, value in sample["shared_facts"].items()
+                    },
+                    "_ts_code": f"{index:06d}.SZ",
+                    "_source_group_id": f"G-{index}",
+                }
+            )
+        rounds = [
+            {
+                "name": "C-SYNTHETIC",
+                "dataset_version": "draft",
+                "source_snapshot": "20260727",
+                "network_used": False,
+                "dataset_fingerprint": "fingerprint",
+                "label_file_sha256": "labels",
+                "audit_file_sha256": "audit",
+                "record_count": len(records),
+                "records": records,
+            }
+        ]
+        summary = build_calibration_summary(
+            rounds, config["categories"], CATEGORY_WEIGHT_PRIORS
+        )
+        self.assertEqual(summary["sample_role"]["calibration_count"], 8)
+        self.assertEqual(summary["sample_role"]["template_count"], 0)
+        self.assertFalse(summary["formal_scoring_enabled"])
+        self.assertNotIn("_ts_code", public_records(rounds)[0])
+
+    def test_three_scorers_are_independent_and_explain_caps(self):
+        bars, _ = build_public_bars(source_frame(), "20260630", 120)
+        sample = build_public_sample("S-TEST", "draft", "calibration", bars)
+        config_path = (
+            Path(__file__).resolve().parents[2]
+            / "config"
+            / "shape_v2"
+            / "research-v2.0.0-draft3.json"
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        records = []
+        for index in range(8):
+            records.append(
+                {
+                    "round": "C",
+                    "dataset_version": "draft",
+                    "sample_id": f"S-{index}",
+                    "ratings": {
+                        category: 2 if index < 4 else 0
+                        for category in (
+                            "fresh_breakout",
+                            "healthy_uptrend",
+                            "pullback_strengthening",
+                        )
+                    },
+                    "note": "",
+                    "facts": {
+                        key: value + index * 0.0001
+                        for key, value in sample["shared_facts"].items()
+                    },
+                    "_ts_code": f"{index:06d}.SZ",
+                    "_source_group_id": f"G-{index}",
+                }
+            )
+        rounds = [
+            {
+                "name": "C",
+                "dataset_version": "draft",
+                "source_snapshot": "20260727",
+                "network_used": False,
+                "dataset_fingerprint": "fingerprint",
+                "label_file_sha256": "labels",
+                "audit_file_sha256": "audit",
+                "record_count": len(records),
+                "records": records,
+            }
+        ]
+        summary = build_calibration_summary(
+            rounds, config["categories"], CATEGORY_WEIGHT_PRIORS
+        )
+        facts = dict(sample["shared_facts"])
+        facts["breakout_age"] = 0.0
+        predictions = score_all(facts, summary)
+        self.assertEqual(set(predictions), set(CATEGORY_WEIGHT_PRIORS))
+        self.assertLessEqual(predictions["fresh_breakout"]["score"], 2.0)
+        self.assertTrue(
+            any(
+                cap["code"] == "breakout_day_ceiling"
+                for cap in predictions["fresh_breakout"]["caps"]
+            )
+        )
+
+    def test_calibration_metrics_are_explicitly_in_sample(self):
+        records = []
+        predictions = {}
+        for index in range(4):
+            sample_id = f"S-{index}"
+            ratings = {
+                "fresh_breakout": index,
+                "healthy_uptrend": 3 - index,
+                "pullback_strengthening": index % 2,
+            }
+            records.append(
+                {
+                    "sample_id": sample_id,
+                    "round": "C",
+                    "ratings": ratings,
+                    "note": "",
+                }
+            )
+            predictions[sample_id] = {
+                category: {"score": float(ratings[category]), "caps": []}
+                for category in ratings
+            }
+        diagnostics = calibration_diagnostics(records, predictions)
+        self.assertEqual(diagnostics["status"], "apparent_in_sample_only")
+        self.assertEqual(
+            diagnostics["categories"]["fresh_breakout"]["pairwise"]["accuracy"], 1.0
+        )
+
+    def test_local_20_day_breakout_is_not_blocked_by_an_old_60_day_high(self):
+        close = np.concatenate(
+            [
+                np.linspace(100.0, 130.0, 30),
+                np.linspace(112.0, 105.0, 40),
+                np.linspace(104.0, 112.0, 47),
+                np.asarray([114.0, 116.0, 117.0]),
+            ]
+        )
+        bars = [
+            {
+                "t": index - 119,
+                "open": float(value * 0.997),
+                "high": float(value * 1.002),
+                "low": float(value * 0.995),
+                "close": float(value),
+                "volume": 1.0,
+            }
+            for index, value in enumerate(close)
+        ]
+        facts = extract_shared_facts(bars)
+        self.assertLessEqual(facts["breakout_age"], 2.0)
+        self.assertEqual(facts["breakout_resistance_window"], 20.0)
+        self.assertLess(facts["old_high_gap_120"], 0.0)
+
+    def test_v2_namespace_does_not_break_v1_or_keep_range_bounce(self):
+        self.assertEqual(
+            V1_CATEGORY_ORDER, ("breakout", "pullback", "range_bounce")
+        )
+        self.assertEqual(
+            tuple(CATEGORY_WEIGHT_PRIORS),
+            ("fresh_breakout", "healthy_uptrend", "pullback_strengthening"),
+        )
+        self.assertNotIn("range_bounce", CATEGORY_WEIGHT_PRIORS)
 
 
 if __name__ == "__main__":

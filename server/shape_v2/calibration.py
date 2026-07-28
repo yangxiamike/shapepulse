@@ -12,6 +12,7 @@ import numpy as np
 
 from . import CATEGORY_KEYS
 from .dataset import content_hash, validate_audit_manifest, validate_public_payload
+from .facts import extract_shared_facts
 
 
 @dataclass(frozen=True)
@@ -105,7 +106,13 @@ def load_calibration_round(spec: CalibrationRound) -> dict[str, Any]:
                     key: int(label_items[sample_id]["ratings"][key]) for key in CATEGORY_KEYS
                 },
                 "note": str(label_items[sample_id].get("note", "")).strip(),
-                "facts": {key: float(value) for key, value in sample["shared_facts"].items()},
+                # Older calibration packs intentionally remain immutable. Recompute the
+                # current shared-fact schema from their already-censored anonymous bars
+                # instead of mutating the archived public payload.
+                "facts": {
+                    key: float(value)
+                    for key, value in extract_shared_facts(sample["bars"]).items()
+                },
                 "_ts_code": str(audit_items[sample_id]["ts_code"]),
                 "_source_group_id": str(audit_items[sample_id]["source_group_id"]),
             }
@@ -232,7 +239,7 @@ def build_calibration_summary(
         }
     return {
         "schema_version": "shape-v2-calibration-summary/1",
-        "model_version": "shape-v2.0.0-baseline1-provisional",
+        "model_version": "shape-v2.0.0-baseline1.1-provisional",
         "status": "calibration_prior_only",
         "formal_scoring_enabled": False,
         "allowed_use": ["definition", "weight_prior", "provisional_template", "tuning_ranking"],
