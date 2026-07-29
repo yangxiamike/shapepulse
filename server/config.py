@@ -16,6 +16,7 @@ class Settings:
     zer0share_root: Path
     zer0share_config: Path
     thresholds_path: Path
+    similarity_templates_path: Path
     state_db: Path
     host: str
     port: int
@@ -29,6 +30,12 @@ def load_settings() -> Settings:
     thresholds = Path(
         os.environ.get("MARKET_THRESHOLDS", PROJECT_ROOT / "config" / "thresholds.json")
     ).resolve()
+    similarity_templates = Path(
+        os.environ.get(
+            "MARKET_SIMILARITY_TEMPLATES",
+            PROJECT_ROOT / "config" / "similarity_templates.json",
+        )
+    ).resolve()
     state_db = Path(
         os.environ.get("MARKET_STATE_DB", PROJECT_ROOT / "server" / "market_state.sqlite3")
     ).resolve()
@@ -37,6 +44,7 @@ def load_settings() -> Settings:
         zer0share_root=root,
         zer0share_config=config_path,
         thresholds_path=thresholds,
+        similarity_templates_path=similarity_templates,
         state_db=state_db,
         host=os.environ.get("MARKET_HOST", "127.0.0.1"),
         port=int(os.environ.get("MARKET_PORT", "8765")),

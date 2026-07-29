@@ -94,6 +94,19 @@ class StateStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_pattern_code
                     ON pattern_evaluations(ts_code, created_at DESC);
+                CREATE TABLE IF NOT EXISTS similarity_templates (
+                    template_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    source_ts_code TEXT NOT NULL,
+                    start_date TEXT NOT NULL,
+                    end_date TEXT NOT NULL,
+                    window_bars INTEGER NOT NULL,
+                    bars_json TEXT NOT NULL,
+                    z_values_json TEXT NOT NULL,
+                    data_as_of TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             run_columns = {
@@ -179,6 +192,101 @@ class StateStore:
         item["pending"] = bool(item["pending"])
         item["watchlist"] = bool(item.get("watchlist", 0))
         return item
+
+    @staticmethod
+    def _decode_similarity_template(
+        row: sqlite3.Row | dict[str, Any],
+    ) -> dict[str, Any]:
+        item = dict(row)
+        item["id"] = item.pop("template_id")
+        item["label"] = item["name"]
+        item["bars"] = json.loads(item.pop("bars_json"))
+        item["z_values"] = json.loads(item.pop("z_values_json"))
+        item["source"] = "custom"
+        item["kind"] = "custom"
+        item["read_only"] = False
+        return item
+
+    def create_similarity_template(
+        self,
+        *,
+        name: str,
+        source_ts_code: str,
+        start_date: str,
+        end_date: str,
+        bars: list[dict[str, Any]],
+        z_values: list[float],
+        data_as_of: str,
+    ) -> dict[str, Any]:
+        template_id = f"custom_{uuid.uuid4().hex}"
+        timestamp = now_iso()
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO similarity_templates(
+                    template_id, name, source_ts_code, start_date, end_date,
+                    window_bars, bars_json, z_values_json, data_as_of,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    template_id,
+                    name,
+                    source_ts_code,
+                    start_date,
+                    end_date,
+                    len(bars),
+                    json.dumps(bars, ensure_ascii=False),
+                    json.dumps(z_values),
+                    data_as_of,
+                    timestamp,
+                    timestamp,
+                ),
+            )
+        item = self.similarity_template(template_id)
+        if item is None:  # pragma: no cover - protects an impossible committed insert
+            raise RuntimeError("custom template was not persisted")
+        return item
+
+    def list_similarity_templates(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM similarity_templates ORDER BY created_at, template_id"
+            ).fetchall()
+        return [self._decode_similarity_template(row) for row in rows]
+
+    def similarity_template(self, template_id: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM similarity_templates WHERE template_id=?",
+                (template_id,),
+            ).fetchone()
+        return None if row is None else self._decode_similarity_template(row)
+
+    def rename_similarity_template(
+        self, template_id: str, name: str
+    ) -> dict[str, Any] | None:
+        timestamp = now_iso()
+        with self._lock, self._connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE similarity_templates
+                SET name=?, updated_at=?
+                WHERE template_id=?
+                """,
+                (name, timestamp, template_id),
+            )
+        if cursor.rowcount == 0:
+            return None
+        return self.similarity_template(template_id)
+
+    def delete_similarity_template(self, template_id: str) -> bool:
+        with self._lock, self._connection() as connection:
+            cursor = connection.execute(
+                "DELETE FROM similarity_templates WHERE template_id=?",
+                (template_id,),
+            )
+        return cursor.rowcount > 0
 
     def record_screen(
         self,

@@ -123,7 +123,10 @@ def make_handler(service: MarketService):
             self.send_header("Cache-Control", "no-store")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header(
+                "Access-Control-Allow-Methods",
+                "GET, POST, PATCH, DELETE, OPTIONS",
+            )
             timings = payload.get("timings") if isinstance(payload, dict) else None
             if isinstance(timings, dict):
                 entries = []
@@ -163,6 +166,20 @@ def make_handler(service: MarketService):
                     self._send(HTTPStatus.OK, service.search(term, limit))
                 elif path == "/api/industries":
                     self._send(HTTPStatus.OK, service.industries())
+                elif path == "/api/templates":
+                    self._send(HTTPStatus.OK, service.templates())
+                elif path.startswith("/api/templates/"):
+                    suffix = unquote(path.removeprefix("/api/templates/"))
+                    if suffix.endswith("/stocks"):
+                        template_id = suffix.removesuffix("/stocks").rstrip("/")
+                        self._send(
+                            HTTPStatus.OK,
+                            service.template_stocks(
+                                template_id, _first(query, "limit", "100")
+                            ),
+                        )
+                    else:
+                        self._send(HTTPStatus.OK, service.template(suffix))
                 elif path == "/api/industry-strength":
                     self._send(
                         HTTPStatus.OK,
@@ -264,6 +281,11 @@ def make_handler(service: MarketService):
                             None if token is None else str(token), filters
                         ),
                     )
+                elif path == "/api/templates":
+                    self._send(
+                        HTTPStatus.CREATED,
+                        service.create_template(body),
+                    )
                 elif path == "/api/state":
                     code = str(body.get("code", body.get("ts_code", ""))).strip()
                     action = str(body.get("action", "")).strip().lower()
@@ -272,6 +294,39 @@ def make_handler(service: MarketService):
                     self._send(HTTPStatus.OK, service.update_state(code, action))
                 else:
                     self._send(HTTPStatus.NOT_FOUND, {"error": "not_found", "path": path})
+            except Exception as exc:
+                self._handle_error(exc)
+
+        def do_PATCH(self) -> None:
+            try:
+                path = (urlparse(self.path).path.rstrip("/") or "/")
+                body = self._read_json()
+                if path.startswith("/api/templates/"):
+                    template_id = unquote(path.removeprefix("/api/templates/"))
+                    self._send(
+                        HTTPStatus.OK,
+                        service.rename_template(template_id, body),
+                    )
+                else:
+                    self._send(
+                        HTTPStatus.NOT_FOUND, {"error": "not_found", "path": path}
+                    )
+            except Exception as exc:
+                self._handle_error(exc)
+
+        def do_DELETE(self) -> None:
+            try:
+                path = (urlparse(self.path).path.rstrip("/") or "/")
+                if path.startswith("/api/templates/"):
+                    template_id = unquote(path.removeprefix("/api/templates/"))
+                    self._send(
+                        HTTPStatus.OK,
+                        service.delete_template(template_id),
+                    )
+                else:
+                    self._send(
+                        HTTPStatus.NOT_FOUND, {"error": "not_found", "path": path}
+                    )
             except Exception as exc:
                 self._handle_error(exc)
 

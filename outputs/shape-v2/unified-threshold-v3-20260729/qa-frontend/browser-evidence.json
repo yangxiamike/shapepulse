@@ -1,0 +1,1717 @@
+{
+  "checkedAt": "2026-07-29T12:45:31.034Z",
+  "branch": "codex/unified-threshold-app-v3",
+  "baseURL": "http://localhost:3100",
+  "backendURL": "http://127.0.0.1:8876",
+  "health": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "source": "local zer0share Parquet/DuckDB snapshot",
+      "network": "not used",
+      "zer0share_root": "C:\\Users\\hp\\Documents\\zer0share",
+      "config": "C:\\Users\\hp\\Documents\\zer0share\\config\\settings.toml",
+      "data_dir": "C:\\Users\\hp\\Documents\\zer0share\\data",
+      "snapshots": {
+        "daily_kline": "20260729",
+        "daily_basic": "20260729",
+        "adj_factor": "20260729",
+        "stock_st": "20260729",
+        "suspend_d": "20260729",
+        "stk_limit": "20260729",
+        "universe": "20260729"
+      },
+      "active_stocks": 5534,
+      "elapsed_ms": 73.6,
+      "service": "手动跟踪市场 local API",
+      "threshold_version": 1,
+      "state_db": "C:\\Users\\hp\\.codex\\worktrees\\b367\\手动跟踪市场\\outputs\\shape-v2\\unified-threshold-v3-20260729\\qa-frontend\\qa-market-state.sqlite3"
+    }
+  },
+  "pages": [
+    {
+      "route": "/templates",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "httpStatus": 200,
+      "loadMs": 907,
+      "title": "模板库 | 手动跟踪市场",
+      "scroll": {
+        "width": 1440,
+        "height": 1444
+      },
+      "horizontalOverflow": false,
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "label": "小字体",
+          "width": 32,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "标准字体",
+          "width": 32,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "大字体",
+          "width": 32,
+          "height": 28
+        }
+      ],
+      "horizontalClips": [],
+      "fonts": {
+        "h1": {
+          "size": "34px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "h2": {
+          "size": "20px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "body": {
+          "size": "14px",
+          "weight": "400",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgb(247, 245, 239)"
+        }
+      },
+      "firstScreenText": [
+        "模板库",
+        "先看冻结四模板，也可以把一只股票的真实历史区间保存成自己的模板。",
+        "保存一段你看得懂的 K 线",
+        "输入股票和起止日期。系统保存这段窗口，之后用同样长度寻找最相似的股票。",
+        "冻结四模板",
+        "刚突破",
+        "健康上涨",
+        "回调转强",
+        "抛物线上升",
+        "我的自定义模板",
+        "从上方输入股票与日期开始。",
+        "刚突破",
+        "价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。",
+        "50 个交易日",
+        "603986.SH",
+        "2025-06-19 至 2025-08-27",
+        "5496 只",
+        "价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。",
+        "整体向上，高点靠近窗口后段。这只是形状说明，不代表之后一定上涨或下跌。",
+        "五洲医疗",
+        "伟星股份",
+        "艾艾精工",
+        "超卓航科"
+      ]
+    },
+    {
+      "route": "/market?code=603986&template=fresh_breakout",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "httpStatus": 200,
+      "loadMs": 1304,
+      "title": "本地行情终端 | 手动跟踪市场",
+      "scroll": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "label": "小字体",
+          "width": 32,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "标准字体",
+          "width": 32,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "大字体",
+          "width": 32,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "分时",
+          "width": 42,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "5分",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "15分",
+          "width": 44,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "30分",
+          "width": 44,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "60分",
+          "width": 44,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "日K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "周K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "月K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "季K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "年K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "A",
+          "label": "保存当前区间为模板",
+          "width": 80,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "指标尚未实现",
+          "width": 54,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "对比尚未实现",
+          "width": 36,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "预警尚未实现",
+          "width": 54,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "回放尚未实现",
+          "width": 54,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "截图",
+          "width": 27,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "进入全屏",
+          "width": 54,
+          "height": 32
+        },
+        {
+          "tag": "INPUT",
+          "label": "画线颜色",
+          "width": 23,
+          "height": 20
+        },
+        {
+          "tag": "SELECT",
+          "label": "画线线宽",
+          "width": 41,
+          "height": 23
+        },
+        {
+          "tag": "BUTTON",
+          "label": "选择/调整",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "十字光标已开启",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "趋势线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "线段",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "射线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "水平线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "垂直线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "斐波那契回撤",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "斐波那契扩展",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "矩形",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "曲线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "自由绘制",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "文本",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "测量",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "放大图表",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "删除所选",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "清除画线（全部）",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "放大图表 1",
+          "width": 70,
+          "height": 26
+        },
+        {
+          "tag": "A",
+          "label": "",
+          "width": 35,
+          "height": 19
+        },
+        {
+          "tag": "BUTTON",
+          "label": "1天",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "5天",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "1个月",
+          "width": 47,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "3个月",
+          "width": 47,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "6个月",
+          "width": 47,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "YTD",
+          "width": 40,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "1年",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "3年",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "5年",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "全部",
+          "width": 40,
+          "height": 30
+        },
+        {
+          "tag": "A",
+          "label": "保存当前区间为模板",
+          "width": 148,
+          "height": 34
+        },
+        {
+          "tag": "DIV",
+          "label": "调整主图与右侧栏宽度",
+          "width": 10,
+          "height": 958
+        }
+      ],
+      "horizontalClips": [],
+      "fonts": {
+        "h1": {
+          "size": "26px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "h2": null,
+        "body": {
+          "size": "14px",
+          "weight": "400",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgb(247, 245, 239)"
+        }
+      },
+      "firstScreenText": [
+        "兆易创新",
+        "-26.60 -6.81%"
+      ]
+    },
+    {
+      "route": "/template-breadth-v3",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "httpStatus": 200,
+      "loadMs": 333,
+      "title": "形态宽度试用页 | 手动跟踪市场",
+      "scroll": {
+        "width": 1440,
+        "height": 1788
+      },
+      "horizontalOverflow": false,
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "label": "小字体",
+          "width": 32,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "标准字体",
+          "width": 32,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "大字体",
+          "width": 32,
+          "height": 28
+        }
+      ],
+      "horizontalClips": [],
+      "fonts": {
+        "h1": {
+          "size": "34px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "h2": {
+          "size": "21px",
+          "weight": "700",
+          "lineHeight": "26.25px",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "body": {
+          "size": "14px",
+          "weight": "400",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgb(247, 245, 239)"
+        }
+      },
+      "firstScreenText": [
+        "市场形态宽度",
+        "看有多少股票同时接近同一种市场形态，以及这种状态正在扩散还是收缩。",
+        "0.80 试用观察线，实验未验证为四模板统一基准",
+        "刚突破",
+        "健康上涨",
+        "回调转强",
+        "抛物线上升",
+        "1 只",
+        "0 只",
+        "-4 只",
+        "1.8 只",
+        "低位",
+        "超过观察线的股票数量",
+        "实线是每日数量，虚线是 5 日平均。",
+        "最接近当前模板的股票",
+        "0.80 以下仍保留展示，并明确标为相对偏低。",
+        "五洲医疗",
+        "行业宽度地图",
+        "块的面积只表示当前超过 0.80 的股票数量。",
+        "医药生物"
+      ]
+    },
+    {
+      "route": "/templates",
+      "viewport": {
+        "width": 1024,
+        "height": 800
+      },
+      "httpStatus": 200,
+      "loadMs": 895,
+      "title": "模板库 | 手动跟踪市场",
+      "scroll": {
+        "width": 1024,
+        "height": 1751
+      },
+      "horizontalOverflow": false,
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "label": "小字体",
+          "width": 17,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "标准字体",
+          "width": 17,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "大字体",
+          "width": 17,
+          "height": 28
+        }
+      ],
+      "horizontalClips": [],
+      "fonts": {
+        "h1": {
+          "size": "34px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "h2": {
+          "size": "20px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "body": {
+          "size": "14px",
+          "weight": "400",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgb(247, 245, 239)"
+        }
+      },
+      "firstScreenText": [
+        "模板库",
+        "先看冻结四模板，也可以把一只股票的真实历史区间保存成自己的模板。",
+        "保存一段你看得懂的 K 线",
+        "输入股票和起止日期。系统保存这段窗口，之后用同样长度寻找最相似的股票。",
+        "冻结四模板",
+        "刚突破",
+        "健康上涨",
+        "回调转强",
+        "抛物线上升",
+        "我的自定义模板",
+        "从上方输入股票与日期开始。",
+        "刚突破",
+        "价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。",
+        "50 个交易日",
+        "603986.SH",
+        "2025-06-19 至 2025-08-27",
+        "5496 只",
+        "价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。",
+        "整体向上，高点靠近窗口后段。这只是形状说明，不代表之后一定上涨或下跌。"
+      ]
+    },
+    {
+      "route": "/market?code=603986&template=fresh_breakout",
+      "viewport": {
+        "width": 1024,
+        "height": 800
+      },
+      "httpStatus": 200,
+      "loadMs": 1293,
+      "title": "本地行情终端 | 手动跟踪市场",
+      "scroll": {
+        "width": 1024,
+        "height": 800
+      },
+      "horizontalOverflow": false,
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "label": "小字体",
+          "width": 17,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "标准字体",
+          "width": 17,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "大字体",
+          "width": 17,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "分时",
+          "width": 42,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "5分",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "15分",
+          "width": 44,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "30分",
+          "width": 44,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "60分",
+          "width": 44,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "日K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "周K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "月K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "季K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "年K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "INPUT",
+          "label": "画线颜色",
+          "width": 23,
+          "height": 20
+        },
+        {
+          "tag": "SELECT",
+          "label": "画线线宽",
+          "width": 41,
+          "height": 23
+        },
+        {
+          "tag": "BUTTON",
+          "label": "选择/调整",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "十字光标已开启",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "趋势线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "线段",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "射线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "水平线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "垂直线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "斐波那契回撤",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "斐波那契扩展",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "矩形",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "曲线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "自由绘制",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "文本",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "测量",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "放大图表",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "删除所选",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "清除画线（全部）",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "放大图表 1",
+          "width": 70,
+          "height": 26
+        },
+        {
+          "tag": "A",
+          "label": "",
+          "width": 35,
+          "height": 19
+        },
+        {
+          "tag": "BUTTON",
+          "label": "1天",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "5天",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "1个月",
+          "width": 47,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "3个月",
+          "width": 47,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "6个月",
+          "width": 47,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "YTD",
+          "width": 40,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "1年",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "3年",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "5年",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "全部",
+          "width": 40,
+          "height": 30
+        },
+        {
+          "tag": "A",
+          "label": "保存当前区间为模板",
+          "width": 148,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "关闭",
+          "width": 35,
+          "height": 35
+        }
+      ],
+      "horizontalClips": [],
+      "fonts": {
+        "h1": {
+          "size": "23px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "h2": null,
+        "body": {
+          "size": "14px",
+          "weight": "400",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgb(247, 245, 239)"
+        }
+      },
+      "firstScreenText": [
+        "兆易创新",
+        "-26.60 -6.81%"
+      ]
+    },
+    {
+      "route": "/template-breadth-v3",
+      "viewport": {
+        "width": 1024,
+        "height": 800
+      },
+      "httpStatus": 200,
+      "loadMs": 204,
+      "title": "形态宽度试用页 | 手动跟踪市场",
+      "scroll": {
+        "width": 1024,
+        "height": 2738
+      },
+      "horizontalOverflow": false,
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "label": "小字体",
+          "width": 17,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "标准字体",
+          "width": 17,
+          "height": 28
+        },
+        {
+          "tag": "BUTTON",
+          "label": "大字体",
+          "width": 17,
+          "height": 28
+        }
+      ],
+      "horizontalClips": [],
+      "fonts": {
+        "h1": {
+          "size": "34px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "h2": {
+          "size": "21px",
+          "weight": "700",
+          "lineHeight": "26.25px",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "body": {
+          "size": "14px",
+          "weight": "400",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgb(247, 245, 239)"
+        }
+      },
+      "firstScreenText": [
+        "市场形态宽度",
+        "看有多少股票同时接近同一种市场形态，以及这种状态正在扩散还是收缩。",
+        "0.80 试用观察线，实验未验证为四模板统一基准",
+        "刚突破",
+        "健康上涨",
+        "回调转强",
+        "抛物线上升",
+        "1 只",
+        "0 只",
+        "-4 只",
+        "1.8 只",
+        "低位",
+        "超过观察线的股票数量",
+        "实线是每日数量，虚线是 5 日平均。"
+      ]
+    },
+    {
+      "route": "/templates",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "httpStatus": 200,
+      "loadMs": 896,
+      "title": "模板库 | 手动跟踪市场",
+      "scroll": {
+        "width": 390,
+        "height": 2804
+      },
+      "horizontalOverflow": false,
+      "smallTargets": [],
+      "horizontalClips": [],
+      "fonts": {
+        "h1": {
+          "size": "29px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "h2": {
+          "size": "20px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "body": {
+          "size": "14px",
+          "weight": "400",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgb(247, 245, 239)"
+        }
+      },
+      "firstScreenText": [
+        "模板库",
+        "先看冻结四模板，也可以把一只股票的真实历史区间保存成自己的模板。",
+        "保存一段你看得懂的 K 线",
+        "输入股票和起止日期。系统保存这段窗口，之后用同样长度寻找最相似的股票。",
+        "冻结四模板",
+        "刚突破"
+      ]
+    },
+    {
+      "route": "/market?code=603986&template=fresh_breakout",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "httpStatus": 200,
+      "loadMs": 1292,
+      "title": "本地行情终端 | 手动跟踪市场",
+      "scroll": {
+        "width": 390,
+        "height": 908
+      },
+      "horizontalOverflow": false,
+      "smallTargets": [
+        {
+          "tag": "BUTTON",
+          "label": "分时",
+          "width": 42,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "5分",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "15分",
+          "width": 44,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "30分",
+          "width": 44,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "60分",
+          "width": 44,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "日K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "周K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "月K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "季K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "BUTTON",
+          "label": "年K",
+          "width": 39,
+          "height": 32
+        },
+        {
+          "tag": "INPUT",
+          "label": "画线颜色",
+          "width": 23,
+          "height": 20
+        },
+        {
+          "tag": "SELECT",
+          "label": "画线线宽",
+          "width": 41,
+          "height": 23
+        },
+        {
+          "tag": "BUTTON",
+          "label": "选择/调整",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "十字光标已开启",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "趋势线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "线段",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "射线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "水平线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "垂直线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "斐波那契回撤",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "斐波那契扩展",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "矩形",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "曲线",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "自由绘制",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "文本",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "测量",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "放大图表",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "删除所选",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "清除画线（全部）",
+          "width": 34,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "放大图表 1",
+          "width": 70,
+          "height": 26
+        },
+        {
+          "tag": "A",
+          "label": "",
+          "width": 35,
+          "height": 19
+        },
+        {
+          "tag": "BUTTON",
+          "label": "1天",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "5天",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "1个月",
+          "width": 47,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "3个月",
+          "width": 47,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "6个月",
+          "width": 47,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "YTD",
+          "width": 40,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "1年",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "3年",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "5年",
+          "width": 35,
+          "height": 30
+        },
+        {
+          "tag": "BUTTON",
+          "label": "全部",
+          "width": 40,
+          "height": 30
+        },
+        {
+          "tag": "A",
+          "label": "保存当前区间为模板",
+          "width": 148,
+          "height": 34
+        },
+        {
+          "tag": "BUTTON",
+          "label": "关闭",
+          "width": 35,
+          "height": 35
+        }
+      ],
+      "horizontalClips": [
+        {
+          "tag": "BUTTON",
+          "className": "",
+          "text": "月K",
+          "left": 361,
+          "right": 400
+        },
+        {
+          "tag": "BUTTON",
+          "className": "",
+          "text": "季K",
+          "left": 402,
+          "right": 441
+        },
+        {
+          "tag": "BUTTON",
+          "className": "",
+          "text": "年K",
+          "left": 443,
+          "right": 482
+        },
+        {
+          "tag": "LABEL",
+          "className": "",
+          "text": "线宽1px2px3px4px5px",
+          "left": 339,
+          "right": 423
+        },
+        {
+          "tag": "SELECT",
+          "className": "",
+          "text": "1px2px3px4px5px",
+          "left": 374,
+          "right": 415
+        },
+        {
+          "tag": "BUTTON",
+          "className": "",
+          "text": "1年",
+          "left": 373,
+          "right": 408
+        },
+        {
+          "tag": "BUTTON",
+          "className": "",
+          "text": "3年",
+          "left": 418,
+          "right": 453
+        },
+        {
+          "tag": "BUTTON",
+          "className": "",
+          "text": "5年",
+          "left": 463,
+          "right": 498
+        },
+        {
+          "tag": "BUTTON",
+          "className": "",
+          "text": "全部",
+          "left": 508,
+          "right": 548
+        },
+        {
+          "tag": "A",
+          "className": "range-save-template",
+          "text": "保存当前区间为模板",
+          "left": 558,
+          "right": 706
+        },
+        {
+          "tag": "svg",
+          "className": "[object SVGAnimatedString]",
+          "text": "",
+          "left": 568,
+          "right": 583
+        },
+        {
+          "tag": "path",
+          "className": "[object SVGAnimatedString]",
+          "text": "",
+          "left": 570,
+          "right": 581
+        },
+        {
+          "tag": "path",
+          "className": "[object SVGAnimatedString]",
+          "text": "",
+          "left": 573,
+          "right": 579
+        },
+        {
+          "tag": "path",
+          "className": "[object SVGAnimatedString]",
+          "text": "",
+          "left": 573,
+          "right": 578
+        }
+      ],
+      "fonts": {
+        "h1": {
+          "size": "23px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "h2": null,
+        "body": {
+          "size": "14px",
+          "weight": "400",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgb(247, 245, 239)"
+        }
+      },
+      "firstScreenText": [
+        "兆易创新",
+        "-26.60 -6.81%"
+      ]
+    },
+    {
+      "route": "/template-breadth-v3",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "httpStatus": 200,
+      "loadMs": 205,
+      "title": "形态宽度试用页 | 手动跟踪市场",
+      "scroll": {
+        "width": 390,
+        "height": 3048
+      },
+      "horizontalOverflow": false,
+      "smallTargets": [],
+      "horizontalClips": [
+        {
+          "tag": "BUTTON",
+          "className": "",
+          "text": "回调转强先走强、再回吐，随后恢复向上",
+          "left": 372,
+          "right": 544
+        },
+        {
+          "tag": "I",
+          "className": "",
+          "text": "",
+          "left": 386,
+          "right": 396
+        },
+        {
+          "tag": "SPAN",
+          "className": "",
+          "text": "回调转强先走强、再回吐，随后恢复向上",
+          "left": 407,
+          "right": 530
+        },
+        {
+          "tag": "STRONG",
+          "className": "",
+          "text": "回调转强",
+          "left": 407,
+          "right": 530
+        },
+        {
+          "tag": "SMALL",
+          "className": "",
+          "text": "先走强、再回吐，随后恢复向上",
+          "left": 407,
+          "right": 530
+        },
+        {
+          "tag": "BUTTON",
+          "className": "",
+          "text": "抛物线上升前段较缓，随后斜率放大并加速",
+          "left": 553,
+          "right": 725
+        },
+        {
+          "tag": "I",
+          "className": "",
+          "text": "",
+          "left": 567,
+          "right": 577
+        },
+        {
+          "tag": "SPAN",
+          "className": "",
+          "text": "抛物线上升前段较缓，随后斜率放大并加速",
+          "left": 588,
+          "right": 711
+        },
+        {
+          "tag": "STRONG",
+          "className": "",
+          "text": "抛物线上升",
+          "left": 588,
+          "right": 711
+        },
+        {
+          "tag": "SMALL",
+          "className": "",
+          "text": "前段较缓，随后斜率放大并加速",
+          "left": 588,
+          "right": 711
+        }
+      ],
+      "fonts": {
+        "h1": {
+          "size": "29px",
+          "weight": "700",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "h2": {
+          "size": "21px",
+          "weight": "700",
+          "lineHeight": "26.25px",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "body": {
+          "size": "14px",
+          "weight": "400",
+          "lineHeight": "normal",
+          "color": "rgb(9, 12, 14)",
+          "background": "rgb(247, 245, 239)"
+        }
+      },
+      "firstScreenText": [
+        "市场形态宽度",
+        "看有多少股票同时接近同一种市场形态，以及这种状态正在扩散还是收缩。",
+        "0.80 试用观察线，实验未验证为四模板统一基准",
+        "刚突破",
+        "健康上涨",
+        "回调转强",
+        "抛物线上升",
+        "1 只",
+        "0 只",
+        "-4 只",
+        "1.8 只"
+      ]
+    }
+  ],
+  "interactions": {
+    "templates": {
+      "frozenPresence": {
+        "刚突破": true,
+        "健康上涨": true,
+        "回调转强": true,
+        "抛物线上升": true
+      },
+      "topHref": "/market?code=301234&template=fresh_breakout",
+      "topLinkPreservesTemplate": true,
+      "createRenameDelete": {
+        "created": true,
+        "renamed": true,
+        "deleted": true,
+        "customRemaining": 0
+      },
+      "focusVisibleChanged": true,
+      "focusBefore": {
+        "outline": "rgb(9, 12, 14) none 3px",
+        "boxShadow": "rgb(28, 168, 122) 5px 0px 0px 0px inset",
+        "background": "rgb(228, 242, 237)"
+      },
+      "focusAfter": {
+        "outline": "rgba(40, 92, 245, 0.34) solid 3px",
+        "boxShadow": "rgb(28, 168, 122) 5px 0px 0px 0px inset",
+        "background": "rgb(228, 242, 237)"
+      }
+    },
+    "market": {
+      "initialTemplate": "fresh_breakout",
+      "templateSelectOptions": [
+        "刚突破",
+        "健康上涨",
+        "回调转强",
+        "抛物线上升"
+      ],
+      "stockButtons": 200,
+      "requested603986Ranked": false,
+      "requested603986FallbackMessage": "未进入这个模板的当前列表",
+      "comparisonCurveVisible": true,
+      "legends": "模板窗口\n当前候选窗口",
+      "keyboardSwitch": {
+        "beforeURL": "http://localhost:3100/market?code=603986&template=fresh_breakout",
+        "afterURL": "http://localhost:3100/market?code=002003&template=fresh_breakout",
+        "beforeText": "1五洲医疗3012340.879",
+        "afterText": "2伟星股份0020030.798",
+        "codeChanged": true,
+        "templatePreserved": true
+      },
+      "backHref": "/templates?template=fresh_breakout"
+    },
+    "breadth": {
+      "displayThreshold": 0.8,
+      "warning": "0.80 试用观察线，实验未验证为四模板统一基准\n0.80 是用户指定的试用观察线。实验显示它不适合作为四模板统一常态基准；页面用于先观察数量和变化，不代表该线已验证有效。",
+      "warningShowsTrial080": true,
+      "tabs": [
+        "刚突破平台蓄势后向上突破，尾段仍保持力度",
+        "健康上涨持续抬高，回撤受控，不靠末端拔线",
+        "回调转强先走强、再回吐，随后恢复向上",
+        "抛物线上升前段较缓，随后斜率放大并加速"
+      ],
+      "templateChecks": [
+        {
+          "key": "fresh_breakout",
+          "label": "刚突破",
+          "summary": "当前超过 0.80\n1 只\n同日达到试用观察线\n较昨日\n0 只\n基本不变\n较 5 日前\n-4 只\n看一周左右的方向\n5 日平均\n1.8 只\n减少单日跳动干扰\n历史位置\n低位\n高于历史 1% 的日期",
+          "hasCount": true,
+          "hasChange1d": true,
+          "hasChange5d": true,
+          "hasMa5": true,
+          "hasPercent": true
+        },
+        {
+          "key": "healthy_uptrend",
+          "label": "健康上涨",
+          "summary": "当前超过 0.80\n64 只\n同日达到试用观察线\n较昨日\n-5 只\n范围缩小\n较 5 日前\n-35 只\n看一周左右的方向\n5 日平均\n76.4 只\n减少单日跳动干扰\n历史位置\n低位\n高于历史 0% 的日期",
+          "hasCount": true,
+          "hasChange1d": true,
+          "hasChange5d": true,
+          "hasMa5": true,
+          "hasPercent": true
+        },
+        {
+          "key": "pullback_strengthening",
+          "label": "回调转强",
+          "summary": "当前超过 0.80\n76 只\n同日达到试用观察线\n较昨日\n-11 只\n范围缩小\n较 5 日前\n-19 只\n看一周左右的方向\n5 日平均\n83.4 只\n减少单日跳动干扰\n历史位置\n低位\n高于历史 0% 的日期",
+          "hasCount": true,
+          "hasChange1d": true,
+          "hasChange5d": true,
+          "hasMa5": true,
+          "hasPercent": true
+        },
+        {
+          "key": "parabolic_uptrend",
+          "label": "抛物线上升",
+          "summary": "当前超过 0.80\n264 只\n同日达到试用观察线\n较昨日\n-22 只\n范围缩小\n较 5 日前\n-64 只\n看一周左右的方向\n5 日平均\n294.0 只\n减少单日跳动干扰\n历史位置\n低位\n高于历史 12% 的日期",
+          "hasCount": true,
+          "hasChange1d": true,
+          "hasChange5d": true,
+          "hasMa5": true,
+          "hasPercent": true
+        }
+      ],
+      "areaData": [
+        {
+          "label": "医药生物，当前 1 只，Top100行业占比 21%，5日变化 -2 只",
+          "count": 1,
+          "width": 780.734375,
+          "height": 490,
+          "area": 382559.84375
+        }
+      ],
+      "viewModeVisualChange": true,
+      "widthBackground": "rgb(230, 243, 238)",
+      "changeBackground": "rgb(250, 234, 219)",
+      "selectedIndustry": "医药生物",
+      "industryLabel": "医药生物，当前 1 只，Top100行业占比 21%，5日变化 -2 只",
+      "industryChartVisible": true,
+      "returned": true
+    }
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failedResponses": []
+}

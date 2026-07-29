@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import duckdb
+import numpy as np
+import pandas as pd
 from zer0share.api import LocalPro
 
 
@@ -249,6 +250,80 @@ class LocalMarketRepository:
                 ),
             ),
         )
+
+    def recent_qfq_daily(
+        self,
+        start_date: str,
+        end_date: str,
+        codes: set[str] | None = None,
+    ) -> pd.DataFrame:
+        """Load daily bars and factors once, then reproduce qfq in one batch."""
+
+        latest_daily = self.latest_partition("daily_kline")
+        latest_factor = self.latest_partition("adj_factor")
+        token = (start_date, end_date, latest_daily, latest_factor)
+
+        def load() -> pd.DataFrame:
+            with self._query_lock:
+                daily = self.pro.daily(
+                    start_date=start_date,
+                    end_date=end_date,
+                    fields=(
+                        "ts_code,trade_date,open,high,low,close,pre_close,"
+                        "vol,amount,pct_chg"
+                    ),
+                )
+                factors = self.pro.adj_factor(
+                    start_date=start_date,
+                    end_date=end_date,
+                    fields="ts_code,trade_date,adj_factor",
+                )
+            if daily.empty:
+                return pd.DataFrame(
+                    columns=[
+                        "ts_code",
+                        "trade_date",
+                        "qfq_open",
+                        "qfq_high",
+                        "qfq_low",
+                        "qfq_close",
+                    ]
+                )
+            for frame in (daily, factors):
+                frame["ts_code"] = frame["ts_code"].astype(str)
+                frame["trade_date"] = frame["trade_date"].astype(str)
+            merged = daily.merge(
+                factors,
+                on=["ts_code", "trade_date"],
+                how="left",
+                validate="one_to_one",
+            ).sort_values(["ts_code", "trade_date"])
+            merged["adj_factor"] = merged.groupby("ts_code")["adj_factor"].bfill()
+            if merged["adj_factor"].isna().any():
+                missing = int(merged["adj_factor"].isna().sum())
+                raise RuntimeError(f"前复权因子缺失 {missing} 行")
+            anchor = merged.groupby("ts_code")["adj_factor"].transform("last")
+            multiplier = merged["adj_factor"].astype(float) / anchor.astype(float)
+            if not np.isfinite(multiplier).all() or (multiplier <= 0).any():
+                raise RuntimeError("前复权因子包含无效值")
+            for source, target in (
+                ("open", "qfq_open"),
+                ("high", "qfq_high"),
+                ("low", "qfq_low"),
+                ("close", "qfq_close"),
+            ):
+                merged[target] = merged[source].astype(float) * multiplier
+            return merged.reset_index(drop=True)
+
+        frame = self._cached(
+            f"recent-qfq:{start_date}:{end_date}",
+            token,
+            load,
+        )
+        if codes is None:
+            return frame.copy()
+        normalized = {str(code) for code in codes}
+        return frame[frame["ts_code"].isin(normalized)].copy()
 
     def pattern_daily(self, code: str, start_date: str, end_date: str) -> pd.DataFrame:
         """Reuse the current screening snapshot for one on-demand pattern evaluation."""

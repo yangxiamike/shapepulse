@@ -1,0 +1,70 @@
+{
+  "status": "changes_required",
+  "branch": "codex/unified-threshold-app-v3",
+  "commit": "7f57b3f",
+  "issues": [
+    {
+      "id": "VQA-P1-01",
+      "severity": "P1",
+      "title": "Market 的模板曲线与候选曲线使用不同数值尺度",
+      "evidence": "fresh_breakout API 模板曲线为首日归一到 100（92.98–129.11），Market 候选曲线为 log-close z 值；两条线共用同一 SVG 纵轴后，候选线被压在底部，截图 market-template-interaction-1440.png 可见。",
+      "fix": "比较图两条曲线必须采用同一种转换。建议两边都使用独立窗口 z，或两边都首日归一到 100；相似度仍保持冻结 Pearson 算法。补测试断言两条输入均值/标准差口径一致，并做视觉快照。"
+    },
+    {
+      "id": "VQA-P1-02",
+      "severity": "P1",
+      "title": "390px Market 右侧模板面板无法正常进入可点击视口",
+      "evidence": "点击“打开右侧面板”后，模板 tab 与模板股票按钮仍被 Playwright 判定为 outside of viewport；正常点击持续超时。market-mobile-panel-open-390.png 中也未出现可操作的右侧面板。",
+      "fix": "修正 <=600px 下 .market-rightbar.open 的位置/transform/display 与层叠关系，确保面板边界在 0–390 内；模板 tab、列表首项和关闭按钮均须支持普通鼠标/触控点击，不可依赖 force/DOM click。补 390px 真实 API E2E：打开面板→模板→首股→关闭。"
+    },
+    {
+      "id": "VQA-P2-01",
+      "severity": "P2",
+      "title": "带 template 参数进入 Market 时仍默认显示“自选”而不是“模板”",
+      "evidence": "从模板 Top 股票进入的 URL 正确保留 template=fresh_breakout，但 market-1440.png、market-1024.png 与 market-390.png 的初始状态没有直接打开模板工作区；用户还要再次找到并点击“模板”。",
+      "fix": "当 URL 含合法 template 参数时，初始 rightTab 应设为模板，并直接展示对应模板列表/未入榜说明；不含参数时才沿用自选默认页。补真实路由 E2E 断言。"
+    },
+    {
+      "id": "VQA-P2-02",
+      "severity": "P2",
+      "title": "“最近变化”视图遗漏当前已降为 0 但仍发生变化的行业",
+      "evidence": "Treemap 始终先过滤 above_count>0。fresh_breakout 遗漏交通运输、基础化工各 -1；healthy_uptrend 遗漏计算机、通信各 -1；pullback_strengthening 遗漏有色金属、建筑材料各 -2、环保 -1。",
+      "fix": "当前宽度视图可继续按 above_count 分配面积；最近变化视图应改用 abs(change_5d) 或单独的正负变化布局，并纳入 above_count=0、change_5d!=0 的行业，明确显示收缩到 0。"
+    },
+    {
+      "id": "VQA-P2-03",
+      "severity": "P2",
+      "title": "30 秒扫读无法直接得到最大扩张与最大收缩行业",
+      "evidence": "首屏可立即读出模板当前数量与 1/5 日变化，但没有“最大扩张/最大收缩”摘要；用户需进入 Treemap 并逐块比较。",
+      "fix": "在行业地图标题区增加两个简洁摘要：5日最大扩张行业、5日最大收缩行业，显示行业名与只数；数据必须覆盖收缩到 0 的行业。"
+    },
+    {
+      "id": "VQA-P2-04",
+      "severity": "P2",
+      "title": "390px Market 存在大量低于移动端建议尺寸的点击目标和横向裁切控件",
+      "evidence": "自动几何检查记录 43 个小目标；周期按钮多为 39x32，绘图按钮多为 34x34，颜色输入约 23x20。月K/季K/年K、线宽和较长期范围控件的几何边界超出 390px 可视区。",
+      "fix": "移动端主要交互最小触控区提升至 44x44；周期、线宽、范围条使用明确可横滑容器并保留滚动提示或分组折叠，避免控件只被裁掉。"
+    },
+    {
+      "id": "VQA-P2-05",
+      "severity": "P2",
+      "title": "390px 宽度页四模板 tabs 被裁切且缺少明确横滑提示",
+      "evidence": "template-breadth-v3-390.png 首屏仅完整显示前两个模板，第三个只露出边缘，第四个不可见；虽然容器可横滑，但没有箭头、分页点或“左右滑动”提示。",
+      "fix": "保留横滑时增加清晰的渐隐/箭头/滑动提示，并确保键盘焦点能自动滚入视口；或在390px改为2×2完整展示四模板。"
+    },
+    {
+      "id": "VQA-P2-06",
+      "severity": "P2",
+      "title": "390px 模板库固定底栏会遮挡正在阅读的内容",
+      "evidence": "templates-390.png 中固定底栏横跨冻结模板列表，遮住分组标题/首行阅读区域；页面虽有底部留白，但滚动过程仍持续覆盖约64px内容。",
+      "fix": "为可滚动内容提供与底栏等高的安全区，并通过 scroll-padding-bottom/scroll-margin 确保聚焦或点击的条目不会停在底栏后；必要时缩短底栏高度。"
+    },
+    {
+      "id": "VQA-P2-07",
+      "severity": "P2",
+      "title": "侧栏帮助与退出按钮为可见死按钮",
+      "evidence": "桌面三页均显示帮助与退出图标按钮，但组件没有 onClick、链接或禁用说明，不产生任何状态变化。",
+      "fix": "若本阶段不实现，应隐藏或明确 disabled 并给出“暂未开放”提示；若保留可点击外观，则必须实现对应动作。"
+    }
+  ]
+}

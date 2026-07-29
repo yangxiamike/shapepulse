@@ -28,6 +28,7 @@ import {
   RotateCcw,
   Ruler,
   Search,
+  Save,
   Settings2,
   Square,
   Spline,
@@ -45,19 +46,19 @@ import {
   type FibonacciLevel,
   type MarketChartHandle,
 } from "./MarketChart";
-import { api, fmtAmount, fmtMarketValue, fmtMetric, fmtNumber, formatDate, metricLabel } from "../lib/api";
-import type { Bar, PatternKey, PatternResponse, StateSnapshot, Stock } from "../lib/types";
+import { api, fmtAmount, fmtMarketValue, fmtNumber, formatDate, normalizeLogCloseWindow } from "../lib/api";
+import type { Bar, StateSnapshot, Stock, TemplateDefinition, TemplateStock } from "../lib/types";
 
 const periods = [
   ["日K", "D"], ["周K", "W"], ["月K", "M"], ["季K", "Q"], ["年K", "Y"],
 ] as const;
 const unavailablePeriods = ["分时", "5分", "15分", "30分", "60分"];
 const ranges = [["1天", "1D"], ["5天", "5D"], ["1个月", "1M"], ["3个月", "3M"], ["6个月", "6M"], ["YTD", "YTD"], ["1年", "1Y"], ["3年", "3Y"], ["5年", "5Y"], ["全部", "ALL"]] as const;
-const tabs = ["自选", "详情", "形态", "指标", "因子"] as const;
+const tabs = ["自选", "详情", "模板", "指标", "因子"] as const;
 type RightTab = typeof tabs[number];
 type FibonacciKind = "fibonacci" | "fibonacci-extension";
 
-const patternNames: Record<PatternKey, string> = { breakout: "突破启动", pullback: "上升趋势回调", range_bounce: "区间下沿反弹" };
+const DEFAULT_TEMPLATE_KEY = "fresh_breakout";
 const emptyState: StateSnapshot = { viewed: [], saved: [], pending: [], watchlist: [], history: { runs: [], recommendations: [] } };
 const rangeLimits: Record<string, Record<string, number>> = {
   "1D": { D: 1, W: 1, M: 1, Q: 1, Y: 1 }, "5D": { D: 5, W: 2, M: 1, Q: 1, Y: 1 },
@@ -80,9 +81,10 @@ export function MarketClient() {
   const [rightOpen, setRightOpen] = useState(false);
   const [state, setState] = useState<StateSnapshot>(emptyState);
   const [watchlist, setWatchlist] = useState<Stock[]>([]);
-  const [pattern, setPattern] = useState<PatternResponse | null>(null);
-  const [patternLoading, setPatternLoading] = useState(false);
-  const [patternError, setPatternError] = useState("");
+  const [templates, setTemplates] = useState<TemplateDefinition[]>([]);
+  const [template, setTemplate] = useState<TemplateDefinition | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templateError, setTemplateError] = useState("");
   const [drawingMode, setDrawingMode] = useState<DrawingMode | null>(null);
   const [drawings, setDrawings] = useState<ChartDrawing[]>([]);
   const [selectedDrawing, setSelectedDrawing] = useState<number | null>(null);
@@ -100,13 +102,13 @@ export function MarketClient() {
   const [layoutOpen, setLayoutOpen] = useState(false);
   const [maximizedPane, setMaximizedPane] = useState<number | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
-  const [patternCategory, setPatternCategory] = useState<PatternKey>("breakout");
-  const [patternPool, setPatternPool] = useState<Stock[]>([]);
+  const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_KEY);
+  const [templatePool, setTemplatePool] = useState<TemplateStock[]>([]);
   const [poolLoading, setPoolLoading] = useState(false);
   const [crosshairEnabled, setCrosshairEnabled] = useState(true);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [rightWidth, setRightWidth] = useState(360);
-  const [patternPendingCode, setPatternPendingCode] = useState<string | null>(null);
+  const [templatePendingCode, setTemplatePendingCode] = useState<string | null>(null);
   const [status, setStatus] = useState("连接本地数据…");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -119,8 +121,8 @@ export function MarketClient() {
   const shellRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
   const chartRefs = useRef<Array<MarketChartHandle | null>>([]);
-  const patternCursorRef = useRef(-1);
-  const patternCategoryRef = useRef<PatternKey>("breakout");
+  const templateCursorRef = useRef(-1);
+  const templateIdRef = useRef(DEFAULT_TEMPLATE_KEY);
   const rightResizeActive = useRef(false);
   const rightResizeFrame = useRef<number | null>(null);
   const fibonacciInputRef = useRef<HTMLInputElement>(null);
@@ -130,21 +132,48 @@ export function MarketClient() {
     setWatchlist(items);
   }, []);
 
-  const loadPattern = useCallback(async (code: string) => {
-    setPatternLoading(true); setPatternError("");
-    try { setPattern(await api.pattern(code)); }
-    catch (e) { setPatternError(e instanceof Error ? e.message : "形态事实加载失败"); setPattern(null); }
-    finally { setPatternLoading(false); }
-  }, []);
-
-  const loadPatternPool = useCallback(async (category: PatternKey) => {
+  const loadTemplatePool = useCallback(async (id: string) => {
     setPoolLoading(true);
+    setTemplateError("");
     try {
-      const pool = await api.patternPool(category, 10_000);
-      setPatternPool(pool.items);
-    } catch (e) { setPatternError(e instanceof Error ? e.message : "形态股票池加载失败"); setPatternPool([]); }
+      const [definition, result] = await Promise.all([
+        api.template(id),
+        api.templateStocks(id, 200),
+      ]);
+      setTemplate(definition);
+      setTemplatePool(result.items);
+    } catch (e) {
+      setTemplateError(e instanceof Error ? e.message : "模板股票列表加载失败");
+      setTemplate(null);
+      setTemplatePool([]);
+    }
     finally { setPoolLoading(false); }
   }, []);
+
+  const loadTemplates = useCallback(async (requestedId?: string | null) => {
+    setTemplateLoading(true);
+    setTemplateError("");
+    try {
+      const items = await api.templates();
+      setTemplates(items);
+      const selected = items.find(item => item.id === requestedId || item.key === requestedId)
+        || items.find(item => item.key === DEFAULT_TEMPLATE_KEY)
+        || items[0];
+      if (!selected) throw new Error("模板库当前为空");
+      const requestedIsValid = Boolean(requestedId && items.some(item => item.id === requestedId || item.key === requestedId));
+      if (requestedIsValid) {
+        setRightTab("模板");
+        if (window.matchMedia("(max-width: 1100px)").matches) setRightOpen(true);
+      }
+      templateIdRef.current = selected.id;
+      setTemplateId(selected.id);
+      await loadTemplatePool(selected.id);
+    } catch (e) {
+      setTemplateError(e instanceof Error ? e.message : "模板库加载失败");
+    } finally {
+      setTemplateLoading(false);
+    }
+  }, [loadTemplatePool]);
 
   const loadStock = useCallback(async (code: string, nextPeriod = "D", nextRange = "6M", preserveContext = false) => {
     const sequence = ++loadSequence.current;
@@ -157,71 +186,70 @@ export function MarketClient() {
       if (sequence !== loadSequence.current) return;
       const detail = detailResult.item;
       setStock(detail); setBars(history.items); setPeriod(nextPeriod); setRange(nextRange);
-      setPatternPendingCode(null);
+      setTemplatePendingCode(null);
       setPerf(current => ({ ...current, frontendMs: performance.now() - started, httpMs: detailResult.httpMs + (history.http_ms || 0), queryMs: history.timings.total_ms || 0, cache: detailResult.cacheHit && Boolean(history.client_cache_hit) }));
       setStatus(`${history.client_cache_hit ? "前端缓存" : history.cache_hit ? "后端缓存" : "本地快照"} · ${formatDate(history.as_of.daily)} · ${history.items.length} 根`);
       setSearchOpen(false); setQuery(""); if (!preserveContext) setRightOpen(false);
-      window.history.replaceState(null, "", `/market?code=${detail.code}&category=${patternCategoryRef.current}`);
+      window.history.replaceState(null, "", `/market?code=${detail.code}&template=${encodeURIComponent(templateIdRef.current)}`);
       void api.updateState(detail.code, "viewed").catch(() => undefined);
-      void loadPattern(detail.code);
     } catch (e) {
       const message = e instanceof Error ? e.message : "本地行情加载失败";
       setError(message); setStatus(message);
-      if (sequence === loadSequence.current) setPatternPendingCode(null);
+      if (sequence === loadSequence.current) setTemplatePendingCode(null);
     } finally { if (sequence === loadSequence.current) setLoading(false); }
-  }, [loadPattern]);
+  }, []);
 
-  const choosePatternStock = useCallback((code: string) => {
-    const index = patternPool.findIndex(item => item.code === code);
-    if (index >= 0) patternCursorRef.current = index;
-    setPatternPendingCode(code);
+  const chooseTemplateStock = useCallback((code: string) => {
+    const index = templatePool.findIndex(item => item.code === code);
+    if (index >= 0) templateCursorRef.current = index;
+    setTemplatePendingCode(code);
     void loadStock(code, "D", "6M", true);
-  }, [loadStock, patternPool]);
+  }, [loadStock, templatePool]);
 
-  const stepPatternStock = useCallback((direction: -1 | 1) => {
-    if (!patternPool.length) return false;
-    let index = patternCursorRef.current;
-    if (index < 0 || index >= patternPool.length) {
-      index = patternPool.findIndex(item => item.code === (patternPendingCode || stock?.code));
+  const stepTemplateStock = useCallback((direction: -1 | 1) => {
+    if (!templatePool.length) return false;
+    let index = templateCursorRef.current;
+    if (index < 0 || index >= templatePool.length) {
+      index = templatePool.findIndex(item => item.code === (templatePendingCode || stock?.code));
     }
-    if (index < 0) index = direction > 0 ? -1 : patternPool.length;
-    const nextIndex = Math.max(0, Math.min(patternPool.length - 1, index + direction));
+    if (index < 0) index = direction > 0 ? -1 : templatePool.length;
+    const nextIndex = Math.max(0, Math.min(templatePool.length - 1, index + direction));
     if (nextIndex === index) return false;
-    patternCursorRef.current = nextIndex;
-    const code = patternPool[nextIndex].code;
-    setPatternPendingCode(code);
+    templateCursorRef.current = nextIndex;
+    const code = templatePool[nextIndex].code;
+    setTemplatePendingCode(code);
     void loadStock(code, "D", "6M", true);
     return true;
-  }, [loadStock, patternPendingCode, patternPool, stock?.code]);
+  }, [loadStock, stock?.code, templatePendingCode, templatePool]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code") || "000001";
-    const requestedCategory = params.get("category") as PatternKey | null;
+    const requestedTemplate = params.get("template");
     const updateClock = () => setClock(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
     const boot = window.setTimeout(() => {
-      if (requestedCategory && requestedCategory in patternNames) {
-        patternCategoryRef.current = requestedCategory;
-        setPatternCategory(requestedCategory);
-        void loadPatternPool(requestedCategory);
-      }
-      void loadStock(code);
-      void api.state().then(snapshot => { setState(snapshot); void refreshWatchlist(snapshot); }).catch(() => undefined);
-      updateClock();
+      void (async () => {
+        await loadTemplates(requestedTemplate);
+        await loadStock(code, "D", "6M", Boolean(requestedTemplate));
+        void api.state().then(snapshot => { setState(snapshot); void refreshWatchlist(snapshot); }).catch(() => undefined);
+        updateClock();
+      })();
     }, 0);
     const timer = window.setInterval(updateClock, 1000);
     return () => { window.clearTimeout(boot); window.clearInterval(timer); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { if (rightTab === "形态") void loadPatternPool(patternCategory); }, 0);
+    const timer = window.setTimeout(() => {
+      if (rightTab === "模板" && !templates.length && !templateLoading) void loadTemplates(templateId);
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadPatternPool, patternCategory, rightTab]);
+  }, [loadTemplates, rightTab, templateId, templateLoading, templates.length]);
 
   useEffect(() => {
-    const index = patternPool.findIndex(item => item.code === (patternPendingCode || stock?.code));
-    if (index >= 0) patternCursorRef.current = index;
-  }, [patternPendingCode, patternPool, stock?.code]);
+    const index = templatePool.findIndex(item => item.code === (templatePendingCode || stock?.code));
+    if (index >= 0) templateCursorRef.current = index;
+  }, [stock?.code, templatePendingCode, templatePool]);
 
   useEffect(() => {
     const onFullscreen = () => {
@@ -251,14 +279,14 @@ export function MarketClient() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (rightTab !== "形态" || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+      if (rightTab !== "模板" || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
       const target = event.target as HTMLElement | null;
       if (target?.matches("input, select, textarea, [contenteditable=true]")) return;
-      if (stepPatternStock(event.key === "ArrowDown" ? 1 : -1)) event.preventDefault();
+      if (stepTemplateStock(event.key === "ArrowDown" ? 1 : -1)) event.preventDefault();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [rightTab, stepPatternStock]);
+  }, [rightTab, stepTemplateStock]);
 
   const changeBars = useCallback(async (nextPeriod: string, nextRange = range) => {
     if (!stock || (nextPeriod === period && nextRange === range)) return;
@@ -337,12 +365,13 @@ export function MarketClient() {
     if (drawing.kind === "text" && drawing.text) setDrawingText(drawing.text);
   }
 
-  function changePatternCategory(category: PatternKey) {
-    patternCategoryRef.current = category;
-    patternCursorRef.current = -1;
-    setPatternPendingCode(null);
-    setPatternCategory(category);
-    if (stock) window.history.replaceState(null, "", `/market?code=${stock.code}&category=${category}`);
+  function changeTemplate(nextId: string) {
+    templateIdRef.current = nextId;
+    templateCursorRef.current = -1;
+    setTemplatePendingCode(null);
+    setTemplateId(nextId);
+    if (stock) window.history.replaceState(null, "", `/market?code=${stock.code}&template=${encodeURIComponent(nextId)}`);
+    void loadTemplatePool(nextId);
   }
 
   function applyDrawingStyle(change: Pick<ChartDrawing, "color" | "lineWidth" | "text">) {
@@ -484,6 +513,11 @@ export function MarketClient() {
   const watched = Boolean(stock && state.watchlist.some(item => item.code === stock.code));
   const visibleCount = rangeLimits[range]?.[period] || 110;
   const paneIndexes = maximizedPane == null ? Array.from({ length: layout }, (_value, index) => index) : [maximizedPane];
+  const saveWindow = bars.slice(-Math.min(60, visibleCount));
+  const saveTemplateHref = stock && saveWindow.length
+    ? `/templates?source_ts_code=${encodeURIComponent(stock.ts_code || stock.code)}&start_date=${encodeURIComponent(saveWindow[0].trade_date || saveWindow[0].time)}&end_date=${encodeURIComponent(saveWindow.at(-1)!.trade_date || saveWindow.at(-1)!.time)}&name=${encodeURIComponent(`${stock.name} ${saveWindow.length}日窗口`)}`
+    : "/templates";
+  const activeTemplateStock = templatePool.find(item => item.code === (templatePendingCode || stock?.code)) || null;
 
   return <div
     ref={shellRef}
@@ -516,7 +550,7 @@ export function MarketClient() {
       <section ref={workspaceRef} className="chart-workspace" data-layout={layout} data-fullscreen={fullscreen}>
         <div className="chart-toolbar">
           <div className="period-tabs">{unavailablePeriods.map(label => <button key={label} disabled title="本地 zer0share 当前只有日线，分钟周期不可用">{label}</button>)}{periods.map(([label, value]) => <button key={label} className={period === value ? "active" : ""} onClick={() => void changeBars(value)}>{label}</button>)}</div>
-          <div className="chart-actions"><DisabledButton title="指标尚未实现">指标 <ChevronDown /></DisabledButton><i /><DisabledButton title="对比尚未实现">对比</DisabledButton><i /><DisabledButton title="预警尚未实现"><Bell />预警</DisabledButton><i /><DisabledButton title="回放尚未实现"><RotateCcw />回放</DisabledButton><i /><DisabledButton title="截图导出尚未实现" label="截图"><Camera /></DisabledButton><button onClick={() => void toggleFullscreen()} aria-label={fullscreen ? "退出全屏" : "进入全屏"} title={fullscreen ? "退出全屏" : "进入全屏"}><Fullscreen />{fullscreen ? "退出" : "全屏"}</button></div>
+          <div className="chart-actions"><Link className="save-template-link" href={saveTemplateHref} aria-label="保存当前区间为模板"><Save />保存区间</Link><i /><DisabledButton title="指标尚未实现">指标 <ChevronDown /></DisabledButton><i /><DisabledButton title="对比尚未实现">对比</DisabledButton><i /><DisabledButton title="预警尚未实现"><Bell />预警</DisabledButton><i /><DisabledButton title="回放尚未实现"><RotateCcw />回放</DisabledButton><i /><DisabledButton title="截图导出尚未实现" label="截图"><Camera /></DisabledButton><button onClick={() => void toggleFullscreen()} aria-label={fullscreen ? "退出全屏" : "进入全屏"} title={fullscreen ? "退出全屏" : "进入全屏"}><Fullscreen />{fullscreen ? "退出" : "全屏"}</button></div>
           <div className="ma-legend">
             <span className="ma5">MA5　{fmtNumber(maLegend[0])}</span><span className="ma10">MA10　{fmtNumber(maLegend[1])}</span><span className="ma20">MA20　{fmtNumber(maLegend[2])}</span>
             <div className="drawing-style-controls" aria-label="画线样式">
@@ -559,7 +593,7 @@ export function MarketClient() {
           </div>
         </div>
         <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart key={`${stock?.code || "none"}-${period}-${range}-${index}`} ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} rightPaddingBars={10} enablePriceScaleMenu onResetDefault={() => void changeBars("D", "6M")} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} fibonacciLevels={drawingMode === "fibonacci-extension" ? fibonacciDefaults["fibonacci-extension"] : fibonacciDefaults.fibonacci} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onDrawingDoubleClick={openFibonacciSettings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
-        <div className="range-toolbar">{ranges.map(([label, value]) => <button className={range === value ? "active" : ""} key={value} onClick={() => void changeBars(period, value)}>{label}</button>)}<b>{bars[0]?.time || "—"} 至 {bars.at(-1)?.time || "—"}　<CalendarDays /></b></div>
+        <div className="range-toolbar">{ranges.map(([label, value]) => <button className={range === value ? "active" : ""} key={value} onClick={() => void changeBars(period, value)}>{label}</button>)}<Link className="range-save-template" href={saveTemplateHref}><Save />保存当前区间为模板</Link><b>{bars[0]?.time || "—"} 至 {bars.at(-1)?.time || "—"}　<CalendarDays /></b></div>
       </section>
     </main>
 
@@ -587,7 +621,7 @@ export function MarketClient() {
         <div className="watch-header"><span>名称/代码</span><span>最新价</span><span>涨跌幅</span></div>
         <div className="watch-list">{watchlist.length ? watchlist.map(item => <button key={item.code} className={item.code === stock?.code ? "active" : ""} onClick={() => void loadStock(item.code, "D", "6M")}><span><b>{item.name}</b><em>{item.code}</em></span><strong>{fmtNumber(item.close)}</strong><i className={item.pct_chg >= 0 ? "up" : "down"}>{signed(item.pct_chg)}%</i></button>) : <PanelEmpty title="暂无自选" text="添加后会保存在本项目的本地数据库中。" />}</div>
         <button className={`add-watch ${watched ? "remove" : ""}`} onClick={() => void toggleWatchlist()} disabled={!stock}>{watched ? <X /> : <Plus />}{watched ? "移出自选" : "添加自选"}</button>
-      </> : rightTab === "详情" ? <DetailPanel stock={stock} /> : rightTab === "形态" ? <PatternWorkspace activeCode={patternPendingCode || stock?.code || null} category={patternCategory} pool={patternPool} poolLoading={poolLoading} onCategory={changePatternCategory} onChoose={choosePatternStock}><PatternPanel stock={stock} data={pattern} loading={patternLoading} error={patternError} onRetry={() => stock && void loadPattern(stock.code)} /></PatternWorkspace> : <UnavailablePanel tab={rightTab} />}
+      </> : rightTab === "详情" ? <DetailPanel stock={stock} /> : rightTab === "模板" ? <TemplateWorkspace activeCode={templatePendingCode || stock?.code || null} templateId={templateId} templates={templates} pool={templatePool} poolLoading={poolLoading || templateLoading} onTemplate={changeTemplate} onChoose={chooseTemplateStock}><TemplateComparisonPanel stock={stock} bars={bars} template={template} candidate={activeTemplateStock} loading={templateLoading} error={templateError} onRetry={() => void loadTemplates(templateId)} /></TemplateWorkspace> : <UnavailablePanel tab={rightTab} />}
     </aside>
 
     <footer className="market-statusbar"><span><i className={stock ? "connected" : ""} />{stock ? "已连接" : "未连接"}</span><span><Clock3 />{clock}</span><span className="status-center">本地数据　{status}</span><span><CircleDot />zer0share 日线快照</span><span>CN</span></footer>
@@ -626,7 +660,7 @@ function DetailPanel({ stock }: { stock: Stock | null }) {
   return <div className="detail-panel"><div className="panel-title"><Layers3 /><div><h3>{stock.name}</h3><p>{stock.ts_code}</p></div></div><dl><dt>市场</dt><dd>{stock.market || "—"}</dd><dt>行业</dt><dd>{stock.industry || "—"}</dd><dt>总市值</dt><dd>{fmtMarketValue(stock.total_mv)}</dd><dt>市盈率 TTM</dt><dd>{fmtNumber(stock.pe_ttm)}</dd><dt>市净率</dt><dd>{fmtNumber(stock.pb)}</dd><dt>ST 状态</dt><dd>{stock.is_st ? "是" : "否"}</dd></dl><div className="panel-dates"><b>数据表日期</b><span>行情 {formatDate(stock.as_of?.quote)}</span><span>估值 {formatDate(stock.as_of?.valuation)}</span><span>ST {formatDate(stock.as_of?.st)}</span><span>复权 {formatDate(stock.as_of?.adj_factor)}</span></div>{stock.warnings?.map(item => <p className="panel-warning" key={item}>{item}</p>)}</div>;
 }
 
-function PatternWorkspace({ activeCode, category, pool, poolLoading, onCategory, onChoose, children }: { activeCode: string | null; category: PatternKey; pool: Stock[]; poolLoading: boolean; onCategory: (category: PatternKey) => void; onChoose: (code: string) => void; children: React.ReactNode }) {
+function TemplateWorkspace({ activeCode, templateId, templates, pool, poolLoading, onTemplate, onChoose, children }: { activeCode: string | null; templateId: string; templates: TemplateDefinition[]; pool: TemplateStock[]; poolLoading: boolean; onTemplate: (id: string) => void; onChoose: (code: string) => void; children: React.ReactNode }) {
   const activeButtonRef = useRef<HTMLButtonElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const resizing = useRef(false);
@@ -677,20 +711,20 @@ function PatternWorkspace({ activeCode, category, pool, poolLoading, onCategory,
 
   return <div
     ref={workspaceRef}
-    className="pattern-workspace"
+    className="pattern-workspace template-workspace"
     style={{ "--pattern-pool-height": poolHeight == null ? "54%" : `${poolHeight}px` } as React.CSSProperties}
     data-pattern-pool-height={poolHeight == null ? "default" : Math.round(poolHeight)}
   >
-    <section className="pattern-pool-section" aria-labelledby="pattern-pool-title">
-      <div className="panel-section-heading"><b id="pattern-pool-title">形态股票列表</b><span>{pool.length} 只 · ↑↓切换 · 滚轮滚动</span></div>
-      <label className="pattern-group"><span>形态分组</span><select data-testid="pattern-group-select" value={category} onChange={event => onCategory(event.target.value as PatternKey)}>{(Object.keys(patternNames) as PatternKey[]).map(key => <option key={key} value={key}>{patternNames[key]}</option>)}</select></label>
-      <div className="pattern-pool" data-testid="pattern-pool" data-wheel-behavior="scroll-only">{poolLoading ? <p>正在加载股票池…</p> : pool.length ? pool.map((item, index) => <button ref={item.code === activeCode ? activeButtonRef : undefined} key={item.code} aria-current={item.code === activeCode ? "true" : undefined} className={item.code === activeCode ? "active" : ""} onClick={() => onChoose(item.code)}><b>{index + 1}</b><span><strong>{item.name}</strong><small>{item.code}</small></span><em>{Math.round(item.score || 0)}分</em></button>) : <p>该分类当前没有可用股票</p>}</div>
+    <section className="pattern-pool-section template-list-section" aria-labelledby="template-list-title">
+      <div className="panel-section-heading"><b id="template-list-title">模板股票列表</b><span>{pool.length} 只 · ↑↓切换 · 滚轮滚动</span></div>
+      <label className="pattern-group template-group-select"><span>当前模板</span><select data-testid="template-group-select" value={templateId} onChange={event => onTemplate(event.target.value)}>{templates.map(item => <option key={item.id} value={item.id}>{item.kind === "custom" ? `自定义 · ${item.name}` : item.name}</option>)}</select></label>
+      <div className="pattern-pool template-stock-list" data-testid="template-stock-list" data-wheel-behavior="scroll-only">{poolLoading ? <p>正在加载模板股票…</p> : pool.length ? pool.map((item, index) => <button ref={item.code === activeCode ? activeButtonRef : undefined} key={item.ts_code} aria-current={item.code === activeCode ? "true" : undefined} className={item.code === activeCode ? "active" : ""} onClick={() => onChoose(item.code)}><b>{item.rank || index + 1}</b><span><strong>{item.name}</strong><small>{item.code}</small></span><em>{item.score.toFixed(3)}</em></button>) : <p>该模板当前没有可用股票</p>}</div>
     </section>
     <div
-      className="pattern-splitter"
-      data-testid="pattern-splitter"
+      className="pattern-splitter template-splitter"
+      data-testid="template-splitter"
       role="separator"
-      aria-label="调整形态列表与当前个股形态事实高度"
+      aria-label="调整模板股票列表与曲线比较高度"
       aria-orientation="horizontal"
       aria-valuemin={120}
       aria-valuemax={1000}
@@ -702,24 +736,79 @@ function PatternWorkspace({ activeCode, category, pool, poolLoading, onCategory,
       onPointerCancel={stopSplitResize}
       onKeyDown={splitKeyDown}
     ><span /></div>
-    <section className="pattern-facts-section" aria-labelledby="pattern-facts-title">
-      <div className="panel-section-heading"><b id="pattern-facts-title">当前个股形态事实</b><span>{activeCode || "未选择"}</span></div>
-      <div className="pattern-facts">{children}</div>
+    <section className="pattern-facts-section template-comparison-section" aria-labelledby="template-comparison-title">
+      <div className="panel-section-heading"><b id="template-comparison-title">模板与当前窗口</b><span>{activeCode || "未选择"}</span></div>
+      <div className="pattern-facts template-comparison">{children}</div>
     </section>
   </div>;
 }
 
-function PatternPanel({ stock, data, loading, error, onRetry }: { stock: Stock | null; data: PatternResponse | null; loading: boolean; error: string; onRetry: () => void }) {
-  if (!stock) return <PanelEmpty title="尚未选择股票" text="形态标签只展示当前股票的事实。" />;
-  if (loading) return <PanelEmpty title="计算形态事实" text="正在按最新本地快照计算三类形态…" />;
+function TemplateComparisonPanel({ stock, bars, template, candidate, loading, error, onRetry }: { stock: Stock | null; bars: Bar[]; template: TemplateDefinition | null; candidate: TemplateStock | null; loading: boolean; error: string; onRetry: () => void }) {
+  if (!stock) return <PanelEmpty title="尚未选择股票" text="从模板股票列表中打开一只股票。" />;
+  if (loading) return <PanelEmpty title="正在读取模板" text="正在准备模板与候选窗口曲线。" />;
   if (error) return <div className="panel-error"><p>{error}</p><button onClick={onRetry}>重试</button></div>;
-  if (!data || data.calculation_state === "not_calculated") return <div className="pattern-empty"><CircleDot /><h3>计算未完成</h3><p>{data?.message || "最新本地数据不足，未能完成形态计算。"}</p><PatternDates data={data} /><button onClick={onRetry}>重新计算</button></div>;
-  if (data.calculation_state === "calculated_no_match") return <div className="pattern-empty"><CircleDot /><h3>三类形态均不符合</h3><p>{data.message}</p><PatternDates data={data} /><Link href={`/?code=${stock.code}`}>到选股看板查看当前快照</Link></div>;
-  const current = data.current!;
-  return <div className="pattern-panel"><div className="pattern-panel-head"><div><small>规则版本 v{data.rule_version}</small><h3>{stock.name} · 形态事实</h3></div><span>{formatDate(current.trade_date)}</span></div>{current.matches.map(match => <article key={match.category}><div><span>{patternNames[match.category]}</span><b>{match.score.toFixed(1)} 分</b></div><p>匹配 · 阈值 {match.minimum_score ?? data.rules[match.category]?.minimum_score} 分</p><ul>{match.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul><dl>{Object.entries(match.metrics).slice(0, 6).map(([key, value]) => <span key={key}><dt>{metricLabel(key)}</dt><dd>{fmtMetric(key, value)}</dd></span>)}</dl></article>)}<PatternDates data={data} />{current.run_warnings.map(item => <p className="panel-warning" key={item}>{item}</p>)}<div className="pattern-history"><b>形态历史</b>{data.history.slice(0, 6).map(item => <span key={`${item.run_id}-${item.created_at}`}><em>{formatDate(item.trade_date)}</em><strong>{item.status === "matched" ? item.matches.map(match => patternNames[match.category]).join("、") : item.status === "no_match" ? "无匹配" : "未计算"}</strong></span>)}</div><Link className="pattern-link" href={`/?code=${stock.code}`}>到选股看板查看该股记录</Link></div>;
+  if (!template) return <PanelEmpty title="模板不可用" text="请重新选择一个模板。" />;
+  if (!candidate) return <div className="template-not-ranked"><CircleDot /><h3>未进入这个模板的当前列表</h3><p>{stock.name} 不在当前返回的相似股票范围内，因此不显示推测分数。</p><Link href="/templates">回到模板库</Link></div>;
+  const candidateCurve = normalizeCandidateWindow(bars, candidate, template.window_length || template.curve.length);
+  return <div className="template-comparison-panel">
+    <div className="template-comparison-head"><div><small>{template.kind === "custom" ? "自定义模板" : "冻结模板"}</small><h3>{template.name}</h3></div><strong>{candidate.score.toFixed(3)}</strong></div>
+    <TemplateCurveComparison templateValues={template.curve} candidateValues={candidateCurve} />
+    <div className="template-curve-legend"><span><i />模板窗口</span><span><i />当前候选窗口</span></div>
+    <dl className="template-comparison-facts">
+      <div><dt>相似度</dt><dd>{candidate.score.toFixed(3)}</dd></div>
+      <div><dt>窗口长度</dt><dd>{template.window_length || template.curve.length} 日</dd></div>
+      <div><dt>候选区间</dt><dd>{candidate.start_date ? `${formatDate(candidate.start_date)}—${formatDate(candidate.end_date)}` : "按最新等长窗口"}</dd></div>
+      <div><dt>模板区间</dt><dd>{template.start_date ? `${formatDate(template.start_date)}—${formatDate(template.end_date)}` : "冻结定义"}</dd></div>
+    </dl>
+    <p className="template-description">{template.description || template.cue || "两条线都在各自窗口内归一化，只比较形状是否相近。"}</p>
+    <Link className="pattern-link" href={`/templates?template=${encodeURIComponent(template.id)}`}>回到模板库查看完整列表</Link>
+  </div>;
 }
 
-function PatternDates({ data }: { data?: PatternResponse | null }) { return data ? <div className="panel-dates"><b>本机最新可用快照</b><span>行情 {formatDate(data.as_of.daily_kline || data.as_of.daily)}</span><span>估值 {formatDate(data.as_of.daily_basic || data.as_of.valuation)}</span><span>ST {formatDate(data.as_of.stock_st || data.as_of.st)}</span><span>复权 {formatDate(data.as_of.adj_factor)}</span></div> : null; }
+function normalizeCandidateWindow(bars: Bar[], candidate: TemplateStock, windowLength: number) {
+  const end = String(candidate.end_date || "").replaceAll("-", "");
+  const eligible = end
+    ? bars.filter(bar => String(bar.trade_date || bar.time).replaceAll("-", "") <= end)
+    : bars;
+  const closes = eligible.slice(-windowLength).map(bar => bar.close);
+  if (closes.length < 2 || closes.some(value => !Number.isFinite(value) || value <= 0)) return [];
+  return normalizeLogCloseWindow(closes);
+}
+
+function TemplateCurveComparison({ templateValues, candidateValues }: { templateValues: number[]; candidateValues: number[] }) {
+  const width = 330;
+  const height = 150;
+  const pad = 10;
+  const series = [templateValues, candidateValues].filter(values => values.length > 1);
+  if (series.length < 2) return <div className="template-curve-empty">曲线数据暂不完整。</div>;
+  const stats = (values: number[]) => {
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const standardDeviation = Math.sqrt(values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length);
+    return { mean, standardDeviation };
+  };
+  const templateStats = stats(templateValues);
+  const candidateStats = stats(candidateValues);
+  const all = series.flat();
+  const min = Math.min(...all);
+  const max = Math.max(...all);
+  const spread = Math.max(.0001, max - min);
+  const path = (values: number[]) => values.map((value, index) => {
+    const x = pad + index * ((width - pad * 2) / Math.max(1, values.length - 1));
+    const y = height - pad - (value - min) / spread * (height - pad * 2);
+    return `${index ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return <svg
+    className="template-curve-comparison"
+    viewBox={`0 0 ${width} ${height}`}
+    role="img"
+    aria-label="模板窗口与当前候选窗口归一化曲线比较"
+    data-transform="qfq-log-close-independent-z"
+    data-template-mean={templateStats.mean.toFixed(6)}
+    data-template-std={templateStats.standardDeviation.toFixed(6)}
+    data-candidate-mean={candidateStats.mean.toFixed(6)}
+    data-candidate-std={candidateStats.standardDeviation.toFixed(6)}
+  ><line x1={pad} x2={width - pad} y1={height / 2} y2={height / 2} /><path className="template-source-line" d={path(templateValues)} /><path className="template-candidate-line" d={path(candidateValues)} /></svg>;
+}
 function UnavailablePanel({ tab }: { tab: RightTab }) { return <PanelEmpty title={`${tab} · 暂不可用`} text={`${tab}能力尚未实现，本版本只保留禁用入口。`} />; }
 function PanelEmpty({ title, text }: { title: string; text: string }) { return <div className="right-placeholder"><CircleDot /><h3>{title}</h3><p>{text}</p></div>; }
 function QuoteFact({ label, value }: { label: string; value: string }) { return <span><small>{label}</small><b>{value}</b></span>; }

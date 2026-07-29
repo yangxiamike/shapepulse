@@ -352,3 +352,38 @@ export type IndustryStrengthResponse = {
   };
   as_of: DataDates;
 };
+
+export type TemplateDefinition = {
+  id: string;
+  key: string;
+  name: string;
+  kind: "frozen" | "custom";
+  source_ts_code?: string | null;
+  source_name?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  window_length: number;
+  curve: number[];
+  description: string;
+  cue?: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type TemplateStock = {
+  rank: number;
+  ts_code: string;
+  code: string;
+  name: string;
+  industry?: string;
+  score: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  curve: number[];
+};
+
+export type TemplateStocksResponse = {
+  template: TemplateDefinition;
+  items: TemplateStock[];
+  total: number;
+};

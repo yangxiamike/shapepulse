@@ -1,0 +1,1443 @@
+{
+  "checkedAt": "2026-07-29T13:04:51.528Z",
+  "branch": "codex/unified-threshold-app-v3",
+  "head": "7f57b3f",
+  "baseURL": "http://localhost:3101",
+  "backendURL": "http://127.0.0.1:8876",
+  "health": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "source": "local zer0share Parquet/DuckDB snapshot",
+      "network": "not used",
+      "zer0share_root": "C:\\Users\\hp\\Documents\\zer0share",
+      "config": "C:\\Users\\hp\\Documents\\zer0share\\config\\settings.toml",
+      "data_dir": "C:\\Users\\hp\\Documents\\zer0share\\data",
+      "snapshots": {
+        "daily_kline": "20260729",
+        "daily_basic": "20260729",
+        "adj_factor": "20260729",
+        "stock_st": "20260729",
+        "suspend_d": "20260729",
+        "stk_limit": "20260729",
+        "universe": "20260729"
+      },
+      "active_stocks": 5534,
+      "elapsed_ms": 75.5,
+      "service": "手动跟踪市场 local API",
+      "threshold_version": 1,
+      "state_db": "C:\\Users\\hp\\.codex\\worktrees\\b367\\手动跟踪市场\\outputs\\shape-v2\\unified-threshold-v3-20260729\\qa-frontend\\qa-market-state.sqlite3"
+    }
+  },
+  "pages": [
+    {
+      "route": "/templates",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "httpStatus": 200,
+      "loadMs": 1580,
+      "scroll": {
+        "width": 1440,
+        "height": 1444
+      },
+      "horizontalOverflow": false,
+      "visibleInteractiveCount": 116,
+      "smallTargets": [
+        {
+          "label": "小字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 16,
+          "top": 941,
+          "right": 48,
+          "bottom": 969,
+          "width": 32,
+          "height": 28
+        },
+        {
+          "label": "标准字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 52,
+          "top": 941,
+          "right": 83,
+          "bottom": 969,
+          "width": 32,
+          "height": 28
+        },
+        {
+          "label": "大字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 87,
+          "top": 941,
+          "right": 119,
+          "bottom": 969,
+          "width": 32,
+          "height": 28
+        }
+      ],
+      "enabledHelpExit": [],
+      "pageText": "LC\n模板库\n行情详情\n形态宽度\n字号\n小\n标\n大\nK 线模板\n模板库\n\n先看冻结四模板，也可以把一只股票的真实历史区间保存成自己的模板。\n\n打开行情详情\n自定义模板\n保存一段你看得懂的 K 线\n\n输入股票和起止日期。系统保存这段窗口，之后用同样长度寻找最相似的股票。\n\n模板名称\n股票代码\n开始日期\n结束日期\n保存并分析\n冻结四模板\n定义固定，不在这里修改\n刚突破\n50 日固定窗口\n健康上涨\n80 日固定窗口\n回调转强\n55 日固定窗口\n抛物线上升\n160 日固定窗口\n我的自定义模板\n还没有保存\n\n从上方输入股票与日期开始。\n\n冻结模板\n刚突破\n\n价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。\n\n窗口长度\n50 个交易日\n来源股票\n603986.SH\n模板区间\n2025-06-19 至 2025-08-27\n相似股票\n5496 只\n模板曲线\n只比较窗口内的相对形状\n\n价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。\n\n整体向上，高点靠近窗口后段。这只是形状说明，不代表之后一定上涨或下跌。\n\n按相似度排序\nTop 股票\n点击后进入 K 线，并保留当前模板与股票列表。\n1\n五洲医疗\n301234 · 医药生物\n0.879\n2026.05.06—2026.07.29\n2\n伟星股份\n002003 · 纺织服饰\n0.798\n2026.05.20—2026.07.29\n3\n艾艾精工\n603580 · 基础化工\n0.793\n2026.05.12—2026.07.29\n4\n超卓航科\n688237 · 国防军工\n0.778\n2026.05.13—2026.07.29\n5\n唐山港\n601000 · 交通运输\n0.777\n2026.05.20—2026.07.29\n6\n世茂能源\n605028 · 公用事业\n0.763\n2026.05.20—2026.07.29\n7\n赛维时代\n301381 · 商贸零售\n0.745\n2026.05.20—2026.07.29\n8\n哈三联\n002900 · 医药生物\n0.742\n2026.05.20—2026.07.29\n9\n惠城环保\n300779 · 环保\n0.736\n2026.05.20—2026.07.29\n10\n四川路桥\n600039 · 建筑装饰\n0.731\n2026.05.20—2026.07.29\n11\n陇神戎发\n300534 · 医药生物\n0.731\n2026.05.20—2026.07.29\n12\n海尔智家\n600690 · 家用电器\n0.728\n2026.05.20—2026.07.29\n13\n米奥会展\n300795 · 社会服务\n0.725\n2026.05.20—2026.07.29\n14\n哈药股份\n600664 · 医药生物\n0.709\n2026.05.20—2026.07.29\n15\n立新能源\n001258 · 公用事业\n0.707\n2026.05.20—2026.07.29\n16\n中远海控\n601919 · 交通运输\n0.706\n2026.05.20—2026.07.29\n17\n汉森制药\n002412 · 医药生物\n0.690\n2026.05.20—2026.07.29\n18\n宝钢股份\n600019 · 钢铁\n0.690\n2026.05.20—2026.07.29\n19\n一拖股份\n601038 · 机械设备\n0.685\n2026.05.20—2026.07.29\n20\n爱丽家居\n603221 · 轻工制造\n0.682\n2026.05.20—2026.07.29\n21\n兴蓉环境\n000598 · 环保\n0.680\n2026.05.20—2026.07.29\n22\n格力电器\n000651 · 家用电器\n0.680\n2026.05.20—2026.07.29\n23\n皖通高速\n600012 · 交通运输\n0.674\n2026.05.20—2026.07.29\n24\n南京高科\n600064 · 房地产\n0.673\n2026.05.20—2026.07.29\n25\n学大教育\n000526 · 社会服务\n0.673\n2026.05.20—2026.07.29\n26\n瑞晨环保\n301273 · 机械设备\n0.673\n2026.05.20—2026.07.29\n27\n共进股份\n603118 · 通信\n0.668\n2026.05.20—2026.07.29\n28\n可孚医疗\n301087 · 医药生物\n0.667\n2026.05.20—2026.07.29\n29\n海天味业\n603288 · 食品饮料\n0.664\n2026.05.20—2026.07.29\n30\n粤高速A\n000429 · 交通运输\n0.662\n2026.05.20—2026.07.29\n31\n日科化学\n300214 · 基础化工"
+    },
+    {
+      "route": "/market?code=603986&template=fresh_breakout",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "httpStatus": 200,
+      "loadMs": 1903,
+      "scroll": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "visibleInteractiveCount": 269,
+      "smallTargets": [
+        {
+          "label": "小字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 16,
+          "top": 941,
+          "right": 48,
+          "bottom": 969,
+          "width": 32,
+          "height": 28
+        },
+        {
+          "label": "标准字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 52,
+          "top": 941,
+          "right": 83,
+          "bottom": 969,
+          "width": 32,
+          "height": 28
+        },
+        {
+          "label": "大字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 87,
+          "top": 941,
+          "right": 119,
+          "bottom": 969,
+          "width": 32,
+          "height": 28
+        },
+        {
+          "label": "日K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 417,
+          "top": 275,
+          "right": 456,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "周K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 458,
+          "top": 275,
+          "right": 497,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "月K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 499,
+          "top": 275,
+          "right": 538,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "季K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 540,
+          "top": 275,
+          "right": 579,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "年K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 581,
+          "top": 275,
+          "right": 620,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "保存当前区间为模板",
+          "tag": "A",
+          "disabled": false,
+          "left": 656,
+          "top": 275,
+          "right": 736,
+          "bottom": 307,
+          "width": 80,
+          "height": 32
+        },
+        {
+          "label": "进入全屏",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 1006,
+          "top": 275,
+          "right": 1060,
+          "bottom": 307,
+          "width": 54,
+          "height": 32
+        },
+        {
+          "label": "画线颜色",
+          "tag": "INPUT",
+          "disabled": false,
+          "left": 522,
+          "top": 319,
+          "right": 545,
+          "bottom": 339,
+          "width": 23,
+          "height": 20
+        },
+        {
+          "label": "画线线宽",
+          "tag": "SELECT",
+          "disabled": false,
+          "left": 596,
+          "top": 318,
+          "right": 637,
+          "bottom": 341,
+          "width": 41,
+          "height": 23
+        },
+        {
+          "label": "选择/调整",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 361,
+          "right": 187,
+          "bottom": 395,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "十字光标已开启",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 397,
+          "right": 187,
+          "bottom": 431,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "趋势线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 440,
+          "right": 187,
+          "bottom": 474,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "线段",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 476,
+          "right": 187,
+          "bottom": 510,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "射线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 512,
+          "right": 187,
+          "bottom": 546,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "水平线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 548,
+          "right": 187,
+          "bottom": 582,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "垂直线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 584,
+          "right": 187,
+          "bottom": 618,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "斐波那契回撤",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 627,
+          "right": 187,
+          "bottom": 661,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "斐波那契扩展",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 663,
+          "right": 187,
+          "bottom": 697,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "矩形",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 706,
+          "right": 187,
+          "bottom": 740,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "曲线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 742,
+          "right": 187,
+          "bottom": 776,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "自由绘制",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 778,
+          "right": 187,
+          "bottom": 812,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "文本",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 821,
+          "right": 187,
+          "bottom": 855,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "测量",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 857,
+          "right": 187,
+          "bottom": 891,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "放大图表",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 900,
+          "right": 187,
+          "bottom": 934,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "删除所选",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 936,
+          "right": 187,
+          "bottom": 970,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "清除画线（全部）",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 153,
+          "top": 972,
+          "right": 187,
+          "bottom": 1006,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "放大图表 1",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 935,
+          "top": 363,
+          "right": 1005,
+          "bottom": 389,
+          "width": 70,
+          "height": 26
+        },
+        {
+          "label": "",
+          "tag": "A",
+          "disabled": false,
+          "left": 205,
+          "top": 841,
+          "right": 240,
+          "bottom": 860,
+          "width": 35,
+          "height": 19
+        },
+        {
+          "label": "1天",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 200,
+          "top": 915,
+          "right": 235,
+          "bottom": 945,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "5天",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 245,
+          "top": 915,
+          "right": 280,
+          "bottom": 945,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "1个月",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 290,
+          "top": 915,
+          "right": 337,
+          "bottom": 945,
+          "width": 47,
+          "height": 30
+        },
+        {
+          "label": "3个月",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 347,
+          "top": 915,
+          "right": 394,
+          "bottom": 945,
+          "width": 47,
+          "height": 30
+        },
+        {
+          "label": "6个月",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 404,
+          "top": 915,
+          "right": 452,
+          "bottom": 945,
+          "width": 47,
+          "height": 30
+        },
+        {
+          "label": "YTD",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 462,
+          "top": 915,
+          "right": 501,
+          "bottom": 945,
+          "width": 40,
+          "height": 30
+        },
+        {
+          "label": "1年",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 511,
+          "top": 915,
+          "right": 546,
+          "bottom": 945,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "3年",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 556,
+          "top": 915,
+          "right": 591,
+          "bottom": 945,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "5年",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 601,
+          "top": 915,
+          "right": 636,
+          "bottom": 945,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "全部",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 646,
+          "top": 915,
+          "right": 686,
+          "bottom": 945,
+          "width": 40,
+          "height": 30
+        },
+        {
+          "label": "保存当前区间为模板",
+          "tag": "A",
+          "disabled": false,
+          "left": 696,
+          "top": 913,
+          "right": 844,
+          "bottom": 947,
+          "width": 148,
+          "height": 34
+        },
+        {
+          "label": "调整主图与右侧栏宽度",
+          "tag": "DIV",
+          "disabled": false,
+          "left": 1075,
+          "top": 0,
+          "right": 1085,
+          "bottom": 958,
+          "width": 10,
+          "height": 958
+        },
+        {
+          "label": "刚突破健康上涨回调转强抛物线上升",
+          "tag": "SELECT",
+          "disabled": false,
+          "left": 1152,
+          "top": 116,
+          "right": 1427,
+          "bottom": 153,
+          "width": 275,
+          "height": 37
+        },
+        {
+          "label": "调整模板股票列表与曲线比较高度",
+          "tag": "DIV",
+          "disabled": false,
+          "left": 1081,
+          "top": 549,
+          "right": 1440,
+          "bottom": 559,
+          "width": 359,
+          "height": 10
+        }
+      ],
+      "enabledHelpExit": [],
+      "pageText": "LC\n模板库\n行情详情\n形态宽度\n字号\n小\n标\n大\n1 图布局\n布局 1\n兆易创新\n603986\n主板\n电子\n364.03\nCNY\n\n-26.60　-6.81%\n\n今开\n373.15\n最高\n378.00\n最低\n351.57\n昨收\n390.63\n成交额\n324.39亿\n成交量\n90.39万手\n换手率\n13.52%\n市值\n2555亿\n行情 2026.07.29\n估值 2026.07.29\nST 2026.07.29\n复权 2026.07.29\n分时\n5分\n15分\n30分\n60分\n日K\n周K\n月K\n季K\n年K\n保存区间\n指标\n对比\n预警\n回放\n全屏\nMA5　419.53\nMA10　445.32\nMA20　534.27\n线宽\n1px\n2px\n3px\n4px\n5px\n总 154ms · HTTP 125ms · 查询 43ms · 绘制 40ms\n图 1 · 放大\n\t\n\t\n\n\t\n\t\n1天\n5天\n1个月\n3个月\n6个月\nYTD\n1年\n3年\n5年\n全部\n保存当前区间为模板\n2016-08-18 至 2026-07-29　\n自选\n详情\n模板\n指标\n因子\n模板股票列表\n200 只 · ↑↓切换 · 滚轮滚动\n当前模板\n刚突破\n健康上涨\n回调转强\n抛物线上升\n1\n五洲医疗\n301234\n0.879\n2\n伟星股份\n002003\n0.798\n3\n艾艾精工\n603580\n0.793\n4\n超卓航科\n688237\n0.778\n5\n唐山港\n601000\n0.777\n6\n世茂能源\n605028\n0.763\n7\n赛维时代\n301381\n0.745\n8\n哈三联\n002900\n0.742\n9\n惠城环保\n300779\n0.736\n10\n四川路桥\n600039\n0.731\n11\n陇神戎发\n300534\n0.731\n12\n海尔智家\n600690\n0.728\n13\n米奥会展\n300795\n0.725\n14\n哈药股份\n600664\n0.709\n15\n立新能源\n001258\n0.707\n16\n中远海控\n601919\n0.706\n17\n汉森制药\n002412\n0.690\n18\n宝钢股份\n600019\n0.690\n19\n一拖股份\n601038\n0.685\n20\n爱丽家居\n603221\n0.682\n21\n兴蓉环境\n000598\n0.680\n22\n格力电器\n000651\n0.680\n23\n皖通高速\n600012\n0.674\n24\n南京高科\n600064\n0.673\n25\n学大教育\n000526\n0.673\n26\n瑞晨环保\n301273\n0.673\n27\n共进股份\n603118\n0.668\n28\n可孚医疗\n301087\n0.667\n29\n海天味业\n603288\n0.664\n30\n粤高速A\n000429\n0.662\n31\n日科化学\n300214\n0.662\n32\n华新建材\n600801\n0.662\n33\n智度股份\n000676\n0.660\n34\n春风动力\n603129\n0.660\n35\n健盛集团\n603558\n0.658\n36\n福耀玻璃\n600660\n0.657\n37\n首钢股份\n000959\n0.655\n38\n长缆科技\n002879\n0.650\n39\n世纪天鸿\n300654\n0.649\n40\n西部矿业\n601168\n0.647\n41\n国投电力\n600886\n0.646\n42\n恩华药业\n002262\n0.645\n43\n隆鑫通用\n603766\n0.643\n44\n浙江鼎力\n603338\n0.639\n45\n比音勒芬\n002832\n0.636\n46\n美的集团\n000333\n0.635\n47\n长春高新\n000661\n0.635\n48\n长江电力\n600900\n0.634\n49\n*ST发展\n000838\n0.631\n50\n青农商行\n002958\n0.630\n51\n太阳纸业\n002078\n0.628\n52\n天士力\n600535\n0.628\n53\n山东出版\n601019\n0.628\n54\n益丰药房\n603939\n0.620\n55\n贵州茅台\n600519\n0.613\n56\n星帅尔\n002860\n0.610\n57\n新产业\n300832\n0.610\n58\n中远海特\n600428\n0.610\n59\n敦煌种业\n600354\n0.607\n60\n伊利股份\n600887\n0.605\n61\n秦港股份\n601326\n0.604\n62\n上港集团\n600018\n0.602\n63\n海大集团\n002311\n0.600\n64\n中国外运\n601598\n0.599\n65\nST浩丰\n300419\n0.598\n66\n港迪技术\n301633\n0.595\n67\n百隆东方\n601339\n0.594\n68\n中国石化\n600028\n0.591\n69\n奥浦迈\n688293\n0.591\n70\n周大生\n002867\n0.591\n71\n招商公路\n001965\n0."
+    },
+    {
+      "route": "/template-breadth-v3",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "httpStatus": 200,
+      "loadMs": 198,
+      "scroll": {
+        "width": 1440,
+        "height": 1880
+      },
+      "horizontalOverflow": false,
+      "visibleInteractiveCount": 13,
+      "smallTargets": [
+        {
+          "label": "小字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 16,
+          "top": 941,
+          "right": 48,
+          "bottom": 969,
+          "width": 32,
+          "height": 28
+        },
+        {
+          "label": "标准字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 52,
+          "top": 941,
+          "right": 83,
+          "bottom": 969,
+          "width": 32,
+          "height": 28
+        },
+        {
+          "label": "大字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 87,
+          "top": 941,
+          "right": 119,
+          "bottom": 969,
+          "width": 32,
+          "height": 28
+        }
+      ],
+      "enabledHelpExit": [],
+      "pageText": "LC\n模板库\n行情详情\n形态宽度\n字号\n小\n标\n大\n统一观察线实验页\n市场形态宽度\n\n看有多少股票同时接近同一种市场形态，以及这种状态正在扩散还是收缩。\n\n数据截至 2026-07-29\n0.80 试用观察线，实验未验证为四模板统一基准\n0.80 是用户指定的试用观察线。实验显示它不适合作为四模板统一常态基准；页面用于先观察数量和变化，不代表该线已验证有效。\n刚突破\n平台蓄势后向上突破，尾段仍保持力度\n健康上涨\n持续抬高，回撤受控，不靠末端拔线\n回调转强\n先走强、再回吐，随后恢复向上\n抛物线上升\n前段较缓，随后斜率放大并加速\n当前超过 0.80\n1 只\n同日达到试用观察线\n较昨日\n0 只\n基本不变\n较 5 日前\n-4 只\n看一周左右的方向\n5 日平均\n1.8 只\n减少单日跳动干扰\n历史位置\n低位\n高于历史 1% 的日期\n刚突破 · 近 60 个交易日\n超过观察线的股票数量\n\n实线是每日数量，虚线是 5 日平均。\n\n0\n96\n192\n05-06\n06-16\n07-29\n固定展示 Top 30\n最接近当前模板的股票\n\n0.80 以下仍保留展示，并明确标为相对偏低。\n\n1\n五洲医疗\n301234.SZ · 医药生物\n0.879\n线上\n0.80 试用观察线\n2\n伟星股份\n002003.SZ · 纺织服饰\n0.798\n相对偏低\n3\n艾艾精工\n603580.SH · 基础化工\n0.793\n相对偏低\n4\n超卓航科\n688237.SH · 国防军工\n0.778\n相对偏低\n5\n唐山港\n601000.SH · 交通运输\n0.777\n相对偏低\n6\n世茂能源\n605028.SH · 公用事业\n0.763\n相对偏低\n7\n赛维时代\n301381.SZ · 商贸零售\n0.745\n相对偏低\n8\n哈三联\n002900.SZ · 医药生物\n0.742\n相对偏低\n9\n惠城环保\n300779.SZ · 环保\n0.736\n相对偏低\n10\n四川路桥\n600039.SH · 建筑装饰\n0.731\n相对偏低\n11\n陇神戎发\n300534.SZ · 医药生物\n0.731\n相对偏低\n12\n海尔智家\n600690.SH · 家用电器\n0.728\n相对偏低\n13\n米奥会展\n300795.SZ · 社会服务\n0.725\n相对偏低\n14\n哈药股份\n600664.SH · 医药生物\n0.709\n相对偏低\n15\n立新能源\n001258.SZ · 公用事业\n0.707\n相对偏低\n16\n中远海控\n601919.SH · 交通运输\n0.706\n相对偏低\n17\n汉森制药\n002412.SZ · 医药生物\n0.690\n相对偏低\n18\n宝钢股份\n600019.SH · 钢铁\n0.690\n相对偏低\n19\n一拖股份\n601038.SH · 机械设备\n0.685\n相对偏低\n20\n爱丽家居\n603221.SH · 轻工制造\n0.682\n相对偏低\n21\n兴蓉环境\n000598.SZ · 环保\n0.680\n相对偏低\n22\n格力电器\n000651.SZ · 家用电器\n0.680\n相对偏低\n23\n皖通高速\n600012.SH · 交通运输\n0.674\n相对偏低\n24\n南京高科\n600064.SH · 房地产\n0.673\n相对偏低\n25\n学大教育\n000526.SZ · 社会服务\n0.673\n相对偏低\n26\n瑞晨环保\n301273.SZ · 机械设备\n0.673\n相对偏低\n27\n共进股份\n603118.SH · 通信\n0.668\n相对偏低\n28\n可孚医疗\n301087.SZ · 医药生物\n0.667\n相对偏低\n29\n海天味业\n603288.SH · 食品饮料\n0.664\n相对偏低\n30\n粤高速A\n000429.SZ · 交通运输\n0.662\n相对偏低\n申万一级行业\n行业宽度地图\n\n块的面积只表示当前超过 0.80 的股票数量。\n\n当前宽度\n最近变化\n5日最大扩张\n暂无\n5日最大收缩\n医药生物 -2只\n新进入\n保留\n退出\n面积表示当前数量；方格同时显示新进、保留和退出。\n医药生物\n1 只\nTop100 行业占比 21%\n收缩 -2 只\n\n当前为 0：农林牧渔、基础化工、钢铁、有色金属、电子、家用电器、食品饮料、纺织服饰、轻工制造、公用事业、交通运输、房地产、商贸零售、社会服务、综合、建筑材料、建筑装饰、电力设备、国防军工、计算机、传媒、通信、银行、非银金融、汽车、机械设备、煤炭、石油石化、环保、美容护理\n\n点击一个行业块查看变化\n默认先看全市场，想进一步了解时再进入单个行业。\n怎么读这页\n\n数量上升：更多股票开始呈现相近形态，可以理解为形态正在扩散。\n\n数量下降：达到观察线的股票变少，可以理解为形态正在收缩。\n\n数量长期较低：这种形态在当时并不普遍。0.80 只是试用线，不能单独作为买卖依据。"
+    },
+    {
+      "route": "/templates",
+      "viewport": {
+        "width": 1024,
+        "height": 800
+      },
+      "httpStatus": 200,
+      "loadMs": 1580,
+      "scroll": {
+        "width": 1024,
+        "height": 1751
+      },
+      "horizontalOverflow": false,
+      "visibleInteractiveCount": 116,
+      "smallTargets": [
+        {
+          "label": "小字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 9,
+          "top": 741,
+          "right": 26,
+          "bottom": 769,
+          "width": 17,
+          "height": 28
+        },
+        {
+          "label": "标准字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 30,
+          "top": 741,
+          "right": 47,
+          "bottom": 769,
+          "width": 17,
+          "height": 28
+        },
+        {
+          "label": "大字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 51,
+          "top": 741,
+          "right": 68,
+          "bottom": 769,
+          "width": 17,
+          "height": 28
+        }
+      ],
+      "enabledHelpExit": [],
+      "pageText": "小\n标\n大\nK 线模板\n模板库\n\n先看冻结四模板，也可以把一只股票的真实历史区间保存成自己的模板。\n\n打开行情详情\n自定义模板\n保存一段你看得懂的 K 线\n\n输入股票和起止日期。系统保存这段窗口，之后用同样长度寻找最相似的股票。\n\n模板名称\n股票代码\n开始日期\n结束日期\n保存并分析\n冻结四模板\n定义固定，不在这里修改\n刚突破\n50 日固定窗口\n健康上涨\n80 日固定窗口\n回调转强\n55 日固定窗口\n抛物线上升\n160 日固定窗口\n我的自定义模板\n还没有保存\n\n从上方输入股票与日期开始。\n\n冻结模板\n刚突破\n\n价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。\n\n窗口长度\n50 个交易日\n来源股票\n603986.SH\n模板区间\n2025-06-19 至 2025-08-27\n相似股票\n5496 只\n模板曲线\n只比较窗口内的相对形状\n\n价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。\n\n整体向上，高点靠近窗口后段。这只是形状说明，不代表之后一定上涨或下跌。\n\n按相似度排序\nTop 股票\n点击后进入 K 线，并保留当前模板与股票列表。\n1\n五洲医疗\n301234 · 医药生物\n0.879\n2026.05.06—2026.07.29\n2\n伟星股份\n002003 · 纺织服饰\n0.798\n2026.05.20—2026.07.29\n3\n艾艾精工\n603580 · 基础化工\n0.793\n2026.05.12—2026.07.29\n4\n超卓航科\n688237 · 国防军工\n0.778\n2026.05.13—2026.07.29\n5\n唐山港\n601000 · 交通运输\n0.777\n2026.05.20—2026.07.29\n6\n世茂能源\n605028 · 公用事业\n0.763\n2026.05.20—2026.07.29\n7\n赛维时代\n301381 · 商贸零售\n0.745\n2026.05.20—2026.07.29\n8\n哈三联\n002900 · 医药生物\n0.742\n2026.05.20—2026.07.29\n9\n惠城环保\n300779 · 环保\n0.736\n2026.05.20—2026.07.29\n10\n四川路桥\n600039 · 建筑装饰\n0.731\n2026.05.20—2026.07.29\n11\n陇神戎发\n300534 · 医药生物\n0.731\n2026.05.20—2026.07.29\n12\n海尔智家\n600690 · 家用电器\n0.728\n2026.05.20—2026.07.29\n13\n米奥会展\n300795 · 社会服务\n0.725\n2026.05.20—2026.07.29\n14\n哈药股份\n600664 · 医药生物\n0.709\n2026.05.20—2026.07.29\n15\n立新能源\n001258 · 公用事业\n0.707\n2026.05.20—2026.07.29\n16\n中远海控\n601919 · 交通运输\n0.706\n2026.05.20—2026.07.29\n17\n汉森制药\n002412 · 医药生物\n0.690\n2026.05.20—2026.07.29\n18\n宝钢股份\n600019 · 钢铁\n0.690\n2026.05.20—2026.07.29\n19\n一拖股份\n601038 · 机械设备\n0.685\n2026.05.20—2026.07.29\n20\n爱丽家居\n603221 · 轻工制造\n0.682\n2026.05.20—2026.07.29\n21\n兴蓉环境\n000598 · 环保\n0.680\n2026.05.20—2026.07.29\n22\n格力电器\n000651 · 家用电器\n0.680\n2026.05.20—2026.07.29\n23\n皖通高速\n600012 · 交通运输\n0.674\n2026.05.20—2026.07.29\n24\n南京高科\n600064 · 房地产\n0.673\n2026.05.20—2026.07.29\n25\n学大教育\n000526 · 社会服务\n0.673\n2026.05.20—2026.07.29\n26\n瑞晨环保\n301273 · 机械设备\n0.673\n2026.05.20—2026.07.29\n27\n共进股份\n603118 · 通信\n0.668\n2026.05.20—2026.07.29\n28\n可孚医疗\n301087 · 医药生物\n0.667\n2026.05.20—2026.07.29\n29\n海天味业\n603288 · 食品饮料\n0.664\n2026.05.20—2026.07.29\n30\n粤高速A\n000429 · 交通运输\n0.662\n2026.05.20—2026.07.29\n31\n日科化学\n300214 · 基础化工\n0.662\n2026.05.06—20"
+    },
+    {
+      "route": "/market?code=603986&template=fresh_breakout",
+      "viewport": {
+        "width": 1024,
+        "height": 800
+      },
+      "httpStatus": 200,
+      "loadMs": 1887,
+      "scroll": {
+        "width": 1024,
+        "height": 800
+      },
+      "horizontalOverflow": false,
+      "visibleInteractiveCount": 263,
+      "smallTargets": [
+        {
+          "label": "小字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 9,
+          "top": 741,
+          "right": 26,
+          "bottom": 769,
+          "width": 17,
+          "height": 28
+        },
+        {
+          "label": "标准字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 30,
+          "top": 741,
+          "right": 47,
+          "bottom": 769,
+          "width": 17,
+          "height": 28
+        },
+        {
+          "label": "大字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 51,
+          "top": 741,
+          "right": 68,
+          "bottom": 769,
+          "width": 17,
+          "height": 28
+        },
+        {
+          "label": "日K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 359,
+          "top": 275,
+          "right": 398,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "周K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 400,
+          "top": 275,
+          "right": 439,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "月K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 441,
+          "top": 275,
+          "right": 480,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "季K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 482,
+          "top": 275,
+          "right": 521,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "年K",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 523,
+          "top": 275,
+          "right": 562,
+          "bottom": 307,
+          "width": 39,
+          "height": 32
+        },
+        {
+          "label": "画线颜色",
+          "tag": "INPUT",
+          "disabled": false,
+          "left": 464,
+          "top": 319,
+          "right": 487,
+          "bottom": 339,
+          "width": 23,
+          "height": 20
+        },
+        {
+          "label": "画线线宽",
+          "tag": "SELECT",
+          "disabled": false,
+          "left": 538,
+          "top": 318,
+          "right": 579,
+          "bottom": 341,
+          "width": 41,
+          "height": 23
+        },
+        {
+          "label": "选择/调整",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 361,
+          "right": 129,
+          "bottom": 395,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "十字光标已开启",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 397,
+          "right": 129,
+          "bottom": 431,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "趋势线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 440,
+          "right": 129,
+          "bottom": 474,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "线段",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 476,
+          "right": 129,
+          "bottom": 510,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "射线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 512,
+          "right": 129,
+          "bottom": 546,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "水平线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 548,
+          "right": 129,
+          "bottom": 582,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "垂直线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 584,
+          "right": 129,
+          "bottom": 618,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "斐波那契回撤",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 627,
+          "right": 129,
+          "bottom": 661,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "斐波那契扩展",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 663,
+          "right": 129,
+          "bottom": 697,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "矩形",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 706,
+          "right": 129,
+          "bottom": 740,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "曲线",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 742,
+          "right": 129,
+          "bottom": 776,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "自由绘制",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 778,
+          "right": 129,
+          "bottom": 812,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "文本",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 821,
+          "right": 129,
+          "bottom": 855,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "测量",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 857,
+          "right": 129,
+          "bottom": 891,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "放大图表",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 900,
+          "right": 129,
+          "bottom": 934,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "删除所选",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 936,
+          "right": 129,
+          "bottom": 970,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "清除画线（全部）",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 95,
+          "top": 972,
+          "right": 129,
+          "bottom": 1006,
+          "width": 34,
+          "height": 34
+        },
+        {
+          "label": "放大图表 1",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 879,
+          "top": 363,
+          "right": 949,
+          "bottom": 389,
+          "width": 70,
+          "height": 26
+        },
+        {
+          "label": "",
+          "tag": "A",
+          "disabled": false,
+          "left": 147,
+          "top": 641,
+          "right": 182,
+          "bottom": 660,
+          "width": 35,
+          "height": 19
+        },
+        {
+          "label": "1天",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 142,
+          "top": 715,
+          "right": 177,
+          "bottom": 745,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "5天",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 187,
+          "top": 715,
+          "right": 222,
+          "bottom": 745,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "1个月",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 232,
+          "top": 715,
+          "right": 279,
+          "bottom": 745,
+          "width": 47,
+          "height": 30
+        },
+        {
+          "label": "3个月",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 289,
+          "top": 715,
+          "right": 336,
+          "bottom": 745,
+          "width": 47,
+          "height": 30
+        },
+        {
+          "label": "6个月",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 346,
+          "top": 715,
+          "right": 394,
+          "bottom": 745,
+          "width": 47,
+          "height": 30
+        },
+        {
+          "label": "YTD",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 404,
+          "top": 715,
+          "right": 443,
+          "bottom": 745,
+          "width": 40,
+          "height": 30
+        },
+        {
+          "label": "1年",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 453,
+          "top": 715,
+          "right": 488,
+          "bottom": 745,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "3年",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 498,
+          "top": 715,
+          "right": 533,
+          "bottom": 745,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "5年",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 543,
+          "top": 715,
+          "right": 578,
+          "bottom": 745,
+          "width": 35,
+          "height": 30
+        },
+        {
+          "label": "全部",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 588,
+          "top": 715,
+          "right": 628,
+          "bottom": 745,
+          "width": 40,
+          "height": 30
+        },
+        {
+          "label": "保存当前区间为模板",
+          "tag": "A",
+          "disabled": false,
+          "left": 638,
+          "top": 713,
+          "right": 786,
+          "bottom": 747,
+          "width": 148,
+          "height": 34
+        },
+        {
+          "label": "关闭",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 1375,
+          "top": 7,
+          "right": 1410,
+          "bottom": 42,
+          "width": 35,
+          "height": 35
+        },
+        {
+          "label": "刚突破健康上涨回调转强抛物线上升",
+          "tag": "SELECT",
+          "disabled": false,
+          "left": 1115,
+          "top": 157,
+          "right": 1410,
+          "bottom": 194,
+          "width": 295,
+          "height": 37
+        },
+        {
+          "label": "调整模板股票列表与曲线比较高度",
+          "tag": "DIV",
+          "disabled": false,
+          "left": 1044,
+          "top": 460,
+          "right": 1423,
+          "bottom": 470,
+          "width": 379,
+          "height": 10
+        }
+      ],
+      "enabledHelpExit": [],
+      "pageText": "小\n标\n大\n兆易创新\n603986\n主板\n电子\n364.03\nCNY\n\n-26.60　-6.81%\n\n今开\n373.15\n最高\n378.00\n最低\n351.57\n昨收\n390.63\n成交额\n324.39亿\n成交量\n90.39万手\n换手率\n13.52%\n市值\n2555亿\n行情 2026.07.29\n估值 2026.07.29\nST 2026.07.29\n复权 2026.07.29\n分时\n5分\n15分\n30分\n60分\n日K\n周K\n月K\n季K\n年K\nMA5　419.53\nMA10　445.32\nMA20　534.27\n线宽\n1px\n2px\n3px\n4px\n5px\n图 1 · 放大\n\t\n\t\n\n\t\n\t\n1天\n5天\n1个月\n3个月\n6个月\nYTD\n1年\n3年\n5年\n全部\n保存当前区间为模板\n2016-08-18 至 2026-07-29　\n股票面板\n自选\n详情\n模板\n指标\n因子\n模板股票列表\n200 只 · ↑↓切换 · 滚轮滚动\n当前模板\n刚突破\n健康上涨\n回调转强\n抛物线上升\n1\n五洲医疗\n301234\n0.879\n2\n伟星股份\n002003\n0.798\n3\n艾艾精工\n603580\n0.793\n4\n超卓航科\n688237\n0.778\n5\n唐山港\n601000\n0.777\n6\n世茂能源\n605028\n0.763\n7\n赛维时代\n301381\n0.745\n8\n哈三联\n002900\n0.742\n9\n惠城环保\n300779\n0.736\n10\n四川路桥\n600039\n0.731\n11\n陇神戎发\n300534\n0.731\n12\n海尔智家\n600690\n0.728\n13\n米奥会展\n300795\n0.725\n14\n哈药股份\n600664\n0.709\n15\n立新能源\n001258\n0.707\n16\n中远海控\n601919\n0.706\n17\n汉森制药\n002412\n0.690\n18\n宝钢股份\n600019\n0.690\n19\n一拖股份\n601038\n0.685\n20\n爱丽家居\n603221\n0.682\n21\n兴蓉环境\n000598\n0.680\n22\n格力电器\n000651\n0.680\n23\n皖通高速\n600012\n0.674\n24\n南京高科\n600064\n0.673\n25\n学大教育\n000526\n0.673\n26\n瑞晨环保\n301273\n0.673\n27\n共进股份\n603118\n0.668\n28\n可孚医疗\n301087\n0.667\n29\n海天味业\n603288\n0.664\n30\n粤高速A\n000429\n0.662\n31\n日科化学\n300214\n0.662\n32\n华新建材\n600801\n0.662\n33\n智度股份\n000676\n0.660\n34\n春风动力\n603129\n0.660\n35\n健盛集团\n603558\n0.658\n36\n福耀玻璃\n600660\n0.657\n37\n首钢股份\n000959\n0.655\n38\n长缆科技\n002879\n0.650\n39\n世纪天鸿\n300654\n0.649\n40\n西部矿业\n601168\n0.647\n41\n国投电力\n600886\n0.646\n42\n恩华药业\n002262\n0.645\n43\n隆鑫通用\n603766\n0.643\n44\n浙江鼎力\n603338\n0.639\n45\n比音勒芬\n002832\n0.636\n46\n美的集团\n000333\n0.635\n47\n长春高新\n000661\n0.635\n48\n长江电力\n600900\n0.634\n49\n*ST发展\n000838\n0.631\n50\n青农商行\n002958\n0.630\n51\n太阳纸业\n002078\n0.628\n52\n天士力\n600535\n0.628\n53\n山东出版\n601019\n0.628\n54\n益丰药房\n603939\n0.620\n55\n贵州茅台\n600519\n0.613\n56\n星帅尔\n002860\n0.610\n57\n新产业\n300832\n0.610\n58\n中远海特\n600428\n0.610\n59\n敦煌种业\n600354\n0.607\n60\n伊利股份\n600887\n0.605\n61\n秦港股份\n601326\n0.604\n62\n上港集团\n600018\n0.602\n63\n海大集团\n002311\n0.600\n64\n中国外运\n601598\n0.599\n65\nST浩丰\n300419\n0.598\n66\n港迪技术\n301633\n0.595\n67\n百隆东方\n601339\n0.594\n68\n中国石化\n600028\n0.591\n69\n奥浦迈\n688293\n0.591\n70\n周大生\n002867\n0.591\n71\n招商公路\n001965\n0.587\n72\n中国中车\n601766\n0.585\n73\n川投能源\n600674\n0.584\n74\n百奥赛图\n688796\n0.583\n75\n东阿阿胶\n000423\n0.583"
+    },
+    {
+      "route": "/template-breadth-v3",
+      "viewport": {
+        "width": 1024,
+        "height": 800
+      },
+      "httpStatus": 200,
+      "loadMs": 198,
+      "scroll": {
+        "width": 1024,
+        "height": 2807
+      },
+      "horizontalOverflow": false,
+      "visibleInteractiveCount": 13,
+      "smallTargets": [
+        {
+          "label": "小字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 9,
+          "top": 741,
+          "right": 26,
+          "bottom": 769,
+          "width": 17,
+          "height": 28
+        },
+        {
+          "label": "标准字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 30,
+          "top": 741,
+          "right": 47,
+          "bottom": 769,
+          "width": 17,
+          "height": 28
+        },
+        {
+          "label": "大字体",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 51,
+          "top": 741,
+          "right": 68,
+          "bottom": 769,
+          "width": 17,
+          "height": 28
+        }
+      ],
+      "enabledHelpExit": [],
+      "pageText": "小\n标\n大\n统一观察线实验页\n市场形态宽度\n\n看有多少股票同时接近同一种市场形态，以及这种状态正在扩散还是收缩。\n\n数据截至 2026-07-29\n0.80 试用观察线，实验未验证为四模板统一基准\n0.80 是用户指定的试用观察线。实验显示它不适合作为四模板统一常态基准；页面用于先观察数量和变化，不代表该线已验证有效。\n刚突破\n平台蓄势后向上突破，尾段仍保持力度\n健康上涨\n持续抬高，回撤受控，不靠末端拔线\n回调转强\n先走强、再回吐，随后恢复向上\n抛物线上升\n前段较缓，随后斜率放大并加速\n当前超过 0.80\n1 只\n同日达到试用观察线\n较昨日\n0 只\n基本不变\n较 5 日前\n-4 只\n看一周左右的方向\n5 日平均\n1.8 只\n减少单日跳动干扰\n历史位置\n低位\n高于历史 1% 的日期\n刚突破 · 近 60 个交易日\n超过观察线的股票数量\n\n实线是每日数量，虚线是 5 日平均。\n\n0\n96\n192\n05-06\n06-16\n07-29\n固定展示 Top 30\n最接近当前模板的股票\n\n0.80 以下仍保留展示，并明确标为相对偏低。\n\n1\n五洲医疗\n301234.SZ · 医药生物\n0.879\n线上\n0.80 试用观察线\n2\n伟星股份\n002003.SZ · 纺织服饰\n0.798\n相对偏低\n3\n艾艾精工\n603580.SH · 基础化工\n0.793\n相对偏低\n4\n超卓航科\n688237.SH · 国防军工\n0.778\n相对偏低\n5\n唐山港\n601000.SH · 交通运输\n0.777\n相对偏低\n6\n世茂能源\n605028.SH · 公用事业\n0.763\n相对偏低\n7\n赛维时代\n301381.SZ · 商贸零售\n0.745\n相对偏低\n8\n哈三联\n002900.SZ · 医药生物\n0.742\n相对偏低\n9\n惠城环保\n300779.SZ · 环保\n0.736\n相对偏低\n10\n四川路桥\n600039.SH · 建筑装饰\n0.731\n相对偏低\n11\n陇神戎发\n300534.SZ · 医药生物\n0.731\n相对偏低\n12\n海尔智家\n600690.SH · 家用电器\n0.728\n相对偏低\n13\n米奥会展\n300795.SZ · 社会服务\n0.725\n相对偏低\n14\n哈药股份\n600664.SH · 医药生物\n0.709\n相对偏低\n15\n立新能源\n001258.SZ · 公用事业\n0.707\n相对偏低\n16\n中远海控\n601919.SH · 交通运输\n0.706\n相对偏低\n17\n汉森制药\n002412.SZ · 医药生物\n0.690\n相对偏低\n18\n宝钢股份\n600019.SH · 钢铁\n0.690\n相对偏低\n19\n一拖股份\n601038.SH · 机械设备\n0.685\n相对偏低\n20\n爱丽家居\n603221.SH · 轻工制造\n0.682\n相对偏低\n21\n兴蓉环境\n000598.SZ · 环保\n0.680\n相对偏低\n22\n格力电器\n000651.SZ · 家用电器\n0.680\n相对偏低\n23\n皖通高速\n600012.SH · 交通运输\n0.674\n相对偏低\n24\n南京高科\n600064.SH · 房地产\n0.673\n相对偏低\n25\n学大教育\n000526.SZ · 社会服务\n0.673\n相对偏低\n26\n瑞晨环保\n301273.SZ · 机械设备\n0.673\n相对偏低\n27\n共进股份\n603118.SH · 通信\n0.668\n相对偏低\n28\n可孚医疗\n301087.SZ · 医药生物\n0.667\n相对偏低\n29\n海天味业\n603288.SH · 食品饮料\n0.664\n相对偏低\n30\n粤高速A\n000429.SZ · 交通运输\n0.662\n相对偏低\n申万一级行业\n行业宽度地图\n\n块的面积只表示当前超过 0.80 的股票数量。\n\n当前宽度\n最近变化\n5日最大扩张\n暂无\n5日最大收缩\n医药生物 -2只\n新进入\n保留\n退出\n面积表示当前数量；方格同时显示新进、保留和退出。\n医药生物\n1 只\nTop100 行业占比 21%\n收缩 -2 只\n\n当前为 0：农林牧渔、基础化工、钢铁、有色金属、电子、家用电器、食品饮料、纺织服饰、轻工制造、公用事业、交通运输、房地产、商贸零售、社会服务、综合、建筑材料、建筑装饰、电力设备、国防军工、计算机、传媒、通信、银行、非银金融、汽车、机械设备、煤炭、石油石化、环保、美容护理\n\n点击一个行业块查看变化\n默认先看全市场，想进一步了解时再进入单个行业。\n怎么读这页\n\n数量上升：更多股票开始呈现相近形态，可以理解为形态正在扩散。\n\n数量下降：达到观察线的股票变少，可以理解为形态正在收缩。\n\n数量长期较低：这种形态在当时并不普遍。0.80 只是试用线，不能单独作为买卖依据。"
+    },
+    {
+      "route": "/templates",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "httpStatus": 200,
+      "loadMs": 1582,
+      "scroll": {
+        "width": 390,
+        "height": 2906
+      },
+      "horizontalOverflow": false,
+      "visibleInteractiveCount": 113,
+      "smallTargets": [],
+      "enabledHelpExit": [],
+      "pageText": "模板库\n行情详情\n形态宽度\nK 线模板\n模板库\n\n先看冻结四模板，也可以把一只股票的真实历史区间保存成自己的模板。\n\n打开行情详情\n自定义模板\n保存一段你看得懂的 K 线\n\n输入股票和起止日期。系统保存这段窗口，之后用同样长度寻找最相似的股票。\n\n模板名称\n股票代码\n开始日期\n结束日期\n保存并分析\n冻结四模板\n定义固定，不在这里修改\n刚突破\n50 日固定窗口\n健康上涨\n80 日固定窗口\n回调转强\n55 日固定窗口\n抛物线上升\n160 日固定窗口\n我的自定义模板\n还没有保存\n\n从上方输入股票与日期开始。\n\n冻结模板\n刚突破\n\n价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。\n\n窗口长度\n50 个交易日\n来源股票\n603986.SH\n模板区间\n2025-06-19 至 2025-08-27\n相似股票\n5496 只\n模板曲线\n只比较窗口内的相对形状\n\n价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。\n\n整体向上，高点靠近窗口后段。这只是形状说明，不代表之后一定上涨或下跌。\n\n按相似度排序\nTop 股票\n点击后进入 K 线，并保留当前模板与股票列表。\n1\n五洲医疗\n301234 · 医药生物\n0.879\n2026.05.06—2026.07.29\n2\n伟星股份\n002003 · 纺织服饰\n0.798\n2026.05.20—2026.07.29\n3\n艾艾精工\n603580 · 基础化工\n0.793\n2026.05.12—2026.07.29\n4\n超卓航科\n688237 · 国防军工\n0.778\n2026.05.13—2026.07.29\n5\n唐山港\n601000 · 交通运输\n0.777\n2026.05.20—2026.07.29\n6\n世茂能源\n605028 · 公用事业\n0.763\n2026.05.20—2026.07.29\n7\n赛维时代\n301381 · 商贸零售\n0.745\n2026.05.20—2026.07.29\n8\n哈三联\n002900 · 医药生物\n0.742\n2026.05.20—2026.07.29\n9\n惠城环保\n300779 · 环保\n0.736\n2026.05.20—2026.07.29\n10\n四川路桥\n600039 · 建筑装饰\n0.731\n2026.05.20—2026.07.29\n11\n陇神戎发\n300534 · 医药生物\n0.731\n2026.05.20—2026.07.29\n12\n海尔智家\n600690 · 家用电器\n0.728\n2026.05.20—2026.07.29\n13\n米奥会展\n300795 · 社会服务\n0.725\n2026.05.20—2026.07.29\n14\n哈药股份\n600664 · 医药生物\n0.709\n2026.05.20—2026.07.29\n15\n立新能源\n001258 · 公用事业\n0.707\n2026.05.20—2026.07.29\n16\n中远海控\n601919 · 交通运输\n0.706\n2026.05.20—2026.07.29\n17\n汉森制药\n002412 · 医药生物\n0.690\n2026.05.20—2026.07.29\n18\n宝钢股份\n600019 · 钢铁\n0.690\n2026.05.20—2026.07.29\n19\n一拖股份\n601038 · 机械设备\n0.685\n2026.05.20—2026.07.29\n20\n爱丽家居\n603221 · 轻工制造\n0.682\n2026.05.20—2026.07.29\n21\n兴蓉环境\n000598 · 环保\n0.680\n2026.05.20—2026.07.29\n22\n格力电器\n000651 · 家用电器\n0.680\n2026.05.20—2026.07.29\n23\n皖通高速\n600012 · 交通运输\n0.674\n2026.05.20—2026.07.29\n24\n南京高科\n600064 · 房地产\n0.673\n2026.05.20—2026.07.29\n25\n学大教育\n000526 · 社会服务\n0.673\n2026.05.20—2026.07.29\n26\n瑞晨环保\n301273 · 机械设备\n0.673\n2026.05.20—2026.07.29\n27\n共进股份\n603118 · 通信\n0.668\n2026.05.20—2026.07.29\n28\n可孚医疗\n301087 · 医药生物\n0.667\n2026.05.20—2026.07.29\n29\n海天味业\n603288 · 食品饮料\n0.664\n2026.05.20—2026.07.29\n30\n粤高速A\n000429 · 交通运输\n0.662\n2026.05.20—2026.07.29\n31\n日科化学\n300214 · 基础化工\n0.662\n2026."
+    },
+    {
+      "route": "/market?code=603986&template=fresh_breakout",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "httpStatus": 200,
+      "loadMs": 1890,
+      "scroll": {
+        "width": 390,
+        "height": 908
+      },
+      "horizontalOverflow": false,
+      "visibleInteractiveCount": 47,
+      "smallTargets": [
+        {
+          "label": "画线线宽",
+          "tag": "SELECT",
+          "disabled": false,
+          "left": 326,
+          "top": 499,
+          "right": 367,
+          "bottom": 522,
+          "width": 41,
+          "height": 23
+        },
+        {
+          "label": "放大图表 1",
+          "tag": "BUTTON",
+          "disabled": false,
+          "left": 247,
+          "top": 610,
+          "right": 317,
+          "bottom": 636,
+          "width": 70,
+          "height": 26
+        },
+        {
+          "label": "",
+          "tag": "A",
+          "disabled": false,
+          "left": 21,
+          "top": 1004,
+          "right": 56,
+          "bottom": 1023,
+          "width": 35,
+          "height": 19
+        }
+      ],
+      "enabledHelpExit": [],
+      "pageText": "模板库\n行情详情\n形态宽度\n兆易创新\n603986\n主板\n电子\n364.03\nCNY\n\n-26.60　-6.81%\n\n今开\n373.15\n最高\n378.00\n最低\n351.57\n昨收\n390.63\n成交额\n324.39亿\n成交量\n90.39万手\n换手率\n13.52%\n市值\n2555亿\n行情 2026.07.29\n估值 2026.07.29\nST 2026.07.29\n复权 2026.07.29\n分时\n5分\n15分\n30分\n60分\n日K\n周K\n月K\n季K\n年K\nMA5　419.53\nMA10　445.32\nMA20　534.27\n线宽\n1px\n2px\n3px\n4px\n5px\n图 1 · 放大\n\t\n\t\n\n\t\n\t\n1天\n5天\n1个月\n3个月\n6个月\nYTD\n1年\n3年\n5年\n全部\n保存当前区间为模板\n已连接\n21:05:02"
+    },
+    {
+      "route": "/template-breadth-v3",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "httpStatus": 200,
+      "loadMs": 270,
+      "scroll": {
+        "width": 390,
+        "height": 3362
+      },
+      "horizontalOverflow": false,
+      "visibleInteractiveCount": 10,
+      "smallTargets": [],
+      "enabledHelpExit": [],
+      "pageText": "模板库\n行情详情\n形态宽度\n统一观察线实验页\n市场形态宽度\n\n看有多少股票同时接近同一种市场形态，以及这种状态正在扩散还是收缩。\n\n数据截至 2026-07-29\n0.80 试用观察线，实验未验证为四模板统一基准\n0.80 是用户指定的试用观察线。实验显示它不适合作为四模板统一常态基准；页面用于先观察数量和变化，不代表该线已验证有效。\n刚突破\n平台蓄势后向上突破，尾段仍保持力度\n健康上涨\n持续抬高，回撤受控，不靠末端拔线\n回调转强\n先走强、再回吐，随后恢复向上\n抛物线上升\n前段较缓，随后斜率放大并加速\n当前超过 0.80\n1 只\n同日达到试用观察线\n较昨日\n0 只\n基本不变\n较 5 日前\n-4 只\n看一周左右的方向\n5 日平均\n1.8 只\n减少单日跳动干扰\n历史位置\n低位\n高于历史 1% 的日期\n刚突破 · 近 60 个交易日\n超过观察线的股票数量\n\n实线是每日数量，虚线是 5 日平均。\n\n0\n96\n192\n05-06\n06-16\n07-29\n固定展示 Top 30\n最接近当前模板的股票\n\n0.80 以下仍保留展示，并明确标为相对偏低。\n\n1\n五洲医疗\n301234.SZ · 医药生物\n0.879\n线上\n0.80 试用观察线\n2\n伟星股份\n002003.SZ · 纺织服饰\n0.798\n相对偏低\n3\n艾艾精工\n603580.SH · 基础化工\n0.793\n相对偏低\n4\n超卓航科\n688237.SH · 国防军工\n0.778\n相对偏低\n5\n唐山港\n601000.SH · 交通运输\n0.777\n相对偏低\n6\n世茂能源\n605028.SH · 公用事业\n0.763\n相对偏低\n7\n赛维时代\n301381.SZ · 商贸零售\n0.745\n相对偏低\n8\n哈三联\n002900.SZ · 医药生物\n0.742\n相对偏低\n9\n惠城环保\n300779.SZ · 环保\n0.736\n相对偏低\n10\n四川路桥\n600039.SH · 建筑装饰\n0.731\n相对偏低\n11\n陇神戎发\n300534.SZ · 医药生物\n0.731\n相对偏低\n12\n海尔智家\n600690.SH · 家用电器\n0.728\n相对偏低\n13\n米奥会展\n300795.SZ · 社会服务\n0.725\n相对偏低\n14\n哈药股份\n600664.SH · 医药生物\n0.709\n相对偏低\n15\n立新能源\n001258.SZ · 公用事业\n0.707\n相对偏低\n16\n中远海控\n601919.SH · 交通运输\n0.706\n相对偏低\n17\n汉森制药\n002412.SZ · 医药生物\n0.690\n相对偏低\n18\n宝钢股份\n600019.SH · 钢铁\n0.690\n相对偏低\n19\n一拖股份\n601038.SH · 机械设备\n0.685\n相对偏低\n20\n爱丽家居\n603221.SH · 轻工制造\n0.682\n相对偏低\n21\n兴蓉环境\n000598.SZ · 环保\n0.680\n相对偏低\n22\n格力电器\n000651.SZ · 家用电器\n0.680\n相对偏低\n23\n皖通高速\n600012.SH · 交通运输\n0.674\n相对偏低\n24\n南京高科\n600064.SH · 房地产\n0.673\n相对偏低\n25\n学大教育\n000526.SZ · 社会服务\n0.673\n相对偏低\n26\n瑞晨环保\n301273.SZ · 机械设备\n0.673\n相对偏低\n27\n共进股份\n603118.SH · 通信\n0.668\n相对偏低\n28\n可孚医疗\n301087.SZ · 医药生物\n0.667\n相对偏低\n29\n海天味业\n603288.SH · 食品饮料\n0.664\n相对偏低\n30\n粤高速A\n000429.SZ · 交通运输\n0.662\n相对偏低\n申万一级行业\n行业宽度地图\n\n块的面积只表示当前超过 0.80 的股票数量。\n\n当前宽度\n最近变化\n5日最大扩张\n暂无\n5日最大收缩\n医药生物 -2只\n新进入\n保留\n退出\n面积表示当前数量；方格同时显示新进、保留和退出。\n医药生物\n1 只\nTop100 行业占比 21%\n收缩 -2 只\n\n当前为 0：农林牧渔、基础化工、钢铁、有色金属、电子、家用电器、食品饮料、纺织服饰、轻工制造、公用事业、交通运输、房地产、商贸零售、社会服务、综合、建筑材料、建筑装饰、电力设备、国防军工、计算机、传媒、通信、银行、非银金融、汽车、机械设备、煤炭、石油石化、环保、美容护理\n\n点击一个行业块查看变化\n默认先看全市场，想进一步了解时再进入单个行业。\n怎么读这页\n\n数量上升：更多股票开始呈现相近形态，可以理解为形态正在扩散。\n\n数量下降：达到观察线的股票变少，可以理解为形态正在收缩。\n\n数量长期较低：这种形态在当时并不普遍。0.80 只是试用线，不能单独作为买卖依据。"
+    }
+  ],
+  "interactions": {
+    "marketDesktop": {
+      "templateTabActiveOnURLLoad": true,
+      "selectValue": "fresh_breakout",
+      "transform": "qfq-log-close-independent-z",
+      "stats": {
+        "templateMean": 0,
+        "templateStd": 1,
+        "candidateMean": 0,
+        "candidateStd": 1,
+        "sourcePath": "M10.0,91.4 L16.3,102.6 L22.7,99.3 L29.0,89.6 L35.3,85.6 L41.6,91.3 L48.0,83.4 L54.3,83.0 L60.6,89.4 L66.9,97.3 L73.3,99.7 L79.6,102.0 L85.9,96.8 L92.2,94.5 L98.6,100.4 L104.9,104.2 L111.2,103.3 L117.6,105.4 L123.9,112.5 L130.2,114.6 L136.5,104.3 L142.9,106.6 L149.2,106.7 L155.5,110.1 L161.8,107.1 L168.2,104.6 L174.5,93.8 L180.8,98.3 L187.1,98.2 L193.5,88.5 L199.8,96.0 L206.1,106.2 L212.4,102.1 L218.8,104.3 L225.1,103.6 L231.4,105.2 L237.8,108.7 L244.1,104.5 L250.4,97.7 L256.7,95.1 L263.1,96.3 L269.4,91.4 L275.7,84.2 L282.0,90.4 L288.4,80.9 L294.7,56.4 L301.0,26.0 L307.3,11.7 L313.7,18.6 L320.0,10.0",
+        "candidatePath": "M10.0,115.6 L16.3,119.2 L22.7,109.2 L29.0,97.5 L35.3,94.9 L41.6,97.7 L48.0,105.4 L54.3,109.5 L60.6,109.2 L66.9,107.5 L73.3,103.0 L79.6,94.1 L85.9,104.1 L92.2,107.7 L98.6,101.0 L104.9,105.9 L111.2,105.2 L117.6,105.7 L123.9,96.8 L130.2,93.3 L136.5,81.7 L142.9,73.0 L149.2,61.7 L155.5,70.7 L161.8,59.0 L168.2,47.4 L174.5,48.2 L180.8,37.6 L187.1,41.3 L193.5,47.9 L199.8,60.8 L206.1,63.8 L212.4,68.2 L218.8,74.8 L225.1,78.1 L231.4,66.5 L237.8,76.4 L244.1,89.3 L250.4,82.1 L256.7,84.7 L263.1,97.6 L269.4,110.5 L275.7,118.9 L282.0,107.3 L288.4,108.7 L294.7,113.5 L301.0,112.1 L307.3,118.5 L313.7,131.4 L320.0,140.0"
+      },
+      "sourceYRange": 104.6,
+      "candidateYRange": 102.4,
+      "yRangeRatio": 1.0214843749999998,
+      "keyboard": {
+        "beforeURL": "http://localhost:3101/market?code=603986&template=fresh_breakout",
+        "afterURL": "http://localhost:3101/market?code=002003&template=fresh_breakout",
+        "beforeActive": "1\n五洲医疗\n301234\n0.879",
+        "afterActive": "2\n伟星股份\n002003\n0.798",
+        "codeChanged": true,
+        "templatePreserved": true
+      }
+    }
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failedResponses": [],
+  "assertions": [
+    {
+      "name": "backend uses local zer0share with no network",
+      "pass": true,
+      "details": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "source": "local zer0share Parquet/DuckDB snapshot",
+          "network": "not used",
+          "zer0share_root": "C:\\Users\\hp\\Documents\\zer0share",
+          "config": "C:\\Users\\hp\\Documents\\zer0share\\config\\settings.toml",
+          "data_dir": "C:\\Users\\hp\\Documents\\zer0share\\data",
+          "snapshots": {
+            "daily_kline": "20260729",
+            "daily_basic": "20260729",
+            "adj_factor": "20260729",
+            "stock_st": "20260729",
+            "suspend_d": "20260729",
+            "stk_limit": "20260729",
+            "universe": "20260729"
+          },
+          "active_stocks": 5534,
+          "elapsed_ms": 75.5,
+          "service": "手动跟踪市场 local API",
+          "threshold_version": 1,
+          "state_db": "C:\\Users\\hp\\.codex\\worktrees\\b367\\手动跟踪市场\\outputs\\shape-v2\\unified-threshold-v3-20260729\\qa-frontend\\qa-market-state.sqlite3"
+        }
+      }
+    },
+    {
+      "name": "market URL auto-selects Template tab",
+      "pass": true,
+      "details": {
+        "tabActive": true,
+        "selectValue": "fresh_breakout"
+      }
+    },
+    {
+      "name": "comparison uses frozen independent z transform",
+      "pass": true,
+      "details": {
+        "transform": "qfq-log-close-independent-z",
+        "stats": {
+          "templateMean": 0,
+          "templateStd": 1,
+          "candidateMean": 0,
+          "candidateStd": 1,
+          "sourcePath": "M10.0,91.4 L16.3,102.6 L22.7,99.3 L29.0,89.6 L35.3,85.6 L41.6,91.3 L48.0,83.4 L54.3,83.0 L60.6,89.4 L66.9,97.3 L73.3,99.7 L79.6,102.0 L85.9,96.8 L92.2,94.5 L98.6,100.4 L104.9,104.2 L111.2,103.3 L117.6,105.4 L123.9,112.5 L130.2,114.6 L136.5,104.3 L142.9,106.6 L149.2,106.7 L155.5,110.1 L161.8,107.1 L168.2,104.6 L174.5,93.8 L180.8,98.3 L187.1,98.2 L193.5,88.5 L199.8,96.0 L206.1,106.2 L212.4,102.1 L218.8,104.3 L225.1,103.6 L231.4,105.2 L237.8,108.7 L244.1,104.5 L250.4,97.7 L256.7,95.1 L263.1,96.3 L269.4,91.4 L275.7,84.2 L282.0,90.4 L288.4,80.9 L294.7,56.4 L301.0,26.0 L307.3,11.7 L313.7,18.6 L320.0,10.0",
+          "candidatePath": "M10.0,115.6 L16.3,119.2 L22.7,109.2 L29.0,97.5 L35.3,94.9 L41.6,97.7 L48.0,105.4 L54.3,109.5 L60.6,109.2 L66.9,107.5 L73.3,103.0 L79.6,94.1 L85.9,104.1 L92.2,107.7 L98.6,101.0 L104.9,105.9 L111.2,105.2 L117.6,105.7 L123.9,96.8 L130.2,93.3 L136.5,81.7 L142.9,73.0 L149.2,61.7 L155.5,70.7 L161.8,59.0 L168.2,47.4 L174.5,48.2 L180.8,37.6 L187.1,41.3 L193.5,47.9 L199.8,60.8 L206.1,63.8 L212.4,68.2 L218.8,74.8 L225.1,78.1 L231.4,66.5 L237.8,76.4 L244.1,89.3 L250.4,82.1 L256.7,84.7 L263.1,97.6 L269.4,110.5 L275.7,118.9 L282.0,107.3 L288.4,108.7 L294.7,113.5 L301.0,112.1 L307.3,118.5 L313.7,131.4 L320.0,140.0"
+        }
+      }
+    },
+    {
+      "name": "both comparison curves have meaningful vertical range",
+      "pass": true,
+      "details": {
+        "sourceYRange": 104.6,
+        "candidateYRange": 102.4
+      }
+    },
+    {
+      "name": "keyboard switch preserves template",
+      "pass": true,
+      "details": {
+        "beforeURL": "http://localhost:3101/market?code=603986&template=fresh_breakout",
+        "afterURL": "http://localhost:3101/market?code=002003&template=fresh_breakout",
+        "beforeActive": "1\n五洲医疗\n301234\n0.879",
+        "afterActive": "2\n伟星股份\n002003\n0.798",
+        "codeChanged": true,
+        "templatePreserved": true
+      }
+    }
+  ],
+  "fatalError": {
+    "message": "locator.waitFor: Timeout 180000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.market-rightbar') to be visible\u001b[22m\n\u001b[2m    356 × locator resolved to hidden <aside aria-hidden=\"false\" class=\"market-rightbar \">…</aside>\u001b[22m\n",
+    "stack": "locator.waitFor: Timeout 180000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.market-rightbar') to be visible\u001b[22m\n\u001b[2m    356 × locator resolved to hidden <aside aria-hidden=\"false\" class=\"market-rightbar \">…</aside>\u001b[22m\n\n    at marketMobile (C:\\Users\\hp\\.codex\\worktrees\\b367\\手动跟踪市场\\outputs\\shape-v2\\unified-threshold-v3-20260729\\qa-frontend\\run-final-visual-qa.mjs:221:16)\n    at async file:///C:/Users/hp/.codex/worktrees/b367/%E6%89%8B%E5%8A%A8%E8%B7%9F%E8%B8%AA%E5%B8%82%E5%9C%BA/outputs/shape-v2/unified-threshold-v3-20260729/qa-frontend/run-final-visual-qa.mjs:442:3"
+  }
+}

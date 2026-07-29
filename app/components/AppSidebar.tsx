@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
-  Activity,
   BarChart3,
-  CircleHelp,
-  LayoutDashboard,
+  Gauge,
+  LibraryBig,
   LineChart,
-  LogOut,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -26,7 +24,7 @@ function applyFontSize(next: UiFontSize, persist = true) {
   window.dispatchEvent(new CustomEvent("ui-font-size-change", { detail: next }));
 }
 
-export function AppSidebar({ active }: { active: "screen" | "market" | "industry-strength" }) {
+export function AppSidebar({ active }: { active: "templates" | "screen" | "market" | "industry-strength" | "template-breadth-v3" }) {
   const [fontSize, setFontSize] = useState<UiFontSize>("standard");
 
   useEffect(() => {
@@ -48,9 +46,9 @@ export function AppSidebar({ active }: { active: "screen" | "market" | "industry
         <span className="brand-name">LC</span>
       </div>
       <nav className="primary-nav" aria-label="主导航">
-        <Link aria-label="选股看板" className={`nav-item ${active === "screen" ? "active" : ""}`} href="/"><LayoutDashboard /><span>选股看板</span></Link>
-        <Link aria-label="本地行情" className={`nav-item ${active === "market" ? "active" : ""}`} href="/market"><LineChart /><span>本地行情</span></Link>
-        <Link aria-label="行业强弱" className={`nav-item ${active === "industry-strength" ? "active" : ""}`} href="/industry-strength"><Activity /><span>行业强弱</span></Link>
+        <Link aria-label="模板库" className={`nav-item ${active === "templates" ? "active" : ""}`} href="/templates"><LibraryBig /><span>模板库</span></Link>
+        <Link aria-label="行情详情" className={`nav-item ${active === "market" ? "active" : ""}`} href="/market"><LineChart /><span>行情详情</span></Link>
+        <Link aria-label="形态宽度试用页" className={`nav-item ${active === "template-breadth-v3" ? "active" : ""}`} href="/template-breadth-v3"><Gauge /><span>形态宽度</span></Link>
       </nav>
       <div className="sidebar-bottom">
         <div className="font-size-control" role="group" aria-label="字体大小">
@@ -66,8 +64,6 @@ export function AppSidebar({ active }: { active: "screen" | "market" | "industry
             >{option.short}</button>)}
           </div>
         </div>
-        <button className="nav-item icon-only" aria-label="帮助"><CircleHelp /></button>
-        <button className="nav-item icon-only" aria-label="退出"><LogOut /></button>
       </div>
     </aside>
   );

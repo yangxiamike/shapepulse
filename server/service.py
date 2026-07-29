@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import re
 import threading
 import time
@@ -23,6 +24,13 @@ from .industry_strength import (
 )
 from .patterns import CATEGORY_ORDER, score_category_arrays, score_stock
 from .repository import LocalMarketRepository, json_value
+from .similarity import (
+    ALGORITHM as SIMILARITY_ALGORITHM,
+    FrozenTemplate,
+    load_frozen_templates,
+    score_latest_cross_section,
+    z_log_close,
+)
 from .state import StateStore
 
 
@@ -38,6 +46,15 @@ class MarketService:
             self.settings.zer0share_root, self.settings.zer0share_config
         )
         self.state_store = StateStore(self.settings.state_db)
+        self.frozen_templates = load_frozen_templates(
+            self.settings.similarity_templates_path
+        )
+        self._frozen_templates_by_id = {
+            item.key: item for item in self.frozen_templates
+        }
+        self._materialized_frozen_templates: dict[tuple, dict[str, Any]] = {}
+        self._similarity_score_cache: dict[tuple, pd.DataFrame] = {}
+        self._similarity_lock = threading.RLock()
         self._screen_lock = threading.RLock()
         self._screen_cache: dict[tuple, dict[str, Any]] = {}
         self._completed_screens: dict[str, dict[str, Any]] = {}
@@ -76,6 +93,294 @@ class MarketService:
             "names": [item["name"] for item in items],
             "as_of": as_of,
             "source": "申万一级行业（本地 zer0share）",
+        }
+
+    @staticmethod
+    def _template_name(value: Any) -> str:
+        name = str(value or "").strip()
+        if not name:
+            raise ValueError("template name is required")
+        if len(name) > 80:
+            raise ValueError("template name cannot exceed 80 characters")
+        return name
+
+    @staticmethod
+    def _template_date(value: Any, label: str) -> str:
+        raw = str(value or "").strip().replace("-", "")
+        if len(raw) != 8 or not raw.isdigit():
+            raise ValueError(f"{label} must use YYYYMMDD")
+        datetime.strptime(raw, "%Y%m%d")
+        return raw
+
+    @staticmethod
+    def _template_public(
+        item: dict[str, Any], *, include_bars: bool = False
+    ) -> dict[str, Any]:
+        hidden = {"z_values"}
+        if not include_bars:
+            hidden.add("bars")
+        return {
+            key: copy.deepcopy(value)
+            for key, value in item.items()
+            if key not in hidden
+        }
+
+    @staticmethod
+    def _source_bars(frame: pd.DataFrame) -> list[dict[str, Any]]:
+        rows = []
+        for row in frame.sort_values("trade_date").itertuples(index=False):
+            date = str(row.trade_date)
+            rows.append(
+                {
+                    "trade_date": date,
+                    "time": f"{date[:4]}-{date[4:6]}-{date[6:]}",
+                    "open": float(row.qfq_open),
+                    "high": float(row.qfq_high),
+                    "low": float(row.qfq_low),
+                    "close": float(row.qfq_close),
+                }
+            )
+        return rows
+
+    @staticmethod
+    def _normalized_curve(bars: list[dict[str, Any]]) -> list[float]:
+        if not bars:
+            return []
+        first = float(bars[0]["close"])
+        if first <= 0:
+            return []
+        return [float(row["close"]) / first * 100.0 for row in bars]
+
+    def _load_source_window(
+        self,
+        source_ts_code: str,
+        start_date: str,
+        end_date: str,
+        expected_bars: int | None = None,
+    ) -> tuple[list[dict[str, Any]], list[float]]:
+        frame = self.repository.recent_qfq_daily(
+            start_date, end_date, {source_ts_code}
+        )
+        frame = (
+            frame[frame["ts_code"].astype(str).eq(source_ts_code)]
+            .sort_values("trade_date")
+            .drop_duplicates("trade_date", keep="last")
+        )
+        if frame.empty:
+            raise ValueError("template source window has no local qfq bars")
+        if (
+            str(frame.iloc[0]["trade_date"]) != start_date
+            or str(frame.iloc[-1]["trade_date"]) != end_date
+        ):
+            raise ValueError(
+                "template start_date and end_date must both be actual trading dates"
+            )
+        if expected_bars is not None and len(frame) != expected_bars:
+            raise RuntimeError(
+                f"frozen template expects {expected_bars} bars; found {len(frame)}"
+            )
+        if expected_bars is None and not 20 <= len(frame) <= 240:
+            raise ValueError("custom template window must contain 20 to 240 trading days")
+        vector = z_log_close(frame["qfq_close"].to_numpy(dtype=float)).tolist()
+        return self._source_bars(frame), vector
+
+    def _materialize_frozen_template(
+        self, definition: FrozenTemplate
+    ) -> dict[str, Any]:
+        snapshots = self.repository.snapshots()
+        key = (definition.key, snapshots.daily_kline, snapshots.adj_factor)
+        with self._similarity_lock:
+            cached = self._materialized_frozen_templates.get(key)
+        if cached is not None:
+            return copy.deepcopy(cached)
+        bars, vector = self._load_source_window(
+            definition.source_ts_code,
+            definition.start_date,
+            definition.end_date,
+            definition.window_bars,
+        )
+        item = {
+            **definition.public_dict(),
+            "name": definition.label,
+            "bars": bars,
+            "curve": self._normalized_curve(bars),
+            "z_values": vector,
+            "data_as_of": snapshots.adj_factor or definition.end_date,
+        }
+        with self._similarity_lock:
+            self._materialized_frozen_templates[key] = copy.deepcopy(item)
+        return item
+
+    def _template_record(self, template_id: str) -> dict[str, Any]:
+        resolved = str(template_id or "").strip()
+        frozen = self._frozen_templates_by_id.get(resolved)
+        if frozen is not None:
+            return self._materialize_frozen_template(frozen)
+        custom = self.state_store.similarity_template(resolved)
+        if custom is None:
+            raise LookupError(f"template not found: {resolved}")
+        custom["algorithm"] = SIMILARITY_ALGORITHM
+        custom["curve"] = self._normalized_curve(custom["bars"])
+        return custom
+
+    def templates(self) -> dict[str, Any]:
+        frozen = [
+            {**item.public_dict(), "name": item.label}
+            for item in self.frozen_templates
+        ]
+        custom = []
+        for item in self.state_store.list_similarity_templates():
+            item["algorithm"] = SIMILARITY_ALGORITHM
+            item["curve"] = self._normalized_curve(item["bars"])
+            custom.append(self._template_public(item))
+        return {
+            "algorithm": SIMILARITY_ALGORITHM,
+            "items": [*frozen, *custom],
+            "frozen_count": len(frozen),
+            "custom_count": len(custom),
+        }
+
+    def template(self, template_id: str) -> dict[str, Any]:
+        return self._template_public(
+            self._template_record(template_id), include_bars=True
+        )
+
+    def create_template(self, payload: dict[str, Any]) -> dict[str, Any]:
+        name = self._template_name(payload.get("name", payload.get("label")))
+        raw_code = str(
+            payload.get(
+                "source_ts_code",
+                payload.get("ts_code", payload.get("code", "")),
+            )
+        ).strip()
+        source_ts_code = self.repository.resolve_code(raw_code)
+        if source_ts_code is None:
+            raise LookupError(f"stock not found: {raw_code}")
+        start_date = self._template_date(payload.get("start_date"), "start_date")
+        end_date = self._template_date(payload.get("end_date"), "end_date")
+        if start_date > end_date:
+            raise ValueError("start_date must not be after end_date")
+        bars, vector = self._load_source_window(
+            source_ts_code, start_date, end_date
+        )
+        snapshots = self.repository.snapshots()
+        item = self.state_store.create_similarity_template(
+            name=name,
+            source_ts_code=source_ts_code,
+            start_date=start_date,
+            end_date=end_date,
+            bars=bars,
+            z_values=vector,
+            data_as_of=snapshots.adj_factor or end_date,
+        )
+        item["algorithm"] = SIMILARITY_ALGORITHM
+        item["curve"] = self._normalized_curve(item["bars"])
+        return self._template_public(item, include_bars=True)
+
+    def rename_template(
+        self, template_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        if template_id in self._frozen_templates_by_id:
+            raise ValueError("frozen templates are read-only")
+        name = self._template_name(payload.get("name", payload.get("label")))
+        item = self.state_store.rename_similarity_template(template_id, name)
+        if item is None:
+            raise LookupError(f"template not found: {template_id}")
+        item["algorithm"] = SIMILARITY_ALGORITHM
+        item["curve"] = self._normalized_curve(item["bars"])
+        return self._template_public(item, include_bars=True)
+
+    def delete_template(self, template_id: str) -> dict[str, Any]:
+        if template_id in self._frozen_templates_by_id:
+            raise ValueError("frozen templates are read-only")
+        if not self.state_store.delete_similarity_template(template_id):
+            raise LookupError(f"template not found: {template_id}")
+        with self._similarity_lock:
+            self._similarity_score_cache = {
+                key: value
+                for key, value in self._similarity_score_cache.items()
+                if key[0] != template_id
+            }
+        return {"deleted": True, "id": template_id}
+
+    def template_stocks(self, template_id: str, limit: Any = 100) -> dict[str, Any]:
+        parsed_limit = self._positive_integer(limit, "limit")
+        if parsed_limit > 1000:
+            raise ValueError("limit cannot exceed 1000")
+        template = self._template_record(template_id)
+        snapshots = self.repository.snapshots()
+        as_of = snapshots.daily_kline
+        if as_of is None:
+            raise FileNotFoundError("daily_kline data not found")
+        vector = [float(value) for value in template["z_values"]]
+        signature = hashlib.sha256(
+            np.asarray(vector, dtype=np.float64).tobytes()
+        ).hexdigest()
+        cache_key = (
+            str(template["id"]),
+            signature,
+            as_of,
+            snapshots.adj_factor,
+        )
+        with self._similarity_lock:
+            scores = self._similarity_score_cache.get(cache_key)
+        if scores is None:
+            start = (
+                datetime.strptime(as_of, "%Y%m%d") - timedelta(days=400)
+            ).strftime("%Y%m%d")
+            active = self.repository.basic()
+            active_codes = set(active["ts_code"].astype(str))
+            qfq = self.repository.recent_qfq_daily(start, as_of, active_codes)
+            scores = score_latest_cross_section(
+                qfq,
+                template_z=vector,
+                window_bars=int(template["window_bars"]),
+                as_of=as_of,
+            )
+            with self._similarity_lock:
+                if len(self._similarity_score_cache) >= 12:
+                    self._similarity_score_cache.pop(
+                        next(iter(self._similarity_score_cache))
+                    )
+                self._similarity_score_cache[cache_key] = scores.copy()
+        active = self.repository.basic()
+        names = active.set_index("ts_code")["name"].astype(str).to_dict()
+        symbols = active.set_index("ts_code")["symbol"].astype(str).to_dict()
+        industries = self.repository.industries()
+        industry_map = (
+            industries.drop_duplicates("ts_code")
+            .set_index("ts_code")["l1_name"]
+            .fillna("")
+            .astype(str)
+            .to_dict()
+        )
+        items = []
+        for rank, row in enumerate(scores.head(parsed_limit).itertuples(index=False), 1):
+            code = str(row.ts_code)
+            items.append(
+                {
+                    "template_id": str(template["id"]),
+                    "rank": rank,
+                    "ts_code": code,
+                    "code": symbols.get(code, code.split(".")[0]),
+                    "name": names.get(code, code),
+                    "industry": industry_map.get(code, ""),
+                    "score": float(row.score),
+                    "start_date": str(row.start_date),
+                    "end_date": str(row.end_date),
+                    "window_bars": int(row.window_bars),
+                }
+            )
+        return {
+            "template": self._template_public(template),
+            "items": items,
+            "total": len(scores),
+            "total_eligible": len(scores),
+            "limit": parsed_limit,
+            "as_of": as_of,
+            "algorithm": SIMILARITY_ALGORITHM,
+            "threshold_used": None,
+            "ranking_scope": "within_template_only",
         }
 
     def industry_strength(

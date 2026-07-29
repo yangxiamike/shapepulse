@@ -1,0 +1,174 @@
+{
+  "checked_at": "2026-07-29",
+  "branch": "codex/unified-threshold-app-v3",
+  "head": "7f57b3f",
+  "frontend_under_test": "http://localhost:3101",
+  "backend": "http://127.0.0.1:8876",
+  "data_boundary": {
+    "source": "C:\\Users\\hp\\Documents\\zer0share",
+    "network": "not used",
+    "state_db": "qa-market-state.sqlite3",
+    "sealed_final_read": false
+  },
+  "summary": {
+    "first_pass_total": 9,
+    "closed": 9,
+    "open_p1": 0,
+    "open_p2": 0,
+    "new_blockers": 0,
+    "route_viewport_documents": 9,
+    "http_failures": 0,
+    "console_errors": 0,
+    "page_errors": 0
+  },
+  "issues": [
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "title": "模板与候选曲线变换口径不一致",
+      "status": "closed",
+      "verification": {
+        "transform": "qfq-log-close-independent-z",
+        "template_mean": 0,
+        "template_std": 1,
+        "candidate_mean": 0,
+        "candidate_std": 1,
+        "evidence": "after-market-template-1440.png"
+      }
+    },
+    {
+      "id": "P1-02",
+      "severity": "P1",
+      "title": "390px 行情页模板抽屉不可操作",
+      "status": "closed",
+      "verification": {
+        "auto_open_on_valid_template_url": true,
+        "inside_viewport": true,
+        "ordinary_select_click": true,
+        "ordinary_stock_click": true,
+        "ordinary_close_click": true,
+        "force_click_used": false,
+        "evidence": "after-market-390.png"
+      }
+    },
+    {
+      "id": "P2-01",
+      "severity": "P2",
+      "title": "template URL 不自动激活模板页签",
+      "status": "closed",
+      "verification": {
+        "desktop": true,
+        "mobile": true,
+        "template_parameter_preserved": true
+      }
+    },
+    {
+      "id": "P2-02",
+      "severity": "P2",
+      "title": "最近变化 Treemap 漏掉当前为 0 但变化非 0 的行业",
+      "status": "closed",
+      "verification": {
+        "weight": "abs(change_5d)",
+        "all_nonzero_changed_industries_included": true,
+        "zero_current_changed_industries_included": true
+      }
+    },
+    {
+      "id": "P2-03",
+      "severity": "P2",
+      "title": "缺少全 31 行业最大扩张/收缩摘要",
+      "status": "closed",
+      "verification": {
+        "templates_checked": 4,
+        "industries_per_template": 31,
+        "max_expansion_matches_raw_table": true,
+        "max_contraction_matches_raw_table": true
+      }
+    },
+    {
+      "id": "P2-04",
+      "severity": "P2",
+      "title": "390px 行情工具触控目标过小或末端不可达",
+      "status": "closed",
+      "verification": {
+        "period_targets_44px": true,
+        "drawing_targets_44px": true,
+        "range_targets_44px": true,
+        "horizontal_scroll_to_last_control": true
+      }
+    },
+    {
+      "id": "P2-05",
+      "severity": "P2",
+      "title": "390px 宽度页四模板标签被截断",
+      "status": "closed",
+      "verification": {
+        "layout": "2x2",
+        "all_four_visible": true,
+        "horizontal_overflow": false,
+        "evidence": "after-breadth-390.png"
+      }
+    },
+    {
+      "id": "P2-06",
+      "severity": "P2",
+      "title": "390px 模板库底部内容被固定导航遮挡",
+      "status": "closed",
+      "verification": {
+        "bottom_safe_spacing": true,
+        "last_control_reachable_above_navigation": true,
+        "evidence": "after-templates-390.png"
+      }
+    },
+    {
+      "id": "P2-07",
+      "severity": "P2",
+      "title": "可见但无效的帮助/退出按钮",
+      "status": "closed",
+      "verification": {
+        "routes_checked": [
+          "/templates",
+          "/market?code=603986&template=fresh_breakout",
+          "/template-breadth-v3"
+        ],
+        "enabled_dead_buttons": 0
+      }
+    }
+  ],
+  "postcheck": {
+    "scope": "390px valid-template URL boot timing only",
+    "route": "/market?code=603986&template=fresh_breakout",
+    "frontend": "http://localhost:3101",
+    "http_status": 200,
+    "waited_until": {
+      "market_loaded": true,
+      "template_stock_count": 200
+    },
+    "drawer_after_full_load": {
+      "open": true,
+      "left": 12,
+      "right": 390,
+      "width": 378,
+      "inside_viewport": true,
+      "visibility": "visible",
+      "pointer_events": "auto"
+    },
+    "ordinary_first_stock_click": {
+      "passed": true,
+      "old_code": "603986",
+      "new_code": "301234",
+      "template_parameter_preserved": true,
+      "drawer_remained_open": true
+    },
+    "ordinary_close_click": {
+      "passed": true,
+      "drawer_open_after_close": false,
+      "visibility_after_close": "hidden",
+      "pointer_events_after_close": "none"
+    },
+    "console_or_page_errors": 0,
+    "failed_responses": 0,
+    "status": "passed"
+  },
+  "residuals": []
+}

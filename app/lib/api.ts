@@ -15,6 +15,9 @@ import type {
   StateItem,
   StateSnapshot,
   Stock,
+  TemplateDefinition,
+  TemplateStock,
+  TemplateStocksResponse,
 } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_MARKET_API || "http://127.0.0.1:8765/api";
@@ -25,6 +28,12 @@ const barsCache = new Map<string, BarsResponse>();
 const stockCache = new Map<string, Stock>();
 const industryStrengthCache = new Map<string, IndustryStrengthResponse>();
 const industryStrengthRequests = new Map<string, Promise<IndustryStrengthResponse>>();
+const frozenTemplateDescriptions: Record<string, string> = {
+  fresh_breakout: "价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。",
+  healthy_uptrend: "价格沿较平缓的方向逐步抬高，回撤有限，整体节奏较稳定。",
+  pullback_strengthening: "已有一段上涨，随后回调并重新转强，重点看回调后的恢复。",
+  parabolic_uptrend: "上涨速度逐渐加快，曲线后段更陡，属于加速型走势。",
+};
 
 async function request<T>(path: string, init?: RequestInit): Promise<{ data: T; httpMs: number }> {
   const started = performance.now();
@@ -222,6 +231,81 @@ function mapSavedSnapshot(raw: Raw): SavedScreenSnapshot {
   };
 }
 
+function numericArray(value: unknown) {
+  return Array.isArray(value) ? value.map(item => {
+    if (item && typeof item === "object") {
+      const point = item as Raw;
+      return numeric(point.value ?? point.close ?? point.z ?? point.y);
+    }
+    return numeric(item);
+  }).filter(Number.isFinite) : [];
+}
+
+export function normalizeLogCloseWindow(values: number[]) {
+  if (values.length < 2 || values.some(value => !Number.isFinite(value) || value <= 0)) return [];
+  const logged = values.map(Math.log);
+  const mean = logged.reduce((sum, value) => sum + value, 0) / logged.length;
+  const variance = logged.reduce((sum, value) => sum + (value - mean) ** 2, 0) / logged.length;
+  const deviation = Math.sqrt(variance);
+  return deviation > 1e-12 ? logged.map(value => (value - mean) / deviation) : [];
+}
+
+function mapTemplate(raw: Raw): TemplateDefinition {
+  const kindValue = String(raw.kind || raw.type || raw.template_type || raw.source || "").toLowerCase();
+  const source = (raw.source || {}) as Raw;
+  const bars = Array.isArray(raw.bars) ? raw.bars as Raw[] : [];
+  const directCurve = raw.curve ?? raw.normalized_curve ?? raw.template_curve ?? raw.z_values ?? raw.values;
+  const mappedCurve = numericArray(directCurve);
+  const barsCurve = normalizeLogCloseWindow(bars.map(bar => numeric(bar.qfq_close ?? bar.close)));
+  const curve = barsCurve.length ? barsCurve : mappedCurve;
+  const id = String(raw.id || raw.template_id || raw.key || "");
+  return {
+    id,
+    key: String(raw.key || id),
+    name: String(raw.name || raw.label || raw.key || "未命名模板"),
+    kind: kindValue === "custom" || Boolean(raw.is_custom) ? "custom" : "frozen",
+    source_ts_code: raw.source_ts_code == null && source.ts_code == null
+      ? null
+      : String(raw.source_ts_code || source.ts_code),
+    source_name: raw.source_name == null && source.name == null
+      ? null
+      : String(raw.source_name || source.name),
+    start_date: raw.start_date == null && source.start_date == null
+      ? null
+      : String(raw.start_date || source.start_date),
+    end_date: raw.end_date == null && source.end_date == null
+      ? null
+      : String(raw.end_date || source.end_date),
+    window_length: numeric(raw.window_length || raw.window_bars || raw.length || curve.length),
+    curve,
+    description: String(raw.description || raw.analysis || raw.explanation || frozenTemplateDescriptions[String(raw.key || id)] || ""),
+    cue: raw.cue == null ? undefined : String(raw.cue),
+    created_at: raw.created_at == null ? null : String(raw.created_at),
+    updated_at: raw.updated_at == null ? null : String(raw.updated_at),
+  };
+}
+
+function mapTemplateStock(raw: Raw, index: number): TemplateStock {
+  const curve = raw.curve ?? raw.normalized_curve ?? raw.candidate_curve ?? raw.values;
+  return {
+    rank: numeric(raw.rank) || index + 1,
+    ts_code: String(raw.ts_code || raw.code || ""),
+    code: symbolOf(raw.ts_code || raw.code),
+    name: String(raw.name || raw.stock_name || raw.ts_code || "—"),
+    industry: raw.industry == null && raw.industry_name == null
+      ? undefined
+      : String(raw.industry || raw.industry_name),
+    score: numeric(raw.score ?? raw.similarity),
+    start_date: raw.start_date == null && raw.window_start == null
+      ? null
+      : String(raw.start_date || raw.window_start),
+    end_date: raw.end_date == null && raw.window_end == null
+      ? null
+      : String(raw.end_date || raw.window_end),
+    curve: numericArray(curve),
+  };
+}
+
 function optionalQueryNumber(value?: string | null) {
   if (value == null || value.trim() === "") return null;
   const parsed = Number(value);
@@ -365,6 +449,37 @@ export const api = {
     return mapState((await request<Raw>("/state")).data);
   },
   pattern: async (code: string) => (await request<PatternResponse>(`/pattern/${encodeURIComponent(code)}?history_limit=12`)).data,
+  templates: async (): Promise<TemplateDefinition[]> => {
+    const { data } = await request<Raw>("/templates");
+    return Array.isArray(data.items) ? (data.items as Raw[]).map(mapTemplate) : [];
+  },
+  template: async (id: string): Promise<TemplateDefinition> => {
+    const { data } = await request<Raw>(`/templates/${encodeURIComponent(id)}`);
+    return mapTemplate((data.template || data.item || data) as Raw);
+  },
+  templateStocks: async (id: string, limit = 200): Promise<TemplateStocksResponse> => {
+    const { data } = await request<Raw>(`/templates/${encodeURIComponent(id)}/stocks?limit=${Math.max(1, Math.floor(limit))}`);
+    const rawTemplate = (data.template || {}) as Raw;
+    const items = Array.isArray(data.items)
+      ? (data.items as Raw[]).map(mapTemplateStock)
+      : [];
+    return {
+      template: mapTemplate(rawTemplate),
+      items,
+      total: numeric(data.total ?? data.total_eligible) || items.length,
+    };
+  },
+  createTemplate: async (input: { name: string; source_ts_code: string; start_date: string; end_date: string }): Promise<TemplateDefinition> => {
+    const { data } = await request<Raw>("/templates", { method: "POST", body: JSON.stringify(input) });
+    return mapTemplate((data.template || data.item || data) as Raw);
+  },
+  renameTemplate: async (id: string, name: string): Promise<TemplateDefinition> => {
+    const { data } = await request<Raw>(`/templates/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ name }) });
+    return mapTemplate((data.template || data.item || data) as Raw);
+  },
+  deleteTemplate: async (id: string): Promise<void> => {
+    await request<Raw>(`/templates/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
   clearCaches: () => { barsCache.clear(); stockCache.clear(); },
 };
 
