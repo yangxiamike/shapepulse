@@ -1,0 +1,24 @@
+{
+  "desktop": {
+    "viewport": "1440x1200",
+    "tabs": 4,
+    "templatesPerCategory": 2,
+    "resultsPerCategory": 24,
+    "horizontalOverflow": false,
+    "browserErrors": []
+  },
+  "mobile": {
+    "viewport": "390x844",
+    "columnsStacked": true,
+    "horizontalOverflow": false,
+    "browserErrors": []
+  },
+  "dataValidation": {
+    "localZer0shareOnly": true,
+    "tailGateUsed": false,
+    "categorySpecificScoringUsed": false,
+    "sealedFinalRead": false,
+    "futureWindowDataUsed": false,
+    "status": "PASS"
+  }
+}
