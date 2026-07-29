@@ -1,0 +1,36 @@
+{
+  "url": "local ephemeral server",
+  "checkedAt": "2026-07-29T08:03:51.549Z",
+  "consoleErrors": [],
+  "pageErrors": [],
+  "desktop": {
+    "viewport": 1440,
+    "scrollWidth": 1440,
+    "title": "四个默认相似K线模板：统计有效性验证 V1",
+    "reviewLabel": "not for model evaluation",
+    "tabCount": 4,
+    "hypothesisCount": 8,
+    "noHorizontalOverflow": true
+  },
+  "mobile": {
+    "viewport": 390,
+    "scrollWidth": 390,
+    "title": "四个默认相似K线模板：统计有效性验证 V1",
+    "reviewLabel": "not for model evaluation",
+    "tabCount": 4,
+    "hypothesisCount": 8,
+    "noHorizontalOverflow": true,
+    "activeTemplate": "抛物线上升 · 德明利 001309.SZ"
+  },
+  "interactions": {
+    "templateTabs": [
+      "刚突破 · 50根",
+      "健康上涨 · 80根",
+      "回调转强 · 55根",
+      "抛物线上升 · 160根"
+    ],
+    "topKSwitchWorked": true,
+    "overlapSwitchWorked": true
+  },
+  "pass": true
+}

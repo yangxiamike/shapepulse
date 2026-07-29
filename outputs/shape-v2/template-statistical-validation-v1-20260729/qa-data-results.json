@@ -1,0 +1,25 @@
+{
+  "pass": true,
+  "templateCount": 4,
+  "hypothesisCount": 8,
+  "currentScoreRows": 21885,
+  "currentEligibleByTemplate": {
+    "刚突破": 5497,
+    "健康上涨": 5472,
+    "回调转强": 5493,
+    "抛物线上升": 5423
+  },
+  "topKSensitivityRows": 12,
+  "overlapMatrixRows": 48,
+  "historicalSnapshotRows": 80,
+  "historicalAsOfCount": 20,
+  "scoreRangeValid": true,
+  "rankSequencesValid": true,
+  "leakageAudit": {
+    "networkUsed": false,
+    "sealedFinalRead": false,
+    "futureReturnUsed": false,
+    "icUsed": false,
+    "strategyPerformanceUsed": false
+  }
+}
