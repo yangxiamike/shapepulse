@@ -1,0 +1,229 @@
+{
+  "pass": true,
+  "branch": "codex/unified-threshold-app-v3",
+  "market": {
+    "rowsChecked": 4824,
+    "thresholdMonotonic": true,
+    "changesAndMa5Exact": true,
+    "expandingPositionExact": true
+  },
+  "industry": {
+    "rowsChecked": 152004,
+    "membershipIdentityExact": true,
+    "previousMembershipIdentityExact": true,
+    "leaderRemovalMonotonic": true,
+    "leaderRemovalBoundsExact": true,
+    "top100DenominatorExact": true,
+    "marketAndIndustrySumsExact": true
+  },
+  "canonicalCrosscheck": {
+    "date": "20260728",
+    "rows": [
+      {
+        "date": "20260728",
+        "template": "fresh_breakout",
+        "threshold": 0.7,
+        "canonicalCount": 13,
+        "dailyRollingCount": 13
+      },
+      {
+        "date": "20260728",
+        "template": "fresh_breakout",
+        "threshold": 0.75,
+        "canonicalCount": 5,
+        "dailyRollingCount": 5
+      },
+      {
+        "date": "20260728",
+        "template": "fresh_breakout",
+        "threshold": 0.8,
+        "canonicalCount": 1,
+        "dailyRollingCount": 1
+      },
+      {
+        "date": "20260728",
+        "template": "healthy_uptrend",
+        "threshold": 0.7,
+        "canonicalCount": 168,
+        "dailyRollingCount": 168
+      },
+      {
+        "date": "20260728",
+        "template": "healthy_uptrend",
+        "threshold": 0.75,
+        "canonicalCount": 109,
+        "dailyRollingCount": 109
+      },
+      {
+        "date": "20260728",
+        "template": "healthy_uptrend",
+        "threshold": 0.8,
+        "canonicalCount": 69,
+        "dailyRollingCount": 69
+      },
+      {
+        "date": "20260728",
+        "template": "pullback_strengthening",
+        "threshold": 0.7,
+        "canonicalCount": 154,
+        "dailyRollingCount": 154
+      },
+      {
+        "date": "20260728",
+        "template": "pullback_strengthening",
+        "threshold": 0.75,
+        "canonicalCount": 119,
+        "dailyRollingCount": 119
+      },
+      {
+        "date": "20260728",
+        "template": "pullback_strengthening",
+        "threshold": 0.8,
+        "canonicalCount": 87,
+        "dailyRollingCount": 87
+      },
+      {
+        "date": "20260728",
+        "template": "parabolic_uptrend",
+        "threshold": 0.7,
+        "canonicalCount": 489,
+        "dailyRollingCount": 489
+      },
+      {
+        "date": "20260728",
+        "template": "parabolic_uptrend",
+        "threshold": 0.75,
+        "canonicalCount": 390,
+        "dailyRollingCount": 390
+      },
+      {
+        "date": "20260728",
+        "template": "parabolic_uptrend",
+        "threshold": 0.8,
+        "canonicalCount": 286,
+        "dailyRollingCount": 286
+      }
+    ],
+    "allExact": true
+  },
+  "conclusion": {
+    "candidateDecisions": {
+      "0.70": "不支持",
+      "0.75": "不支持",
+      "0.80": "不支持"
+    },
+    "recomputedTemplateRows": [
+      {
+        "threshold": 0.7,
+        "template": "fresh_breakout",
+        "lowShare": 0.0,
+        "hundredsShare": 0.27611940298507465,
+        "support": true
+      },
+      {
+        "threshold": 0.7,
+        "template": "healthy_uptrend",
+        "lowShare": 0.0,
+        "hundredsShare": 0.9925373134328358,
+        "support": false
+      },
+      {
+        "threshold": 0.7,
+        "template": "pullback_strengthening",
+        "lowShare": 0.0,
+        "hundredsShare": 0.9850746268656716,
+        "support": false
+      },
+      {
+        "threshold": 0.7,
+        "template": "parabolic_uptrend",
+        "lowShare": 0.0,
+        "hundredsShare": 1.0,
+        "support": false
+      },
+      {
+        "threshold": 0.75,
+        "template": "fresh_breakout",
+        "lowShare": 0.007462686567164179,
+        "hundredsShare": 0.12935323383084577,
+        "support": true
+      },
+      {
+        "threshold": 0.75,
+        "template": "healthy_uptrend",
+        "lowShare": 0.0,
+        "hundredsShare": 0.9850746268656716,
+        "support": false
+      },
+      {
+        "threshold": 0.75,
+        "template": "pullback_strengthening",
+        "lowShare": 0.0,
+        "hundredsShare": 0.927860696517413,
+        "support": false
+      },
+      {
+        "threshold": 0.75,
+        "template": "parabolic_uptrend",
+        "lowShare": 0.0,
+        "hundredsShare": 1.0,
+        "support": false
+      },
+      {
+        "threshold": 0.8,
+        "template": "fresh_breakout",
+        "lowShare": 0.04975124378109453,
+        "hundredsShare": 0.012437810945273632,
+        "support": true
+      },
+      {
+        "threshold": 0.8,
+        "template": "healthy_uptrend",
+        "lowShare": 0.0,
+        "hundredsShare": 0.927860696517413,
+        "support": false
+      },
+      {
+        "threshold": 0.8,
+        "template": "pullback_strengthening",
+        "lowShare": 0.0,
+        "hundredsShare": 0.818407960199005,
+        "support": false
+      },
+      {
+        "threshold": 0.8,
+        "template": "parabolic_uptrend",
+        "lowShare": 0.0,
+        "hundredsShare": 0.9701492537313433,
+        "support": false
+      }
+    ],
+    "selectionIsNull": true,
+    "productizationStopped": true
+  },
+  "boundaries": {
+    "localZer0shareOnly": true,
+    "networkUsed": false,
+    "sealedFinalRead": false,
+    "futureReturnUsed": false,
+    "icUsed": false,
+    "strategyPerformanceUsed": false,
+    "algorithmFrozen": "qfq log-close -> independent window z -> single-window Pearson",
+    "sourceNetworkCallScan": "pass"
+  },
+  "top30": {
+    "rows": 120,
+    "perTemplate": {
+      "fresh_breakout": 30,
+      "healthy_uptrend": 30,
+      "parabolic_uptrend": 30,
+      "pullback_strengthening": 30
+    },
+    "rankExact": true
+  },
+  "visualQa": {
+    "appPageBuilt": false,
+    "status": "not_applicable",
+    "reason": "三条候选统一线均不支持；按实验闸门停止产品化。"
+  }
+}

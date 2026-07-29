@@ -1,0 +1,33 @@
+{
+  "selectedThreshold": null,
+  "reason": "三条统一固定线没有一条在四模板上同时通过简单有效性规则，停止产品化。",
+  "candidateDecisions": [
+    {
+      "threshold": 0.7,
+      "decision": "不支持",
+      "supported_templates": 1,
+      "worst_extreme_share": 1.0,
+      "mean_ma5_lag1_corr": 0.9950954584816311,
+      "rule": "每模板：count<=5 与 count>=200 的天数占比均低于50%；MA5滞后1日相关>=0.85；5日变化同向持续段覆盖>=50%，最长>=5日。4/4支持=支持，2–3/4=较弱，0–1/4=不支持。"
+    },
+    {
+      "threshold": 0.75,
+      "decision": "不支持",
+      "supported_templates": 1,
+      "worst_extreme_share": 1.0,
+      "mean_ma5_lag1_corr": 0.9944104820456134,
+      "rule": "每模板：count<=5 与 count>=200 的天数占比均低于50%；MA5滞后1日相关>=0.85；5日变化同向持续段覆盖>=50%，最长>=5日。4/4支持=支持，2–3/4=较弱，0–1/4=不支持。"
+    },
+    {
+      "threshold": 0.8,
+      "decision": "不支持",
+      "supported_templates": 1,
+      "worst_extreme_share": 0.9701492537313433,
+      "mean_ma5_lag1_corr": 0.9934321316353005,
+      "rule": "每模板：count<=5 与 count>=200 的天数占比均低于50%；MA5滞后1日相关>=0.85；5日变化同向持续段覆盖>=50%，最长>=5日。4/4支持=支持，2–3/4=较弱，0–1/4=不支持。"
+    }
+  ],
+  "marketStateConclusion": "截至2026-07-29，12个候选线×模板组合均处扩展历史低位，且较5日前全部收缩；可描述当前形态供给偏低、正在收缩。但三个模板的历史绝对数量长期过宽，不能据此统一产品线。",
+  "industryConclusion": "固定线行业数量与Top100行业数量的水平结构相关强，行业内去Top1/Top3后仍成立；但1日变化及行业自身变化关系除刚突破外普遍较弱，主要受行业规模共同驱动，不能声称固定线数量稳定解释行业宽度变化。",
+  "productizationContinues": false
+}
