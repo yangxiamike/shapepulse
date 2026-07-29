@@ -1,0 +1,42 @@
+{
+  "status": "passed",
+  "generatedAt": "2026-07-29",
+  "branch": "codex/four-template-market-retrieval-review-v1",
+  "dataChecks": {
+    "latestTradeDate": "20260728",
+    "categoryEligibleCounts": {
+      "fresh_breakout": 5497,
+      "healthy_uptrend": 5472,
+      "pullback_strengthening": 5493,
+      "parabolic_uptrend": 5419
+    },
+    "topKPerCategory": 30,
+    "uniqueCodesPerCategory": 30,
+    "allWindowsEndOnLatestTradeDate": true,
+    "distanceAscending": true,
+    "top1ProBarCloseMatches": {
+      "fresh_breakout": true,
+      "healthy_uptrend": true,
+      "pullback_strengthening": true,
+      "parabolic_uptrend": true
+    },
+    "networkUsed": false,
+    "sealedFinalRead": false
+  },
+  "browserChecks": {
+    "desktop": {
+      "viewport": "1440x1200",
+      "horizontalOverflowPx": 0,
+      "scriptErrors": 0
+    },
+    "mobile": {
+      "viewport": "390x844",
+      "horizontalOverflowPx": 0,
+      "scriptErrors": 0
+    },
+    "categoryTabsWorking": 4,
+    "resultCardsPerCategory": 30,
+    "defaultOpenCardsPerCategory": 10,
+    "chartsPerCategoryIncludingTemplate": 62
+  }
+}
