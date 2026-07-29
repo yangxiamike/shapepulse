@@ -164,12 +164,12 @@ CANDIDATES = [
         "main",
         "001309.SZ",
         "德明利",
-        "20251226",
+        "20251031",
         "20260630",
         None,
-        "斜率持续抬升、涨幅向后半段集中，进入高波动加速尾端。",
-        "120根从近乎横向转为连续加速，区间约上涨295%；后60根明显比前60根陡，适合作为行业拥挤与尾端风险模子。",
-        "多次涨停且最大回撤约20%，极端波动较强；该模子只提示尾端风险，不负责预测精确顶部或做空时点。",
+        "前半段近乎横向，后半段斜率突然放大，进入极端高波动加速尾端。",
+        "160根前半程仅上涨约10%，后半程上涨约275%，前后斜率反差极大；比120根窗口更接近标准抛物线。",
+        "多次涨停且最大回撤约35%，极端波动很强；该模子只提示尾端风险，不负责预测精确顶部或做空时点。",
         "高",
     ),
     Candidate(
@@ -233,7 +233,7 @@ def parse_args() -> argparse.Namespace:
         default=PROJECT_ROOT
         / "outputs"
         / "shape-v2"
-        / "template-selection-review-20260729-v2",
+        / "template-selection-review-20260729-v3",
     )
     return parser.parse_args()
 
@@ -347,7 +347,7 @@ def html_document(data: dict) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>四形态主K线模子 · V2拍板页</title>
+<title>四形态主K线模子 · V3拍板页</title>
 <style>
 :root{{--ink:#172033;--muted:#687083;--paper:#f4f1e8;--card:#fffdf8;--line:#dcd6c8;--up:#d95050;--down:#159874}}
 *{{box-sizing:border-box}}
@@ -406,7 +406,7 @@ footer{{padding:20px 14px 32px;text-align:center;color:var(--muted);font-size:12
 <body>
 <header>
   <div class="eyebrow">Template Selection Review</div>
-  <h1>四形态主 K 线模子 · V2拍板页</h1>
+  <h1>四形态主 K 线模子 · V3拍板页</h1>
   <p>前三类用于主动发现向上状态；“抛物线上升”用于识别加速拥挤和尾端风险。价格路径按首日收盘归一为 100；下方保留前复权原价 K 线与成交量。</p>
   <div class="notice">template selection review / not for model evaluation</div>
 </header>
@@ -435,7 +435,7 @@ footer{{padding:20px 14px 32px;text-align:center;color:var(--muted);font-size:12
     </div>
   </section>
 </main>
-<footer>生成日期 2026-07-29 · V2非正式本地评审页 · 等待用户拍板</footer>
+<footer>生成日期 2026-07-29 · V3非正式本地评审页 · 等待用户拍板</footer>
 <script>
 const DATA={data_json};
 const meta=DATA.categoryMeta;
@@ -529,7 +529,7 @@ def main() -> None:
         os.chdir(previous_cwd)
 
     data = {
-        "schemaVersion": "template-selection-review/2",
+        "schemaVersion": "template-selection-review/3",
         "status": "template_selection_review_not_for_model_evaluation",
         "generatedAt": "2026-07-29",
         "branch": "codex/shape-template-selection-review",
