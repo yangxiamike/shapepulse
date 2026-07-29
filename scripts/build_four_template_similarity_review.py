@@ -102,8 +102,16 @@ def normalized_close(frame: pd.DataFrame) -> np.ndarray:
     return close / close[0] * 100.0
 
 
-def rmse(left: np.ndarray, right: np.ndarray) -> float:
-    return float(np.sqrt(np.mean(np.square(left - right))))
+def z_normalized_log_close(frame: pd.DataFrame) -> np.ndarray:
+    values = np.log(frame["close"].to_numpy(dtype=float))
+    standard_deviation = float(values.std())
+    if standard_deviation <= 1e-12:
+        return np.zeros_like(values)
+    return (values - values.mean()) / standard_deviation
+
+
+def pearson_similarity(left: np.ndarray, right: np.ndarray) -> float:
+    return float(np.mean(left * right))
 
 
 def market_cap_tier(total_mv: float | None) -> str:
@@ -188,7 +196,7 @@ def load_templates(pro) -> dict[str, dict]:
 def result_payload(
     *,
     frame: pd.DataFrame,
-    distance: float,
+    similarity: float,
     rank: int,
     name: str,
     industry: str,
@@ -244,8 +252,8 @@ def result_payload(
         "startLabel": date_label(start),
         "endLabel": date_label(end),
         "barCount": int(len(frame)),
-        "distance": round(distance, 6),
-        "similarity": round(1.0 / (1.0 + distance), 6),
+        "distance": round(1.0 - similarity, 6),
+        "similarity": round(similarity, 6),
         "returnPct": round((close[-1] / close[0] - 1.0) * 100.0, 2),
         "maxDrawdownPct": round(max_drawdown_pct(close), 2),
         "maxAbsDayPct": round(max_abs_day, 2),
@@ -311,24 +319,28 @@ def build_data(pro, top_k: int) -> dict:
 
     categories = []
     for item in TEMPLATES:
-        template_path = templates[item.key]["path"]
+        template_path = z_normalized_log_close(
+            pd.DataFrame(templates[item.key]["bars"])
+        )
         eligible_codes = [
             code for code, frame in groups.items() if len(frame) >= item.bars
         ]
         scored = []
         for code in eligible_codes:
             window = groups[code].tail(item.bars).reset_index(drop=True)
-            distance = rmse(normalized_close(window), template_path)
-            scored.append((distance, code, window))
-        scored.sort(key=lambda value: (value[0], value[1]))
+            similarity = pearson_similarity(
+                z_normalized_log_close(window), template_path
+            )
+            scored.append((similarity, code, window))
+        scored.sort(key=lambda value: (-value[0], value[1]))
         results = []
-        for rank, (distance, code, window) in enumerate(scored[:top_k], start=1):
+        for rank, (similarity, code, window) in enumerate(scored[:top_k], start=1):
             raw_mv = total_mv_map.get(code)
             total_mv = float(raw_mv) if raw_mv is not None and pd.notna(raw_mv) else None
             results.append(
                 result_payload(
                     frame=window,
-                    distance=distance,
+                    similarity=similarity,
                     rank=rank,
                     name=names.get(code, code),
                     industry=industry_map.get(code, ""),
@@ -414,11 +426,11 @@ def build_data(pro, top_k: int) -> dict:
         },
         "method": {
             "windowPolicy": "one latest window per listed A-share, ending on local latest trade date",
-            "priceInput": "qfq close only",
-            "normalization": "close / first close * 100",
-            "distance": "pointwise root mean squared error (RMSE)",
-            "similarity": "1 / (1 + distance), display-only monotonic transform",
-            "rankingInputs": ["query-window normalized qfq close", "fixed template path"],
+            "priceInput": "log(qfq close)",
+            "normalization": "independent z-normalization within each window",
+            "distance": "correlation distance = 1 - Pearson r",
+            "similarity": "Pearson r; display score = 100 * r",
+            "rankingInputs": ["query-window z-normalized log-close", "fixed template z-normalized log-close"],
             "rankingExcludes": [
                 "post-window performance",
                 "industry",
@@ -494,7 +506,7 @@ footer{{padding:0 14px 30px;text-align:center;color:var(--muted);font-size:11px}
 <main>
   <section class="summary">
     <article><b>数据边界</b><span>本机 zer0share，最新交易日 {data["asOfLabel"]}；未联网、未补行情、未读 sealed final。</span></article>
-    <article><b>既定口径</b><span>前复权收盘价；首日=100；逐点 RMSE；每只股票每类仅一个最新窗口。</span></article>
+    <article><b>既定口径</b><span>前复权 log-close；每段独立 z 标准化；Pearson 相关降序；每只股票每类仅一个最新窗口。</span></article>
     <article><b>全市场范围</b><span>{data["universe"]["latestDailyStockCount"]} 只有当日行情；其中 {data["universe"]["eligibleLatest160BarCount"]} 只满足上市且至少160根。</span></article>
     <article><b>人工检查</b><span>先看前10是否像，再看串型、涨停/停牌/异常单日，以及同一股票是否跨类出现。</span></article>
   </section>
@@ -518,7 +530,7 @@ const fmt=n=>Number(n).toLocaleString("zh-CN",{{maximumFractionDigits:2}});
 function pathChart(item,accent){{
  const bars=item.bars,W=560,H=185,p={{l:30,r:10,t:12,b:23}},vals=bars.map(b=>b.normalizedClose),lo0=Math.min(...vals),hi0=Math.max(...vals),pad=Math.max((hi0-lo0)*.1,1),lo=lo0-pad,hi=hi0+pad;
  const x=i=>p.l+i*(W-p.l-p.r)/Math.max(vals.length-1,1),y=v=>p.t+(hi-v)*(H-p.t-p.b)/(hi-lo),d=vals.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+","+y(v).toFixed(1)).join(" ");
- return `<div class="chart"><div class="chart-title"><span>归一化收盘路径 · 首日=100</span><span>${{item.startLabel}} → ${{item.endLabel}}</span></div><svg viewBox="0 0 ${{W}} ${{H}}">${{[lo,(lo+hi)/2,hi].map(t=>`<line x1="${{p.l}}" x2="${{W-p.r}}" y1="${{y(t)}}" y2="${{y(t)}}" stroke="#e5e0d6"/><text x="${{p.l-4}}" y="${{y(t)+3}}" text-anchor="end" font-size="8" fill="#788190">${{t.toFixed(0)}}</text>`).join("")}}<path d="${{d}}" fill="none" stroke="${{accent}}" stroke-width="2.6" stroke-linejoin="round"/><text x="${{p.l}}" y="${{H-6}}" font-size="8" fill="#788190">${{item.startLabel}}</text><text x="${{W-p.r}}" y="${{H-6}}" text-anchor="end" font-size="8" fill="#788190">${{item.endLabel}}</text></svg></div>`;
+ return `<div class="chart"><div class="chart-title"><span>展示路径 · 首日=100（评分使用z标准化）</span><span>${{item.startLabel}} → ${{item.endLabel}}</span></div><svg viewBox="0 0 ${{W}} ${{H}}">${{[lo,(lo+hi)/2,hi].map(t=>`<line x1="${{p.l}}" x2="${{W-p.r}}" y1="${{y(t)}}" y2="${{y(t)}}" stroke="#e5e0d6"/><text x="${{p.l-4}}" y="${{y(t)+3}}" text-anchor="end" font-size="8" fill="#788190">${{t.toFixed(0)}}</text>`).join("")}}<path d="${{d}}" fill="none" stroke="${{accent}}" stroke-width="2.6" stroke-linejoin="round"/><text x="${{p.l}}" y="${{H-6}}" font-size="8" fill="#788190">${{item.startLabel}}</text><text x="${{W-p.r}}" y="${{H-6}}" text-anchor="end" font-size="8" fill="#788190">${{item.endLabel}}</text></svg></div>`;
 }}
 function candleChart(item){{
  const bars=item.bars,W=560,H=245,p={{l:34,r:10,t:10,b:22}},priceH=157,volTop=182,volH=34,lows=bars.map(b=>b.low),highs=bars.map(b=>b.high),lo=Math.min(...lows),hi=Math.max(...highs),range=hi-lo||1,vmax=Math.max(...bars.map(b=>b.volume)),step=(W-p.l-p.r)/bars.length,body=Math.max(1.2,step*.58);
@@ -533,7 +545,7 @@ function flags(item){{
  return `<div class="flags">${{values.join("")}}</div>`;
 }}
 function facts(item){{
- return `<div class="facts"><div class="fact"><b>${{(item.similarity*100).toFixed(2)}}%</b><span>相似度</span></div><div class="fact"><b>${{item.distance.toFixed(4)}}</b><span>RMSE距离</span></div><div class="fact"><b>${{item.returnPct>0?"+":""}}${{item.returnPct}}%</b><span>区间涨跌</span></div><div class="fact"><b>${{item.maxDrawdownPct}}%</b><span>最大回撤</span></div><div class="fact"><b>${{esc(item.industry)}}</b><span>申万一级</span></div><div class="fact"><b>${{esc(item.marketCapTier)}}</b><span>${{item.totalMvYi==null?"市值缺失":fmt(item.totalMvYi)+"亿"}}</span></div></div>`;
+ return `<div class="facts"><div class="fact"><b>${{(item.similarity*100).toFixed(2)}}%</b><span>Pearson相似</span></div><div class="fact"><b>${{item.distance.toFixed(4)}}</b><span>相关距离</span></div><div class="fact"><b>${{item.returnPct>0?"+":""}}${{item.returnPct}}%</b><span>区间涨跌</span></div><div class="fact"><b>${{item.maxDrawdownPct}}%</b><span>最大回撤</span></div><div class="fact"><b>${{esc(item.industry)}}</b><span>申万一级</span></div><div class="fact"><b>${{esc(item.marketCapTier)}}</b><span>${{item.totalMvYi==null?"市值缺失":fmt(item.totalMvYi)+"亿"}}</span></div></div>`;
 }}
 function resultCard(item,cat){{
  const open=item.rank<=10?" open":"";
@@ -570,8 +582,8 @@ def validate(data: dict) -> None:
                 raise RuntimeError(f"{category['label']}: window length drift")
             if result["end"] != data["asOf"]:
                 raise RuntimeError(f"{category['label']}: result not current")
-            if result["distance"] < 0:
-                raise RuntimeError(f"{category['label']}: negative distance")
+            if not -1.0 <= result["similarity"] <= 1.0:
+                raise RuntimeError(f"{category['label']}: invalid Pearson similarity")
         distances = [item["distance"] for item in category["results"]]
         if distances != sorted(distances):
             raise RuntimeError(f"{category['label']}: results not sorted by distance")

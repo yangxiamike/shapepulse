@@ -1,7 +1,19 @@
 {
-  "status": "passed",
+  "status": "passed_after_algorithm_correction",
   "generatedAt": "2026-07-29",
   "branch": "codex/four-template-market-retrieval-review-v1",
+  "algorithm": {
+    "input": "qfq log-close",
+    "normalization": "independent z-normalization per window",
+    "ranking": "Pearson correlation descending",
+    "displayScore": "100 * Pearson r",
+    "distance": "1 - Pearson r"
+  },
+  "correction": {
+    "invalidPrototypeAlgorithm": "first-close-normalized path RMSE",
+    "invalidPrototypeRetained": false,
+    "reason": "display normalization was mistakenly treated as the established ranking formula"
+  },
   "dataChecks": {
     "latestTradeDate": "20260728",
     "categoryEligibleCounts": {
@@ -13,13 +25,7 @@
     "topKPerCategory": 30,
     "uniqueCodesPerCategory": 30,
     "allWindowsEndOnLatestTradeDate": true,
-    "distanceAscending": true,
-    "top1ProBarCloseMatches": {
-      "fresh_breakout": true,
-      "healthy_uptrend": true,
-      "pullback_strengthening": true,
-      "parabolic_uptrend": true
-    },
+    "pearsonDescending": true,
     "networkUsed": false,
     "sealedFinalRead": false
   },
