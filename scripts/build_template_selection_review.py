@@ -27,6 +27,9 @@ class Candidate:
     reason: str
     drawback: str
     purity: str
+    segment_base: str | None = None
+    segment_peak: str | None = None
+    segment_trough: str | None = None
 
 
 CANDIDATES = [
@@ -111,41 +114,89 @@ CANDIDATES = [
     Candidate(
         "pullback_strengthening",
         "main",
-        "600066.SH",
-        "宇通客车",
-        "20250903",
-        "20251203",
-        "S-3F1136639E61",
-        "已有上涨基础，随后有序回调，再逐步收复。",
-        "60根内先抬升至阶段高点，再经历约9%回撤，末段用多根K线恢复，不依赖单日反抽。",
-        "恢复接近前高，时间点略偏“转强确认完成”，不是最早的拐点。",
+        "603391.SH",
+        "力聚热能",
+        "20250805",
+        "20251028",
+        "S-BA6BDD717D6E",
+        "强第一段上涨后，回吐不超过前涨幅的一半，并已略微重新向上。",
+        "55根内先上涨约38%，随后只回吐前涨幅约32%，低点后再回升约9%；终点距前高约1%，三段交易结构清楚。",
+        "上市时间较短；第一段上涨集中在约两个月内，代表的是偏强趋势，不是所有温和回调。",
         "很高",
+        "20250814",
+        "20251015",
+        "20251021",
     ),
     Candidate(
         "pullback_strengthening",
         "backup",
-        "001328.SZ",
-        "登康口腔",
-        "20241028",
-        "20250120",
-        "S-4D176CB8583F",
-        "上升、真实回调、恢复三段结构完整。",
-        "60根中上涨基础和约10%回调都清楚，最后5根连续恢复，终点仍未过度脱离前高。",
-        "阶段波动比宇通客车更大，1月初有一根6.82%的强阳线。",
+        "600029.SH",
+        "南方航空",
+        "20250903",
+        "20251203",
+        "S-B0FD9125DF06",
+        "较强第一段上涨后回吐约38%，随后重新接近前高。",
+        "60根内第一段上涨约26%，回吐前涨幅约38%，低点后回升约7%；结构更稳，但第一段强度低于主模子。",
+        "上涨斜率和弹性略弱，作为备选更合适。",
         "高",
+        "20250903",
+        "20251113",
+        "20251125",
     ),
     Candidate(
         "pullback_strengthening",
         "considered",
-        "603520.SH",
-        "司太立",
-        "20250618",
-        "20250902",
-        "S-5BF82CD54A43",
-        "上涨后回调并快速恢复。",
-        "55根三段结构可辨，末段确有收复。",
-        "窗口含涨停及较大波动，个股噪声较强，不适合做主模子。",
-        "中",
+        "600150.SH",
+        "中国船舶",
+        "20250611",
+        "20250901",
+        "S-79457207DE3A",
+        "强上涨后浅回撤，再次回到前高附近。",
+        "55根内第一段上涨约29%，只回吐前涨幅约28%，低点后回升约7%。",
+        "窗口含一个涨停日，单日事件对结构影响较大，因此不升为主模子。",
+        "中高",
+        "20250612",
+        "20250808",
+        "20250827",
+    ),
+    Candidate(
+        "parabolic_uptrend",
+        "main",
+        "001309.SZ",
+        "德明利",
+        "20251226",
+        "20260630",
+        None,
+        "斜率持续抬升、涨幅向后半段集中，进入高波动加速尾端。",
+        "120根从近乎横向转为连续加速，区间约上涨295%；后60根明显比前60根陡，适合作为行业拥挤与尾端风险模子。",
+        "多次涨停且最大回撤约20%，极端波动较强；该模子只提示尾端风险，不负责预测精确顶部或做空时点。",
+        "高",
+    ),
+    Candidate(
+        "parabolic_uptrend",
+        "backup",
+        "300502.SZ",
+        "新易盛",
+        "20250410",
+        "20250930",
+        None,
+        "持续加速的长周期抛物线上升。",
+        "120根约上涨570%，四段斜率总体逐级放大，归一化后抛物线结构非常醒目。",
+        "创业板单日波动上限更高，含20%大阳线，容易把模板推向过度极端。",
+        "很高",
+    ),
+    Candidate(
+        "parabolic_uptrend",
+        "considered",
+        "300476.SZ",
+        "胜宏科技",
+        "20250410",
+        "20250930",
+        None,
+        "高斜率上涨并在后半程持续扩张。",
+        "120根约上涨325%，后半段加速清楚，适合作为同类证据。",
+        "走势更像多个强台阶串联，连续曲率不如德明利和新易盛纯净。",
+        "中高",
     ),
 ]
 
@@ -163,8 +214,13 @@ CATEGORY_META = {
     },
     "pullback_strengthening": {
         "label": "回调转强",
-        "kicker": "上涨基础 → 回撤 / 整理 → 重新转强",
+        "kicker": "强第一段 → 回吐不超过约一半 → 略微重新向上",
         "accent": "#6d5bd0",
+    },
+    "parabolic_uptrend": {
+        "label": "抛物线上升",
+        "kicker": "斜率抬升 → 加速拥挤 → 尾端风险提示",
+        "accent": "#be123c",
     },
 }
 
@@ -177,7 +233,7 @@ def parse_args() -> argparse.Namespace:
         default=PROJECT_ROOT
         / "outputs"
         / "shape-v2"
-        / "template-selection-review-20260729",
+        / "template-selection-review-20260729-v2",
     )
     return parser.parse_args()
 
@@ -208,6 +264,7 @@ def load_candidate(pro, candidate: Candidate) -> dict:
         )
 
     first_close = float(bars.iloc[0]["close"])
+    final_close = float(bars.iloc[-1]["close"])
     running_high = first_close
     max_drawdown = 0.0
     rendered_bars = []
@@ -229,16 +286,54 @@ def load_candidate(pro, candidate: Candidate) -> dict:
         )
 
     payload = asdict(candidate)
+    midpoint_close = float(bars.iloc[len(bars) // 2]["close"])
+    gain_denominator = final_close - first_close
+    last_20_gain_share = (
+        (final_close - float(bars.iloc[-21]["close"])) / gain_denominator * 100.0
+        if len(bars) > 20 and gain_denominator > 0
+        else None
+    )
+    segment_metrics = None
+    if candidate.segment_base and candidate.segment_peak and candidate.segment_trough:
+        indexed = bars.set_index("trade_date")
+        base = float(indexed.loc[candidate.segment_base, "close"])
+        peak = float(indexed.loc[candidate.segment_peak, "close"])
+        trough = float(indexed.loc[candidate.segment_trough, "close"])
+        segment_metrics = {
+            "baseDate": candidate.segment_base,
+            "peakDate": candidate.segment_peak,
+            "troughDate": candidate.segment_trough,
+            "firstLegAdvancePct": round((peak / base - 1.0) * 100.0, 1),
+            "retracementOfAdvancePct": round(
+                (peak - trough) / (peak - base) * 100.0, 1
+            ),
+            "resumptionFromTroughPct": round(
+                (final_close / trough - 1.0) * 100.0, 1
+            ),
+            "endVsPeakPct": round((final_close / peak - 1.0) * 100.0, 1),
+        }
     payload.update(
         {
             "startLabel": date_label(candidate.start),
             "endLabel": date_label(candidate.end),
             "barCount": len(rendered_bars),
             "returnPct": round(
-                (float(bars.iloc[-1]["close"]) / first_close - 1.0) * 100.0, 1
+                (final_close / first_close - 1.0) * 100.0, 1
             ),
             "maxDrawdownPct": round(max_drawdown * 100.0, 1),
             "maxAbsDayPct": round(float(bars["pct_chg"].abs().max()), 1),
+            "firstHalfReturnPct": round(
+                (midpoint_close / first_close - 1.0) * 100.0, 1
+            ),
+            "secondHalfReturnPct": round(
+                (final_close / midpoint_close - 1.0) * 100.0, 1
+            ),
+            "last20GainSharePct": (
+                round(last_20_gain_share, 1)
+                if last_20_gain_share is not None
+                else None
+            ),
+            "segmentMetrics": segment_metrics,
             "bars": rendered_bars,
         }
     )
@@ -252,7 +347,7 @@ def html_document(data: dict) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>三形态主K线模子 · 拍板页</title>
+<title>四形态主K线模子 · V2拍板页</title>
 <style>
 :root{{--ink:#172033;--muted:#687083;--paper:#f4f1e8;--card:#fffdf8;--line:#dcd6c8;--up:#d95050;--down:#159874}}
 *{{box-sizing:border-box}}
@@ -263,11 +358,11 @@ h1{{margin:9px 0 10px;font-size:clamp(26px,3vw,42px);line-height:1.12}}
 header p{{max-width:900px;margin:0;color:#dbe3f2;line-height:1.7}}
 .notice{{display:inline-flex;margin-top:18px;padding:8px 12px;border:1px solid #8994a8;border-radius:999px;color:#f4d08a;font-size:12px;letter-spacing:.04em}}
 main{{padding:24px clamp(14px,3vw,44px) 44px}}
-.summary{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}}
+.summary{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}}
 .summary article{{padding:16px 18px;background:var(--card);border:1px solid var(--line);border-radius:14px}}
 .summary b{{display:block;margin-bottom:6px;font-size:15px}}
 .summary span{{color:var(--muted);font-size:13px;line-height:1.55}}
-.main-grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}}
+.main-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:start}}
 .category{{--accent:#0f766e;min-width:0;background:var(--card);border:1px solid var(--line);border-top:5px solid var(--accent);border-radius:16px;box-shadow:0 8px 22px rgba(40,35,25,.06);overflow:hidden}}
 .category-head{{padding:18px 18px 12px}}
 .category-head small{{color:var(--muted)}}
@@ -278,7 +373,7 @@ main{{padding:24px clamp(14px,3vw,44px) 44px}}
 .stock-line strong{{font-size:18px}}
 .stock-line span{{color:var(--muted);font:12px ui-monospace,SFMono-Regular,Consolas,monospace}}
 .badge{{display:inline-flex;margin:0 0 8px;padding:4px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 12%,white);color:var(--accent);font-size:12px;font-weight:700}}
-.facts{{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0 0 10px}}
+.facts{{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 10px}}
 .fact{{padding:8px;background:#f6f3eb;border:1px solid #e5dfd2;border-radius:9px;text-align:center}}
 .fact b{{display:block;font-size:13px}}
 .fact span{{color:var(--muted);font-size:10px}}
@@ -303,22 +398,24 @@ th{{border-top:0;color:var(--muted);font-weight:600}}
 .audit-grid b{{display:block;margin-bottom:5px;font-size:13px}}
 .audit-grid span{{color:var(--muted);font-size:12px;line-height:1.5}}
 footer{{padding:20px 14px 32px;text-align:center;color:var(--muted);font-size:12px}}
-@media(max-width:1080px){{.main-grid{{grid-template-columns:1fr}}.summary{{grid-template-columns:1fr 1fr 1fr}}}}
+@media(max-width:1499px){{.main-grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}.summary{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
+@media(max-width:900px){{.main-grid{{grid-template-columns:1fr}}}}
 @media(max-width:700px){{.summary,.audit-grid{{grid-template-columns:1fr}}.candidate-section{{overflow:auto}}table{{min-width:900px}}}}
 </style>
 </head>
 <body>
 <header>
   <div class="eyebrow">Template Selection Review</div>
-  <h1>三形态主 K 线模子 · 拍板页</h1>
-  <p>本页只比较模子本身是否清楚、纯净、具有代表性。价格路径按首日收盘归一为 100；下方保留前复权原价 K 线与成交量，便于同时判断结构与个股噪声。</p>
+  <h1>四形态主 K 线模子 · V2拍板页</h1>
+  <p>前三类用于主动发现向上状态；“抛物线上升”用于识别加速拥挤和尾端风险。价格路径按首日收盘归一为 100；下方保留前复权原价 K 线与成交量。</p>
   <div class="notice">template selection review / not for model evaluation</div>
 </header>
 <main>
   <section class="summary">
     <article><b>数据边界</b><span>仅本机 zer0share 快照；接口 pro_bar；前复权 qfq；未联网、未补数。</span></article>
     <article><b>选择边界</b><span>只看窗口内 OHLCV 和已确认的形态定义；不看窗口之后表现。</span></article>
-    <article><b>本轮不做</b><span>不改算法、评分器、正式前端；不做未来收益、IC、策略与 sealed final。</span></article>
+    <article><b>回调新定义</b><span>强第一段上涨；回吐前涨幅约38%～50%以内；终点已略微重新向上。</span></article>
+    <article><b>抛物线定位</b><span>它是尾端风险与行业拥挤提示，不代表必然下跌，也不负责判断精确顶部。</span></article>
   </section>
   <section class="main-grid" id="mainGrid"></section>
   <section class="candidate-section">
@@ -334,11 +431,11 @@ footer{{padding:20px 14px 32px;text-align:center;color:var(--muted);font-size:12
       <div><b>✅ 查询边界</b><span>每只股票仅查询页面标注的精确起止日；生成页不包含窗口之后 K 线。</span></div>
       <div><b>✅ 选择依据</b><span>只使用窗口内价格、成交量、回撤、单日幅度与形态分段。</span></div>
       <div><b>✅ 数据来源</b><span>本机 zer0share；pro_bar(adj="qfq")；仓库既有非 sealed template 候选。</span></div>
-      <div><b>✅ 明确未看</b><span>未打开 sealed final evaluation；未使用窗口后收益、IC、命中率或策略结果。</span></div>
+      <div><b>✅ 用户先验候选</b><span>德明利由用户先点名；窗口固定截止2026-06-30月末，7月数据不进入页面或选模理由。</span></div>
     </div>
   </section>
 </main>
-<footer>生成日期 2026-07-29 · 非正式本地评审页 · 等待用户拍板</footer>
+<footer>生成日期 2026-07-29 · V2非正式本地评审页 · 等待用户拍板</footer>
 <script>
 const DATA={data_json};
 const meta=DATA.categoryMeta;
@@ -351,11 +448,13 @@ function lineChart(item){{
   const x=i=>p.l+i*(W-p.l-p.r)/(vals.length-1),y=v=>p.t+(hi-v)*(H-p.t-p.b)/(hi-lo);
   const d=vals.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+","+y(v).toFixed(1)).join(" ");
   const ticks=[lo,(lo+hi)/2,hi];
+  const markerSvg=item.segmentMetrics?[["起涨",item.segmentMetrics.baseDate],["前高",item.segmentMetrics.peakDate],["回调低点",item.segmentMetrics.troughDate]].map(([label,date])=>{{const i=item.bars.findIndex(b=>b.date===date),v=vals[i],cy=y(v),ty=Math.max(11,cy-7);return `<circle cx="${{x(i)}}" cy="${{cy}}" r="4" fill="#fff" stroke="${{meta[item.category].accent}}" stroke-width="2"/><text x="${{x(i)}}" y="${{ty}}" text-anchor="middle" font-size="8" fill="#4f5665">${{label}}</text>`;}}).join(""):"";
   return `<div class="chart-wrap"><div class="chart-title"><span>归一化收盘路径 · 首日=100</span><span>${{esc(item.startLabel)}} → ${{esc(item.endLabel)}}</span></div>
   <div class="chart"><svg viewBox="0 0 ${{W}} ${{H}}" aria-label="${{esc(item.name)}}归一化价格路径">
   ${{ticks.map(t=>`<line x1="${{p.l}}" x2="${{W-p.r}}" y1="${{y(t)}}" y2="${{y(t)}}" stroke="#e5e0d6"/><text x="${{p.l-5}}" y="${{y(t)+4}}" text-anchor="end" font-size="9" fill="#7b8493">${{t.toFixed(0)}}</text>`).join("")}}
   <line x1="${{p.l}}" x2="${{W-p.r}}" y1="${{y(100)}}" y2="${{y(100)}}" stroke="#9aa3b1" stroke-dasharray="4 4"/>
   <path d="${{d}}" fill="none" stroke="${{meta[item.category].accent}}" stroke-width="3" stroke-linejoin="round"/>
+  ${{markerSvg}}
   <circle cx="${{x(vals.length-1)}}" cy="${{y(vals.at(-1))}}" r="4" fill="${{meta[item.category].accent}}"/>
   <text x="${{p.l}}" y="${{H-7}}" font-size="9" fill="#7b8493">${{item.startLabel}}</text>
   <text x="${{W-p.r}}" y="${{H-7}}" text-anchor="end" font-size="9" fill="#7b8493">${{item.endLabel}}</text>
@@ -379,7 +478,14 @@ function candleChart(item){{
   </svg></div></div>`;
 }}
 function facts(item){{
- return `<div class="facts"><div class="fact"><b>${{item.barCount}}根</b><span>K线窗口</span></div><div class="fact"><b>${{item.returnPct>0?"+":""}}${{item.returnPct}}%</b><span>区间涨跌</span></div><div class="fact"><b>${{item.maxDrawdownPct}}%</b><span>最大回撤</span></div></div>`;
+ if(item.category==="pullback_strengthening"){{
+   const s=item.segmentMetrics;
+   return `<div class="facts"><div class="fact"><b>${{item.barCount}}根</b><span>K线窗口</span></div><div class="fact"><b>+${{s.firstLegAdvancePct}}%</b><span>第一段上涨</span></div><div class="fact"><b>${{s.retracementOfAdvancePct}}%</b><span>回吐前涨幅</span></div><div class="fact"><b>+${{s.resumptionFromTroughPct}}%</b><span>低点后回升</span></div></div>`;
+ }}
+ if(item.category==="parabolic_uptrend"){{
+   return `<div class="facts"><div class="fact"><b>${{item.barCount}}根</b><span>K线窗口</span></div><div class="fact"><b>+${{item.returnPct}}%</b><span>区间涨幅</span></div><div class="fact"><b>+${{item.secondHalfReturnPct}}%</b><span>后半程涨幅</span></div><div class="fact"><b>${{item.maxDrawdownPct}}%</b><span>最大回撤</span></div></div>`;
+ }}
+ return `<div class="facts"><div class="fact"><b>${{item.barCount}}根</b><span>K线窗口</span></div><div class="fact"><b>${{item.returnPct>0?"+":""}}${{item.returnPct}}%</b><span>区间涨跌</span></div><div class="fact"><b>${{item.maxDrawdownPct}}%</b><span>最大回撤</span></div><div class="fact"><b>${{item.maxAbsDayPct}}%</b><span>最大单日</span></div></div>`;
 }}
 function stock(item,compact=false){{
  return `<div class="stock-line"><strong>${{esc(item.name)}}</strong><span>${{esc(item.code)}} · ${{item.startLabel}}～${{item.endLabel}}</span></div>
@@ -387,7 +493,7 @@ function stock(item,compact=false){{
  <div class="notes"><div class="note">${{esc(item.definition)}}<br>${{esc(item.reason)}}</div><div class="note warn"><b>主要缺点：</b>${{esc(item.drawback)}}</div></div>`;
 }}
 const grid=document.querySelector("#mainGrid");
-for(const key of ["fresh_breakout","healthy_uptrend","pullback_strengthening"]){{
+for(const key of ["fresh_breakout","healthy_uptrend","pullback_strengthening","parabolic_uptrend"]){{
  const main=DATA.candidates.find(x=>x.category===key&&x.role==="main");
  const backup=DATA.candidates.find(x=>x.category===key&&x.role==="backup");
  const m=meta[key];
@@ -423,10 +529,10 @@ def main() -> None:
         os.chdir(previous_cwd)
 
     data = {
-        "schemaVersion": "template-selection-review/1",
+        "schemaVersion": "template-selection-review/2",
         "status": "template_selection_review_not_for_model_evaluation",
         "generatedAt": "2026-07-29",
-        "branch": "detached HEAD at d503991",
+        "branch": "codex/shape-template-selection-review",
         "dataSource": {
             "provider": "local zer0share",
             "root": str(ZERO_ROOT),
