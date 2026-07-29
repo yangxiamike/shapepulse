@@ -39,10 +39,10 @@ CANDIDATES = [
         "603986.SH",
         "兆易创新",
         "20250619",
-        "20250829",
+        "20250827",
         None,
         "长平台缓慢抬升后放量上破，突破后短暂保持。",
-        "52根窗口覆盖约两个月蓄势，8月21日至25日连续上破，随后4根仍守在平台上方；窗口终点停在第二次涨停之前。",
+        "50根窗口覆盖约两个月蓄势，8月21日至25日连续上破，随后用一跌一收回两根确认；终点更贴近刚突破。",
         "突破段仍偏强，包含一个涨停日；更适合表达“强突破”，不适合表达温和型突破。",
         "高",
     ),
@@ -233,7 +233,7 @@ def parse_args() -> argparse.Namespace:
         default=PROJECT_ROOT
         / "outputs"
         / "shape-v2"
-        / "template-selection-review-20260729-v3",
+        / "template-selection-review-20260729-v4",
     )
     return parser.parse_args()
 
@@ -347,7 +347,7 @@ def html_document(data: dict) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>四形态主K线模子 · V3拍板页</title>
+<title>四形态主K线模子 · V4拍板页</title>
 <style>
 :root{{--ink:#172033;--muted:#687083;--paper:#f4f1e8;--card:#fffdf8;--line:#dcd6c8;--up:#d95050;--down:#159874}}
 *{{box-sizing:border-box}}
@@ -406,7 +406,7 @@ footer{{padding:20px 14px 32px;text-align:center;color:var(--muted);font-size:12
 <body>
 <header>
   <div class="eyebrow">Template Selection Review</div>
-  <h1>四形态主 K 线模子 · V3拍板页</h1>
+  <h1>四形态主 K 线模子 · V4拍板页</h1>
   <p>前三类用于主动发现向上状态；“抛物线上升”用于识别加速拥挤和尾端风险。价格路径按首日收盘归一为 100；下方保留前复权原价 K 线与成交量。</p>
   <div class="notice">template selection review / not for model evaluation</div>
 </header>
@@ -435,7 +435,7 @@ footer{{padding:20px 14px 32px;text-align:center;color:var(--muted);font-size:12
     </div>
   </section>
 </main>
-<footer>生成日期 2026-07-29 · V3非正式本地评审页 · 等待用户拍板</footer>
+<footer>生成日期 2026-07-29 · V4非正式本地评审页 · 等待用户拍板</footer>
 <script>
 const DATA={data_json};
 const meta=DATA.categoryMeta;
@@ -529,7 +529,7 @@ def main() -> None:
         os.chdir(previous_cwd)
 
     data = {
-        "schemaVersion": "template-selection-review/3",
+        "schemaVersion": "template-selection-review/4",
         "status": "template_selection_review_not_for_model_evaluation",
         "generatedAt": "2026-07-29",
         "branch": "codex/shape-template-selection-review",
