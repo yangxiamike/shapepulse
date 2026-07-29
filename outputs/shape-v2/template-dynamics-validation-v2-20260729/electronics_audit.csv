@@ -1,0 +1,5 @@
+﻿template,label,eligible_count,qualified_count,qualified_rate,industry_rank_min30,status,rate_excess_pp,top1_code,top3_exceedance_share,rate_without_top1,rate_without_top3
+fresh_breakout,刚突破,501,0,0.0,19,弱且走弱,-0.03638348189921776,603296.SH,0.0,0.0,0.0
+healthy_uptrend,健康上涨,495,0,0.0,19,弱且走弱,-0.01827485380116959,688347.SH,0.0,0.0,0.0
+pullback_strengthening,回调转强,501,2,0.003992015968063872,2,强但走弱,0.32638164413935644,688361.SH,1.0,0.002,0.0
+parabolic_uptrend,抛物线上升,487,1,0.002053388090349076,2,强但走弱,0.1684588532908545,688146.SH,1.0,0.0,0.0
