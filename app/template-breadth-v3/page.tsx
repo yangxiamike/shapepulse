@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { TemplateBreadthV3Client } from "../components/TemplateBreadthV3Client";
 
 export const metadata: Metadata = {
-  title: "形态宽度试用页 | 手动跟踪市场",
-  description: "使用 0.80 试用观察线查看四模板的市场扩散与行业宽度。",
+  title: "Top100 行业宽度 | 手动跟踪市场",
+  description: "按冻结四模板各自每日 Pearson Top100 查看行业宽度、入选率和五日进出变化。",
 };
 
 export default function TemplateBreadthV3Page() {

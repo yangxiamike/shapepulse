@@ -278,6 +278,15 @@ function mapTemplate(raw: Raw): TemplateDefinition {
       : String(raw.end_date || source.end_date),
     window_length: numeric(raw.window_length || raw.window_bars || raw.length || curve.length),
     curve,
+    bars: bars.map(bar => ({
+      time: String(bar.time || bar.trade_date || ""),
+      trade_date: String(bar.trade_date || bar.time || ""),
+      open: numeric(bar.qfq_open ?? bar.open),
+      high: numeric(bar.qfq_high ?? bar.high),
+      low: numeric(bar.qfq_low ?? bar.low),
+      close: numeric(bar.qfq_close ?? bar.close),
+      volume: numeric(bar.volume ?? bar.vol),
+    })),
     description: String(raw.description || raw.analysis || raw.explanation || frozenTemplateDescriptions[String(raw.key || id)] || ""),
     cue: raw.cue == null ? undefined : String(raw.cue),
     created_at: raw.created_at == null ? null : String(raw.created_at),
@@ -287,6 +296,7 @@ function mapTemplate(raw: Raw): TemplateDefinition {
 
 function mapTemplateStock(raw: Raw, index: number): TemplateStock {
   const curve = raw.curve ?? raw.normalized_curve ?? raw.candidate_curve ?? raw.values;
+  const bars = Array.isArray(raw.bars) ? raw.bars as Raw[] : [];
   return {
     rank: numeric(raw.rank) || index + 1,
     ts_code: String(raw.ts_code || raw.code || ""),
@@ -303,6 +313,15 @@ function mapTemplateStock(raw: Raw, index: number): TemplateStock {
       ? null
       : String(raw.end_date || raw.window_end),
     curve: numericArray(curve),
+    bars: bars.map(bar => ({
+      time: String(bar.time || bar.trade_date || ""),
+      trade_date: String(bar.trade_date || bar.time || ""),
+      open: numeric(bar.qfq_open ?? bar.open),
+      high: numeric(bar.qfq_high ?? bar.high),
+      low: numeric(bar.qfq_low ?? bar.low),
+      close: numeric(bar.qfq_close ?? bar.close),
+      volume: numeric(bar.volume ?? bar.vol),
+    })),
   };
 }
 

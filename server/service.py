@@ -354,9 +354,30 @@ class MarketService:
             .astype(str)
             .to_dict()
         )
+        selected_scores = scores.head(parsed_limit)
+        selected_codes = set(selected_scores["ts_code"].astype(str))
+        candidate_bars = (
+            self.repository.recent_qfq_daily(
+                str(selected_scores["start_date"].min()),
+                str(selected_scores["end_date"].max()),
+                selected_codes,
+            )
+            if selected_codes
+            else pd.DataFrame()
+        )
         items = []
-        for rank, row in enumerate(scores.head(parsed_limit).itertuples(index=False), 1):
+        for rank, row in enumerate(selected_scores.itertuples(index=False), 1):
             code = str(row.ts_code)
+            window_frame = (
+                candidate_bars[
+                    candidate_bars["ts_code"].astype(str).eq(code)
+                    & candidate_bars["trade_date"].astype(str).between(
+                        str(row.start_date), str(row.end_date)
+                    )
+                ]
+                if not candidate_bars.empty
+                else candidate_bars
+            )
             items.append(
                 {
                     "template_id": str(template["id"]),
@@ -369,6 +390,7 @@ class MarketService:
                     "start_date": str(row.start_date),
                     "end_date": str(row.end_date),
                     "window_bars": int(row.window_bars),
+                    "bars": self._source_bars(window_frame),
                 }
             )
         return {

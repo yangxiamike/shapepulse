@@ -224,6 +224,20 @@ class MarketTemplateServiceTests(unittest.TestCase):
             self.assertEqual(stocks["threshold_used"], None)
             self.assertEqual(stocks["ranking_scope"], "within_template_only")
             self.assertEqual([item["rank"] for item in stocks["items"]], [1, 2])
+            self.assertTrue(all(item["bars"] for item in stocks["items"]))
+            self.assertTrue(
+                all(
+                    len(item["bars"]) == item["window_bars"]
+                    for item in stocks["items"]
+                )
+            )
+            self.assertTrue(
+                all(
+                    {"open", "high", "low", "close", "trade_date"}
+                    <= set(item["bars"][0])
+                    for item in stocks["items"]
+                )
+            )
             renamed = service.rename_template(created["id"], {"name": "新名字"})
             self.assertEqual(renamed["name"], "新名字")
             with self.assertRaises(ValueError):

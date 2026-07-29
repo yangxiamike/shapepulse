@@ -364,6 +364,7 @@ export type TemplateDefinition = {
   end_date?: string | null;
   window_length: number;
   curve: number[];
+  bars: Bar[];
   description: string;
   cue?: string;
   created_at?: string | null;
@@ -380,6 +381,7 @@ export type TemplateStock = {
   start_date?: string | null;
   end_date?: string | null;
   curve: number[];
+  bars: Bar[];
 };
 
 export type TemplateStocksResponse = {

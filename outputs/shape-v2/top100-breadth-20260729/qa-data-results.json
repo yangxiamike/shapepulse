@@ -1,0 +1,50 @@
+{
+  "pass": true,
+  "asOf": "20260729",
+  "topK": 100,
+  "comparisonTradingDays": 5,
+  "templates": [
+    {
+      "template": "fresh_breakout",
+      "dates": 65,
+      "latestEligible": 5496,
+      "latestTop100": 100,
+      "industryCount": 31,
+      "fiveDayIdentity": true
+    },
+    {
+      "template": "healthy_uptrend",
+      "dates": 65,
+      "latestEligible": 5471,
+      "latestTop100": 100,
+      "industryCount": 31,
+      "fiveDayIdentity": true
+    },
+    {
+      "template": "pullback_strengthening",
+      "dates": 65,
+      "latestEligible": 5492,
+      "latestTop100": 100,
+      "industryCount": 31,
+      "fiveDayIdentity": true
+    },
+    {
+      "template": "parabolic_uptrend",
+      "dates": 65,
+      "latestEligible": 5422,
+      "latestTop100": 100,
+      "industryCount": 31,
+      "fiveDayIdentity": true
+    }
+  ],
+  "leakageAudit": {
+    "dataSource": "C:\\Users\\hp\\Documents\\zer0share",
+    "networkUsed": false,
+    "sealedFinalRead": false,
+    "futureReturnUsed": false,
+    "icUsed": false,
+    "strategyPerformanceUsed": false,
+    "algorithm": "前复权 log-close；窗口内独立 z；单窗口 Pearson",
+    "crossTemplateRankingUsed": false
+  }
+}

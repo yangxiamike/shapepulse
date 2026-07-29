@@ -17,9 +17,21 @@ test("server-renders the template library as the main entry", async () => {
   const html = await response.text();
   assert.match(html, /<title>模板库 \| 手动跟踪市场<\/title>/i);
   assert.match(html, /模板库/);
-  assert.match(html, /自定义模板/);
-  assert.match(html, /保存并分析/);
+  assert.match(html, /真实前复权 K 线模板/);
+  assert.match(html, /href="\/templates\/new"/);
+  assert.match(html, /新建模板/);
+  assert.doesNotMatch(html, /保存并分析|开始日期|结束日期/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
+});
+
+test("server-renders the independent template creation workflow", async () => {
+  const response = await render("/templates/new");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /<title>新建模板 \| 手动跟踪市场<\/title>/i);
+  assert.match(html, /真实 K 线框选/);
+  assert.match(html, /返回模板库/);
+  assert.match(html, /20–240 日限制/);
 });
 
 test("server-renders the legacy selection board only on its compatibility route", async () => {
@@ -39,7 +51,8 @@ test("server-renders the independent market terminal", async () => {
   assert.match(html, /搜索股票名称/);
   assert.match(html, /自选/);
   assert.match(html, /模板/);
-  assert.match(html, /保存当前区间为模板/);
+  assert.match(html, /收起顶部/);
+  assert.doesNotMatch(html, /保存当前区间为模板|保存区间/);
   assert.doesNotMatch(html, /交易/);
   assert.doesNotMatch(html, /今日推荐|筛选进度|上一只|下一只/);
 });
