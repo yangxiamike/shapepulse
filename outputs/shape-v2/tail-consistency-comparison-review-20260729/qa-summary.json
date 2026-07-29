@@ -1,0 +1,25 @@
+{
+  "desktop": {
+    "viewport": "1440x1200",
+    "horizontalOverflow": false,
+    "tabCount": 4,
+    "activePanelCount": 1,
+    "resultsPerCategory": 30,
+    "browserErrors": []
+  },
+  "mobile": {
+    "viewport": "390x844",
+    "horizontalOverflow": false,
+    "columnsStacked": true,
+    "resultsPerCategory": 30,
+    "browserErrors": []
+  },
+  "dataValidation": {
+    "localZer0shareOnly": true,
+    "sealedFinalRead": false,
+    "futureWindowDataUsed": false,
+    "allRightSideCandidatesPassedGate": true,
+    "rightSidePreservesOriginalPearsonOrder": true,
+    "status": "PASS"
+  }
+}
