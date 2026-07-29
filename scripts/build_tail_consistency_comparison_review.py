@@ -29,7 +29,7 @@ DEFAULT_OUTPUT = (
     PROJECT_ROOT
     / "outputs"
     / "shape-v2"
-    / "tail-consistency-comparison-review-20260729"
+    / "tail-consistency-comparison-review-20260729-v2"
 )
 TOP_K = 15
 TAIL_SHARE = 0.20
@@ -328,7 +328,7 @@ main{{padding:20px clamp(10px,3vw,42px) 42px}}.summary{{display:grid;grid-templa
 .rank{{font-size:22px;font-weight:800;color:var(--accent)}}.metrics{{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:8px 0}}
 .metric{{padding:7px 4px;text-align:center;background:#f4f1e9;border-radius:8px}}.metric b{{display:block;font-size:12px}}.metric span{{font-size:9px;color:var(--muted)}}
 .flags{{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}}.pill{{padding:4px 7px;border-radius:999px;font-size:10px;background:#ece8df}}.pill.good{{color:#076d59;background:#e3f5ee}}.pill.bad{{color:#a43f2e;background:#fde8e1}}
-.chart{{padding:7px;background:#fbfaf6;border:1px solid #e7e1d6;border-radius:9px}}svg{{display:block;width:100%;height:auto}}
+.visuals{{display:grid;gap:7px}}.chart{{padding:7px;background:#fbfaf6;border:1px solid #e7e1d6;border-radius:9px}}.chart-label{{display:flex;justify-content:space-between;gap:8px;margin:0 3px 4px;color:var(--muted);font-size:9px}}svg{{display:block;width:100%;height:auto}}
 .audit{{margin-top:16px;padding:16px}}.audit h2{{margin:0 0 9px}}.audit-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}}.audit-grid div{{padding:10px;background:#f4f1e9;border-radius:8px;font-size:11px;line-height:1.5;color:var(--muted)}}.audit-grid b{{display:block;color:var(--ink);margin-bottom:3px}}
 footer{{padding:0 12px 28px;text-align:center;color:var(--muted);font-size:11px}}
 @media(max-width:1000px){{.summary,.audit-grid{{grid-template-columns:repeat(2,1fr)}}}}
@@ -365,10 +365,22 @@ footer{{padding:0 12px 28px;text-align:center;color:var(--muted);font-size:11px}
 <script>
 const DATA={payload};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}}[c]));
-function chart(item,accent){{
+function normalizedChart(item,accent){{
  const v=item.bars.map(x=>x.normalizedClose),W=520,H=145,p={{l:26,r:8,t:8,b:18}},lo0=Math.min(...v),hi0=Math.max(...v),pad=Math.max((hi0-lo0)*.1,1),lo=lo0-pad,hi=hi0+pad;
  const x=i=>p.l+i*(W-p.l-p.r)/Math.max(v.length-1,1),y=n=>p.t+(hi-n)*(H-p.t-p.b)/(hi-lo),d=v.map((n,i)=>(i?"L":"M")+x(i).toFixed(1)+","+y(n).toFixed(1)).join(" "),tailStart=v.length-item.tailBars;
- return `<div class="chart"><svg viewBox="0 0 ${{W}} ${{H}}"><rect x="${{x(tailStart)}}" y="${{p.t}}" width="${{W-p.r-x(tailStart)}}" height="${{H-p.t-p.b}}" fill="${{accent}}" opacity=".07"/><line x1="${{x(tailStart)}}" x2="${{x(tailStart)}}" y1="${{p.t}}" y2="${{H-p.b}}" stroke="${{accent}}" stroke-dasharray="3 3" opacity=".55"/><path d="${{d}}" fill="none" stroke="${{accent}}" stroke-width="2.4" stroke-linejoin="round"/><text x="${{p.l}}" y="${{H-4}}" font-size="8" fill="#788190">${{item.startLabel||""}}</text><text x="${{W-p.r}}" y="${{H-4}}" text-anchor="end" font-size="8" fill="#788190">${{item.endLabel||""}}</text><text x="${{x(tailStart)+4}}" y="${{p.t+10}}" font-size="8" fill="${{accent}}">最后20% · ${{item.tailBars}}根</text></svg></div>`;
+ return `<div class="chart"><div class="chart-label"><span>归一化收盘路径 · 首日=100</span><span>最后20%阴影</span></div><svg viewBox="0 0 ${{W}} ${{H}}"><rect x="${{x(tailStart)}}" y="${{p.t}}" width="${{W-p.r-x(tailStart)}}" height="${{H-p.t-p.b}}" fill="${{accent}}" opacity=".07"/><line x1="${{x(tailStart)}}" x2="${{x(tailStart)}}" y1="${{p.t}}" y2="${{H-p.b}}" stroke="${{accent}}" stroke-dasharray="3 3" opacity=".55"/><path d="${{d}}" fill="none" stroke="${{accent}}" stroke-width="2.4" stroke-linejoin="round"/><text x="${{p.l}}" y="${{H-4}}" font-size="8" fill="#788190">${{item.startLabel||""}}</text><text x="${{W-p.r}}" y="${{H-4}}" text-anchor="end" font-size="8" fill="#788190">${{item.endLabel||""}}</text><text x="${{x(tailStart)+4}}" y="${{p.t+10}}" font-size="8" fill="${{accent}}">最后20% · ${{item.tailBars}}根</text></svg></div>`;
+}}
+function candleChart(item,accent){{
+ const b=item.bars,W=520,H=184,p={{l:34,r:8,t:8,b:18}},priceBottom=124,volumeTop=132,volumeBottom=H-p.b;
+ const lows=b.map(x=>x.low),highs=b.map(x=>x.high),lo0=Math.min(...lows),hi0=Math.max(...highs),pad=Math.max((hi0-lo0)*.05,.01),lo=lo0-pad,hi=hi0+pad,maxVol=Math.max(...b.map(x=>x.volume),1);
+ const step=(W-p.l-p.r)/Math.max(b.length,1),x=i=>p.l+(i+.5)*step,yp=n=>p.t+(hi-n)*(priceBottom-p.t)/(hi-lo),yv=n=>volumeBottom-n*(volumeBottom-volumeTop)/maxVol;
+ const bodyW=Math.max(.8,Math.min(5,step*.62)),tailStart=b.length-item.tailBars,tailX=p.l+tailStart*step;
+ const candles=b.map((q,i)=>{{const up=q.close>=q.open,color=up?"#e05252":"#159a78",cx=x(i),yo=yp(q.open),yc=yp(q.close),top=Math.min(yo,yc),height=Math.max(Math.abs(yo-yc),.8);return `<line x1="${{cx.toFixed(1)}}" x2="${{cx.toFixed(1)}}" y1="${{yp(q.high).toFixed(1)}}" y2="${{yp(q.low).toFixed(1)}}" stroke="${{color}}" stroke-width="${{Math.max(.6,Math.min(1.1,step*.22)).toFixed(1)}}"/><rect x="${{(cx-bodyW/2).toFixed(1)}}" y="${{top.toFixed(1)}}" width="${{bodyW.toFixed(1)}}" height="${{height.toFixed(1)}}" fill="${{color}}"/>`;}}).join("");
+ const volumes=b.map((q,i)=>{{const color=q.close>=q.open?"#e05252":"#159a78",cx=x(i),top=yv(q.volume);return `<rect x="${{(cx-bodyW/2).toFixed(1)}}" y="${{top.toFixed(1)}}" width="${{bodyW.toFixed(1)}}" height="${{Math.max(volumeBottom-top,.6).toFixed(1)}}" fill="${{color}}" opacity=".55"/>`;}}).join("");
+ return `<div class="chart"><div class="chart-label"><span>原始前复权 K线 + 成交量</span><span>红涨 · 绿跌</span></div><svg viewBox="0 0 ${{W}} ${{H}}"><rect x="${{tailX.toFixed(1)}}" y="${{p.t}}" width="${{(W-p.r-tailX).toFixed(1)}}" height="${{(volumeBottom-p.t).toFixed(1)}}" fill="${{accent}}" opacity=".055"/><line x1="${{tailX.toFixed(1)}}" x2="${{tailX.toFixed(1)}}" y1="${{p.t}}" y2="${{volumeBottom}}" stroke="${{accent}}" stroke-dasharray="3 3" opacity=".5"/><line x1="${{p.l}}" x2="${{W-p.r}}" y1="${{priceBottom+4}}" y2="${{priceBottom+4}}" stroke="#ded8cc"/><text x="2" y="${{p.t+7}}" font-size="7" fill="#788190">${{hi0.toFixed(2)}}</text><text x="2" y="${{priceBottom}}" font-size="7" fill="#788190">${{lo0.toFixed(2)}}</text>${{candles}}${{volumes}}<text x="${{p.l}}" y="${{H-4}}" font-size="8" fill="#788190">${{item.startLabel||""}}</text><text x="${{W-p.r}}" y="${{H-4}}" text-anchor="end" font-size="8" fill="#788190">${{item.endLabel||""}}</text></svg></div>`;
+}}
+function charts(item,accent){{
+ return `<div class="visuals">${{normalizedChart(item,accent)}}${{candleChart(item,accent)}}</div>`;
 }}
 function metrics(item){{
  const tail=item.tailCorrelation==null?"—":(item.tailCorrelation*100).toFixed(1)+"%";
@@ -376,13 +388,13 @@ function metrics(item){{
 }}
 function card(item,cat,adjusted){{
  const passed=item.tailGatePassed,rankNote=adjusted&&item.standardRank!==item.rank?` · 原榜#${{item.standardRank}}`:"";
- return `<article class="result ${{passed?"":"rejected"}}" style="--accent:${{cat.accent}}"><div class="result-top"><div><h3>${{esc(item.name)}} <span class="code">${{item.code}}</span></h3><span class="code">${{item.startLabel}}～${{item.endLabel}} · ${{item.barCount}}根${{rankNote}}</span></div><div class="rank">#${{item.rank}}</div></div>${{metrics(item)}}<div class="flags"><span class="pill ${{passed?"good":"bad"}}">${{passed?"尾端通过":"尾端不一致"}}</span>${{item.anomalyFlags.map(x=>`<span class="pill">${{esc(x)}}</span>`).join("")}}</div>${{chart(item,cat.accent)}}</article>`;
+ return `<article class="result ${{passed?"":"rejected"}}" style="--accent:${{cat.accent}}"><div class="result-top"><div><h3>${{esc(item.name)}} <span class="code">${{item.code}}</span></h3><span class="code">${{item.startLabel}}～${{item.endLabel}} · ${{item.barCount}}根${{rankNote}}</span></div><div class="rank">#${{item.rank}}</div></div>${{metrics(item)}}<div class="flags"><span class="pill ${{passed?"good":"bad"}}">${{passed?"尾端通过":"尾端不一致"}}</span>${{item.anomalyFlags.map(x=>`<span class="pill">${{esc(x)}}</span>`).join("")}}</div>${{charts(item,cat.accent)}}</article>`;
 }}
 const tabs=document.querySelector("#tabs"),panels=document.querySelector("#panels");
 DATA.categories.forEach((cat,i)=>{{
  tabs.insertAdjacentHTML("beforeend",`<button class="tab" aria-selected="${{i===0}}" data-key="${{cat.key}}">${{esc(cat.label)}} · ${{cat.windowBars}}根</button>`);
  const rejected=cat.standardTop10Rejected.length?cat.standardTop10Rejected.map(x=>`${{x.rank}}.${{esc(x.name)}}`).join("、"):"无";
- panels.insertAdjacentHTML("beforeend",`<section class="panel ${{i===0?"active":""}}" id="panel-${{cat.key}}" style="--accent:${{cat.accent}}"><div class="head"><div><h2>${{esc(cat.label)}}</h2><p>${{esc(cat.cue)}}</p></div><small>尾段${{cat.tailBars}}根 · 模板尾段${{cat.templateTailReturnPct>0?"+":""}}${{cat.templateTailReturnPct}}% · 模板终点距高点${{cat.templateTailEndDrawdownPct}}%<br>右侧通过${{cat.tailGateEligibleCount}}/${{cat.eligibleCount}} · 前十重合${{cat.top10Overlap}} · 左榜剔除：${{rejected}}</small></div><article class="template-card"><div class="template-top"><div><h3>固定模板 · ${{esc(cat.template.name)}} <span class="code">${{cat.template.code}}</span></h3><span class="code">${{cat.template.startLabel}}～${{cat.template.endLabel}} · 尾端门槛：同方向，且终点距尾段高点≥${{cat.endDrawdownFloorPct}}%</span></div></div>${{chart(cat.template,cat.accent)}}</article><div class="compare"><section class="column"><div class="column-head"><b>标准 Pearson</b><span>原始整段排序；红色卡片表示尾端与模板矛盾。</span></div><div class="results">${{cat.standardResults.map(x=>card(x,cat,false)).join("")}}</div></section><section class="column"><div class="column-head adjusted"><b>通用尾端一致性</b><span>只剔除矛盾候选；通过者仍按左侧整段 Pearson 原名次顺序。</span></div><div class="results">${{cat.tailConsistentResults.map(x=>card(x,cat,true)).join("")}}</div></section></div></section>`);
+ panels.insertAdjacentHTML("beforeend",`<section class="panel ${{i===0?"active":""}}" id="panel-${{cat.key}}" style="--accent:${{cat.accent}}"><div class="head"><div><h2>${{esc(cat.label)}}</h2><p>${{esc(cat.cue)}}</p></div><small>尾段${{cat.tailBars}}根 · 模板尾段${{cat.templateTailReturnPct>0?"+":""}}${{cat.templateTailReturnPct}}% · 模板终点距高点${{cat.templateTailEndDrawdownPct}}%<br>右侧通过${{cat.tailGateEligibleCount}}/${{cat.eligibleCount}} · 前十重合${{cat.top10Overlap}} · 左榜剔除：${{rejected}}</small></div><article class="template-card"><div class="template-top"><div><h3>固定模板 · ${{esc(cat.template.name)}} <span class="code">${{cat.template.code}}</span></h3><span class="code">${{cat.template.startLabel}}～${{cat.template.endLabel}} · 尾端门槛：同方向，且终点距尾段高点≥${{cat.endDrawdownFloorPct}}%</span></div></div>${{charts(cat.template,cat.accent)}}</article><div class="compare"><section class="column"><div class="column-head"><b>标准 Pearson</b><span>原始整段排序；红色卡片表示尾端与模板矛盾。</span></div><div class="results">${{cat.standardResults.map(x=>card(x,cat,false)).join("")}}</div></section><section class="column"><div class="column-head adjusted"><b>通用尾端一致性</b><span>只剔除矛盾候选；通过者仍按左侧整段 Pearson 原名次顺序。</span></div><div class="results">${{cat.tailConsistentResults.map(x=>card(x,cat,true)).join("")}}</div></section></div></section>`);
 }});
 tabs.addEventListener("click",e=>{{const b=e.target.closest(".tab");if(!b)return;document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected",String(x===b)));document.querySelectorAll(".panel").forEach(x=>x.classList.toggle("active",x.id==="panel-"+b.dataset.key));}});
 </script>
