@@ -7,6 +7,23 @@ const templateKeys = [
   "parabolic_uptrend",
 ];
 
+test("sidebar opens the template library and market pages", async ({
+  page,
+}) => {
+  await page.goto("/template-breadth-v3");
+  await page.getByRole("link", { name: "模板库" }).click();
+  await expect(page).toHaveURL(/\/templates$/);
+  await expect(page.getByRole("heading", { name: "模板库", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "冻结四模板" })).toBeVisible();
+  await expect(page.getByText("Failed to fetch", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "行情详情" }).click();
+  await expect(page).toHaveURL(/\/market\?/);
+  await expect(page.getByRole("heading", { name: "平安银行" })).toBeVisible();
+  await expect(page.getByText("已连接", { exact: true })).toBeVisible();
+  await expect(page.getByText("Failed to fetch", { exact: true })).toHaveCount(0);
+});
+
 test("all four frozen templates expose independent one-year timelines", async ({
   page,
 }) => {

@@ -7,7 +7,6 @@ import {
   LibraryBig,
   LineChart,
 } from "lucide-react";
-import Link from "next/link";
 
 export type UiFontSize = "small" | "standard" | "large";
 
@@ -46,9 +45,9 @@ export function AppSidebar({ active }: { active: "templates" | "screen" | "marke
         <span className="brand-name">LC</span>
       </div>
       <nav className="primary-nav" aria-label="主导航">
-        <Link aria-label="模板库" className={`nav-item ${active === "templates" ? "active" : ""}`} href="/templates"><LibraryBig /><span>模板库</span></Link>
-        <Link aria-label="行情详情" className={`nav-item ${active === "market" ? "active" : ""}`} href="/market"><LineChart /><span>行情详情</span></Link>
-        <Link aria-label="形态宽度试用页" className={`nav-item ${active === "template-breadth-v3" ? "active" : ""}`} href="/template-breadth-v3"><Gauge /><span>形态宽度</span></Link>
+        <a aria-label="模板库" className={`nav-item ${active === "templates" ? "active" : ""}`} href="/templates"><LibraryBig /><span>模板库</span></a>
+        <a aria-label="行情详情" className={`nav-item ${active === "market" ? "active" : ""}`} href="/market"><LineChart /><span>行情详情</span></a>
+        <a aria-label="形态宽度试用页" className={`nav-item ${active === "template-breadth-v3" ? "active" : ""}`} href="/template-breadth-v3"><Gauge /><span>形态宽度</span></a>
       </nav>
       <div className="sidebar-bottom">
         <div className="font-size-control" role="group" aria-label="字体大小">
