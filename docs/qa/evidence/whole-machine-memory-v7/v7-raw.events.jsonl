@@ -1,0 +1,12 @@
+{"timestamp_ms":1785387497521,"name":"browser_started"}
+{"timestamp_ms":1785387502922,"name":"large_topk_screen","results":200,"eligible":4988,"elapsed_ms":5237.8}
+{"timestamp_ms":1785387506914,"name":"all_and_drag","source_bars":3268,"js_heap_used_mb":42.7,"js_heap_total_mb":64.2,"dom_nodes":1396}
+{"timestamp_ms":1785387507068,"name":"view_1","code":"300138.SZ","source_bars":3268,"js_heap_used_mb":60.5,"js_heap_total_mb":110.6,"dom_nodes":1463}
+{"timestamp_ms":1785387535282,"name":"view_10","code":"600756.SH","source_bars":3183,"js_heap_used_mb":52.5,"js_heap_total_mb":101.7,"dom_nodes":1388}
+{"timestamp_ms":1785387566423,"name":"view_20_four_charts","source_bars":3165,"js_heap_used_mb":65.5,"js_heap_total_mb":124.4,"dom_nodes":1606}
+{"timestamp_ms":1785387566479,"name":"view_20","code":"300031.SZ","source_bars":3165,"js_heap_used_mb":67.2,"js_heap_total_mb":124.4,"dom_nodes":1608}
+{"timestamp_ms":1785387596535,"name":"view_30","code":"688237.SH","source_bars":979,"js_heap_used_mb":27.4,"js_heap_total_mb":97.5,"dom_nodes":1408}
+{"timestamp_ms":1785387627680,"name":"view_40_four_charts","source_bars":2991,"js_heap_used_mb":46,"js_heap_total_mb":99.2,"dom_nodes":1500}
+{"timestamp_ms":1785387627726,"name":"view_40","code":"000676.SZ","source_bars":2991,"js_heap_used_mb":47.5,"js_heap_total_mb":99.2,"dom_nodes":1502}
+{"timestamp_ms":1785387637526,"name":"industry_strength","elapsed_ms":9759.8,"industries":31,"js_heap_used_mb":24.8,"js_heap_total_mb":99.5,"dom_nodes":1350}
+{"timestamp_ms":1785387637527,"name":"complete"}

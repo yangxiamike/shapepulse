@@ -40,6 +40,7 @@ import { CandlestickPreview } from "./CandlestickPreview";
 import {
   defaultFibonacciLevels,
   MarketChart,
+  prepareChartData,
   type ChartDrawing,
   type DrawingMode,
   type FibonacciLevel,
@@ -685,6 +686,7 @@ export function MarketClient() {
     ? Math.max(1, bars.length)
     : rangeLimits[range]?.[period] || 110;
   const visibleBars = bars.slice(-visibleCount);
+  const preparedChartData = useMemo(() => prepareChartData(bars), [bars]);
   const paneIndexes = maximizedPane == null ? Array.from({ length: layout }, (_value, index) => index) : [maximizedPane];
   const activeTemplateStock = templatePool.find(item => item.code === (templatePendingCode || stock?.code)) || null;
   const templateReturnHref = marketOrigin.from === "breadth"
@@ -765,7 +767,7 @@ export function MarketClient() {
             {drawings.length > 0 && <DrawingButton label="清除画线（全部）" active onClick={() => { setDrawings([]); setSelectedDrawing(null); setDrawingMode(null); }}><Trash2 /></DrawingButton>}
           </div>
         </div>
-        <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart key={`${stock?.code || "none"}-${period}-${range}-${index}`} ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} rightPaddingBars={10} onNeedMoreHistory={requestOlderHistory} enablePriceScaleMenu onResetDefault={() => void changeBars("D", "6M")} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} fibonacciLevels={drawingMode === "fibonacci-extension" ? fibonacciDefaults["fibonacci-extension"] : fibonacciDefaults.fibonacci} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onDrawingDoubleClick={openFibonacciSettings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
+        <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart key={`${stock?.code || "none"}-${period}-${range}-${index}`} ref={handle => { chartRefs.current[index] = handle; }} bars={bars} preparedData={preparedChartData} visibleCount={visibleCount} rightPaddingBars={10} onNeedMoreHistory={requestOlderHistory} enablePriceScaleMenu onResetDefault={() => void changeBars("D", "6M")} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} fibonacciLevels={drawingMode === "fibonacci-extension" ? fibonacciDefaults["fibonacci-extension"] : fibonacciDefaults.fibonacci} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onDrawingDoubleClick={openFibonacciSettings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
         <div className="range-toolbar">{ranges.map(([label, value]) => <button className={range === value ? "active" : ""} key={value} onClick={() => void changeBars(period, value)}>{label}</button>)}<b>{visibleBars[0]?.time || "—"} 至 {visibleBars.at(-1)?.time || "—"}　<CalendarDays /></b></div>
       </section>
     </main>

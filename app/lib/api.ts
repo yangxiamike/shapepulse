@@ -24,7 +24,13 @@ export const API_BASE = process.env.NEXT_PUBLIC_MARKET_API || "http://127.0.0.1:
 
 type Raw = Record<string, unknown>;
 
-const barsCache = new Map<string, BarsResponse>();
+type BarsCacheEntry = {
+  response: BarsResponse;
+  bytes: number;
+  expiresAt: number;
+};
+
+const barsCache = new Map<string, BarsCacheEntry>();
 const barsRequests = new Map<string, Promise<BarsResponse>>();
 const stockCache = new Map<string, Stock>();
 const stockRequests = new Map<string, Promise<{ item: Stock; cacheHit: boolean; httpMs: number }>>();
@@ -38,6 +44,8 @@ const industryStrengthCache = new Map<string, IndustryStrengthResponse>();
 const industryStrengthRequests = new Map<string, Promise<IndustryStrengthResponse>>();
 const MAX_BARS_CACHE_ENTRIES = 12;
 const MAX_CACHED_BARS = 30_000;
+const MAX_BARS_CACHE_BYTES = 16 * 1024 * 1024;
+const BARS_CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_STOCK_CACHE_ENTRIES = 32;
 
 function lruGet<K, V>(cache: Map<K, V>, key: K): V | undefined {
@@ -54,12 +62,47 @@ function lruSet<K, V>(cache: Map<K, V>, key: K, value: V, maxEntries: number) {
   while (cache.size > maxEntries) cache.delete(cache.keys().next().value!);
 }
 
+function estimateBarsResponseBytes(response: BarsResponse) {
+  // JS engines vary internally; this deliberately overestimates numeric fields
+  // and UTF-16 strings so the budget remains conservative across Chrome builds.
+  return 512 + response.items.reduce((sum, item) => {
+    const strings = String(item.time || "").length + String(item.trade_date || "").length;
+    return sum + 192 + strings * 2;
+  }, 0);
+}
+
+function getCachedBars(key: string): BarsResponse | undefined {
+  const entry = barsCache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    barsCache.delete(key);
+    return undefined;
+  }
+  barsCache.delete(key);
+  barsCache.set(key, entry);
+  return entry.response;
+}
+
 function cacheBars(key: string, response: BarsResponse) {
-  lruSet(barsCache, key, response, MAX_BARS_CACHE_ENTRIES);
-  let cachedBars = [...barsCache.values()].reduce((sum, item) => sum + item.items.length, 0);
-  while (cachedBars > MAX_CACHED_BARS && barsCache.size > 1) {
+  const bytes = estimateBarsResponseBytes(response);
+  barsCache.delete(key);
+  if (bytes > MAX_BARS_CACHE_BYTES) return;
+  barsCache.set(key, {
+    response,
+    bytes,
+    expiresAt: Date.now() + BARS_CACHE_TTL_MS,
+  });
+  let cachedBars = [...barsCache.values()].reduce((sum, item) => sum + item.response.items.length, 0);
+  let cachedBytes = [...barsCache.values()].reduce((sum, item) => sum + item.bytes, 0);
+  while (
+    barsCache.size > MAX_BARS_CACHE_ENTRIES
+    || cachedBars > MAX_CACHED_BARS
+    || cachedBytes > MAX_BARS_CACHE_BYTES
+  ) {
     const oldest = barsCache.keys().next().value!;
-    cachedBars -= barsCache.get(oldest)?.items.length || 0;
+    const evicted = barsCache.get(oldest);
+    cachedBars -= evicted?.response.items.length || 0;
+    cachedBytes -= evicted?.bytes || 0;
     barsCache.delete(oldest);
   }
 }
@@ -403,7 +446,7 @@ async function loadBars(
   query: URLSearchParams,
   force = false,
 ): Promise<BarsResponse> {
-  const cached = !force ? lruGet(barsCache, cacheKey) : undefined;
+  const cached = !force ? getCachedBars(cacheKey) : undefined;
   if (cached) {
     return { ...cached, client_cache_hit: true, http_ms: 0 };
   }
@@ -482,15 +525,22 @@ export const api = {
   barsComplete: async (code: string, period = "D", force = false): Promise<BarsResponse> => {
     const periodMap: Record<string, string> = { D: "1d", W: "1w", M: "1m", Q: "1q", Y: "1y" };
     const wirePeriod = periodMap[period] || period;
+    const completeKey = `${symbolOf(code)}:${wirePeriod}:qfq:complete:latest`;
+    const completeCached = !force ? getCachedBars(completeKey) : undefined;
+    if (completeCached) {
+      return { ...completeCached, client_cache_hit: true, http_ms: 0 };
+    }
     const firstKey = `${symbolOf(code)}:${wirePeriod}:qfq:full:latest:10000`;
     const firstQuery = new URLSearchParams({ period: wirePeriod, adjust: "qfq", limit: "10000" });
     let page = await loadBars(code, wirePeriod, 10000, firstKey, firstQuery, force);
     const pages = [page];
+    const pageKeys = [firstKey];
     let cursor = page.items[0]?.trade_date || page.items[0]?.time || "";
     for (let pageIndex = 1; page.has_more && pageIndex < 32; pageIndex += 1) {
       if (!cursor) throw new Error("完整历史分页缺少起始日期");
       const end = previousCalendarDate(cursor);
       const cacheKey = `${symbolOf(code)}:${wirePeriod}:qfq:before:${end}:10000`;
+      pageKeys.push(cacheKey);
       const query = new URLSearchParams({
         period: wirePeriod,
         adjust: "qfq",
@@ -516,7 +566,7 @@ export const api = {
     const items = [...merged.values()].sort((a, b) =>
       String(a.trade_date || a.time).localeCompare(String(b.trade_date || b.time))
     );
-    return {
+    const complete = {
       ...pages.at(-1)!,
       items: withMovingAverages(items),
       warnings: [...new Set(pages.flatMap(item => item.warnings))],
@@ -530,6 +580,11 @@ export const api = {
       history_start: items[0]?.trade_date || items[0]?.time || null,
       history_end: items.at(-1)?.trade_date || items.at(-1)?.time || null,
     };
+    // Retain one complete immutable result instead of both the merged result and
+    // every large source page. The active React state remains usable if rejected.
+    for (const key of pageKeys) barsCache.delete(key);
+    cacheBars(completeKey, complete);
+    return complete;
   },
   barsAll: async (code: string, force = false): Promise<BarsResponse> =>
     api.barsComplete(code, "D", force),

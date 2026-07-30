@@ -60,16 +60,18 @@ class MarketService:
         self._screen_lock = threading.RLock()
         self._screen_cache: BoundedTTLCache[
             tuple, dict[str, Any]
-        ] = BoundedTTLCache(2, 10 * 60)
-        self._completed_screens: dict[str, dict[str, Any]] = {}
+        ] = BoundedTTLCache(2, 10 * 60, max_bytes=64 * 1024 * 1024)
+        self._completed_screens: BoundedTTLCache[
+            str, dict[str, Any]
+        ] = BoundedTTLCache(8, 10 * 60, max_bytes=64 * 1024 * 1024)
         self._industry_strength_cache: BoundedTTLCache[
             tuple, dict[str, Any]
-        ] = BoundedTTLCache(2, 10 * 60)
+        ] = BoundedTTLCache(2, 10 * 60, max_bytes=32 * 1024 * 1024)
         # The prepared input contains large NumPy arrays for the whole board.
         # A 2 GB machine should never retain multiple historical cutoffs.
         self._industry_strength_input_cache: BoundedTTLCache[
             tuple, dict[str, Any]
-        ] = BoundedTTLCache(1, 10 * 60)
+        ] = BoundedTTLCache(1, 10 * 60, max_bytes=192 * 1024 * 1024)
         self._industry_strength_inflight: dict[tuple, threading.Event] = {}
         self._industry_strength_lock = threading.RLock()
         # Full-market screening and industry strength both build large temporary
@@ -1181,8 +1183,6 @@ class MarketService:
             with heavy_lock:
                 payload = self._run_screen(filters, snapshots, notify)
             with self._screen_lock:
-                if len(self._screen_cache) >= 2:
-                    self._screen_cache.pop(next(iter(self._screen_cache)))
                 self._screen_cache[cache_key] = copy.deepcopy(payload)
         else:
             payload = copy.deepcopy(cached)
@@ -1227,15 +1227,6 @@ class MarketService:
     ) -> None:
         now = time.monotonic()
         with self._screen_lock:
-            expired = [
-                token
-                for token, item in self._completed_screens.items()
-                if now - float(item["created_monotonic"]) > 10 * 60
-            ]
-            for token in expired:
-                self._completed_screens.pop(token, None)
-            while len(self._completed_screens) >= 8:
-                self._completed_screens.pop(next(iter(self._completed_screens)))
             self._completed_screens[screen_token] = {
                 "created_monotonic": now,
                 "payload": copy.deepcopy(payload),

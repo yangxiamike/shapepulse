@@ -171,6 +171,39 @@ class CacheAndHistoryTests(unittest.TestCase):
         self.assertEqual(cache.info()["evictions"], 1)
         self.assertEqual(cache.info()["expirations"], 2)
 
+    def test_bounded_cache_combines_byte_weight_lru_and_ttl(self):
+        now = [100.0]
+        cache = BoundedTTLCache(
+            4,
+            10,
+            clock=lambda: now[0],
+            max_bytes=10,
+            weigher=lambda value: len(value),
+        )
+        cache["a"] = "aaaa"
+        cache["b"] = "bbbb"
+        self.assertEqual(cache.get("a"), "aaaa")
+        cache["c"] = "cccc"
+        self.assertNotIn("b", cache)
+        self.assertEqual(list(cache), ["a", "c"])
+        self.assertEqual(cache.info()["current_bytes"], 8)
+        now[0] = 111.0
+        self.assertEqual(len(cache), 0)
+        self.assertEqual(cache.info()["current_bytes"], 0)
+        self.assertEqual(cache.info()["evictions"], 1)
+        self.assertEqual(cache.info()["expirations"], 2)
+
+    def test_bounded_cache_rejects_oversized_single_entry_without_evicting_hot_data(self):
+        cache = BoundedTTLCache(
+            4, 60, max_bytes=8, weigher=lambda value: len(value)
+        )
+        cache["hot"] = "1234"
+        cache["oversized"] = "x" * 9
+        self.assertEqual(cache.get("hot"), "1234")
+        self.assertNotIn("oversized", cache)
+        self.assertEqual(cache.info()["current_bytes"], 4)
+        self.assertEqual(cache.info()["oversized_rejections"], 1)
+
     def test_repository_cache_reloads_when_snapshot_token_changes(self):
         repository = LocalMarketRepository.__new__(LocalMarketRepository)
         repository._lock = threading.RLock()
@@ -573,7 +606,9 @@ class ScreenTokenTests(unittest.TestCase):
         self.service.thresholds = load_thresholds(PROJECT_ROOT / "config" / "thresholds.json")
         self.service.state_store = StateStore(Path(self.tempdir.name) / "state.sqlite3")
         self.service._screen_lock = threading.RLock()
-        self.service._completed_screens = {}
+        self.service._completed_screens = BoundedTTLCache(
+            8, 10 * 60, max_bytes=64 * 1024 * 1024
+        )
 
     def tearDown(self):
         self.tempdir.cleanup()

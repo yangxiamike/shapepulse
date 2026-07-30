@@ -81,6 +81,8 @@ type PriceScaleMode = "auto" | "locked" | "free";
 
 type Props = {
   bars: Bar[];
+  /** Immutable series arrays shared by every pane in a multi-chart layout. */
+  preparedData?: PreparedChartData;
   compact?: boolean;
   drawingMode?: DrawingMode | null;
   crosshairEnabled?: boolean;
@@ -123,6 +125,16 @@ export type NormalizedChartBar = {
   ma5: number | null;
   ma10: number | null;
   ma20: number | null;
+};
+
+export type PreparedChartData = {
+  normalizedBars: NormalizedChartBar[];
+  timeline: string[];
+  candles: Array<{ time: Time; open: number; high: number; low: number; close: number }>;
+  volumes: Array<{ time: Time; value: number; color: string }>;
+  ma5: Array<{ time: Time; value: number }>;
+  ma10: Array<{ time: Time; value: number }>;
+  ma20: Array<{ time: Time; value: number }>;
 };
 
 const FIBONACCI_RETRACEMENT_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const;
@@ -189,6 +201,37 @@ export function normalizeChartBars(bars: readonly Bar[]): NormalizedChartBar[] {
     });
   }
   return [...byDate.values()].sort((left, right) => left.time.localeCompare(right.time));
+}
+
+export function prepareChartData(bars: readonly Bar[]): PreparedChartData {
+  const normalizedBars = normalizeChartBars(bars);
+  return {
+    normalizedBars,
+    timeline: normalizedBars.map(bar => bar.time),
+    candles: normalizedBars.map(bar => ({
+      time: bar.time as Time,
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+    })),
+    volumes: normalizedBars.map(bar => ({
+      time: bar.time as Time,
+      value: bar.volume,
+      color: bar.close >= bar.open
+        ? "rgba(240,68,68,.78)"
+        : "rgba(32,170,123,.78)",
+    })),
+    ma5: normalizedBars
+      .filter(bar => bar.ma5 != null)
+      .map(bar => ({ time: bar.time as Time, value: bar.ma5! })),
+    ma10: normalizedBars
+      .filter(bar => bar.ma10 != null)
+      .map(bar => ({ time: bar.time as Time, value: bar.ma10! })),
+    ma20: normalizedBars
+      .filter(bar => bar.ma20 != null)
+      .map(bar => ({ time: bar.time as Time, value: bar.ma20! })),
+  };
 }
 
 type ScreenDrawing = Omit<ChartDrawing, "coordinateSpace">;
@@ -455,6 +498,7 @@ function paintOneDrawing(ctx: CanvasRenderingContext2D, drawing: ScreenDrawing, 
 
 export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketChart({
   bars,
+  preparedData,
   compact = false,
   drawingMode,
   crosshairEnabled = true,
@@ -506,7 +550,11 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
   const [priceScaleMode, setPriceScaleMode] = useState<PriceScaleMode>("auto");
   const [priceMenu, setPriceMenu] = useState<{ left: number; top: number } | null>(null);
   const activeSelected = selectedDrawingIndex === undefined ? internalSelected : selectedDrawingIndex;
-  const normalizedBars = useMemo(() => normalizeChartBars(bars), [bars]);
+  const prepared = useMemo(
+    () => preparedData ?? prepareChartData(bars),
+    [bars, preparedData],
+  );
+  const normalizedBars = prepared.normalizedBars;
 
   const paintDrawings = useCallback(() => {
     const canvas = overlay.current;
@@ -744,16 +792,16 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
 
   useEffect(() => {
     const started = performance.now();
-    const timeline = normalizedBars.map(bar => bar.time);
+    const timeline = prepared.timeline;
     const previous = previousTimeline.current;
     const logicalRange = chartRef.current?.timeScale().getVisibleLogicalRange();
     const prepended = previous.length > 0 && timeline.at(-1) === previous.at(-1) ? Math.max(0, timeline.indexOf(previous[0])) : 0;
 
-    candleRef.current?.setData(normalizedBars.map(bar => ({ time: bar.time as Time, open: bar.open, high: bar.high, low: bar.low, close: bar.close })));
-    volumeRef.current?.setData(normalizedBars.map(bar => ({ time: bar.time as Time, value: bar.volume, color: bar.close >= bar.open ? "rgba(240,68,68,.78)" : "rgba(32,170,123,.78)" })));
-    ma5Ref.current?.setData(normalizedBars.filter(bar => bar.ma5 != null).map(bar => ({ time: bar.time as Time, value: bar.ma5! })));
-    ma10Ref.current?.setData(normalizedBars.filter(bar => bar.ma10 != null).map(bar => ({ time: bar.time as Time, value: bar.ma10! })));
-    ma20Ref.current?.setData(normalizedBars.filter(bar => bar.ma20 != null).map(bar => ({ time: bar.time as Time, value: bar.ma20! })));
+    candleRef.current?.setData(prepared.candles);
+    volumeRef.current?.setData(prepared.volumes);
+    ma5Ref.current?.setData(prepared.ma5);
+    ma10Ref.current?.setData(prepared.ma10);
+    ma20Ref.current?.setData(prepared.ma20);
 
     previousTimeline.current = timeline;
     if (logicalRange && prepended > 0) {
@@ -777,7 +825,7 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
       syncPriceGeometry();
       onRendered?.(performance.now() - started);
     }));
-  }, [fitContentOnDataChange, normalizedBars, onRendered, rightPaddingBars, syncPriceGeometry, visibleCount]);
+  }, [fitContentOnDataChange, normalizedBars, onRendered, prepared, rightPaddingBars, syncPriceGeometry, visibleCount]);
 
   useEffect(() => {
     chartRef.current?.applyOptions({

@@ -5,6 +5,7 @@ import math
 import threading
 import time
 import tomllib
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -76,24 +77,45 @@ class LocalMarketRepository:
         self.pro = LocalPro(self.data_dir)
         self._lock = threading.RLock()
         self._query_lock = threading.RLock()
-        self._duck = duckdb.connect()
-        # DuckDB otherwise sizes its worker and buffer pools for the host machine,
-        # which is too aggressive when this app is deployed on a 2 GB PC.
-        self._duck.execute("SET threads=2")
-        self._duck.execute("SET memory_limit='512MB'")
-        self._duck.execute("SET preserve_insertion_order=false")
+        self._duck = self._new_duck_connection()
         # Metadata and all-market snapshots are few but may be large. Stock-specific
         # frames and serialized bars are isolated so browsing many symbols cannot
         # crowd out stable reference data or grow without bound.
         self._cache: BoundedTTLCache[str, tuple[object, Any]] = BoundedTTLCache(
-            32, 30 * 60
+            32, 30 * 60, max_bytes=96 * 1024 * 1024
         )
         self._stock_frame_cache: BoundedTTLCache[
             str, tuple[object, pd.DataFrame]
-        ] = BoundedTTLCache(8, 10 * 60)
+        ] = BoundedTTLCache(8, 10 * 60, max_bytes=32 * 1024 * 1024)
         self._bars_cache: BoundedTTLCache[
             str, tuple[object, dict[str, Any]]
-        ] = BoundedTTLCache(8, 10 * 60)
+        ] = BoundedTTLCache(8, 10 * 60, max_bytes=24 * 1024 * 1024)
+
+    @staticmethod
+    def _configure_duck(connection):
+        # DuckDB otherwise sizes worker and buffer pools for the host machine.
+        connection.execute("SET threads=2")
+        connection.execute("SET memory_limit='256MB'")
+        connection.execute("SET preserve_insertion_order=false")
+        return connection
+
+    def _new_duck_connection(self):
+        return self._configure_duck(duckdb.connect())
+
+    @contextmanager
+    def _duck_query(self, *, short_lived: bool = False):
+        """Use a disposable connection for scans whose buffer pool must not linger."""
+
+        if not short_lived:
+            with self._query_lock:
+                yield self._duck
+            return
+        with self._query_lock:
+            connection = self._new_duck_connection()
+            try:
+                yield connection
+            finally:
+                connection.close()
 
     def _read_data_dir(self) -> Path:
         with self.config_path.open("rb") as handle:
@@ -463,8 +485,10 @@ class LocalMarketRepository:
             params.append(limit)
         else:
             sql += " ORDER BY d.trade_date"
-        with self._query_lock:
-            frame = self._duck.execute(sql, params).fetchdf()
+        # Complete-history scans touch thousands of Parquet partitions. Closing a
+        # disposable DuckDB connection releases its buffer pool after each stock.
+        with self._duck_query(short_lived=not cache_frame) as connection:
+            frame = connection.execute(sql, params).fetchdf()
         if cache_frame:
             with self._lock:
                 self._stock_frame_cache[key] = (token, frame.copy())
@@ -478,8 +502,8 @@ class LocalMarketRepository:
             if hit is not None and hit[0] == latest:
                 return hit[1]
         source = str(self.data_dir / "stock" / "daily_kline" / "date=*" / "data.parquet")
-        with self._query_lock:
-            row = self._duck.execute(
+        with self._duck_query(short_lived=True) as connection:
+            row = connection.execute(
                 "SELECT min(trade_date), max(trade_date) FROM read_parquet(?, hive_partitioning=true) WHERE ts_code=?",
                 [source, code],
             ).fetchone()
