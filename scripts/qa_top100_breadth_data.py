@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -14,12 +15,37 @@ SOURCE = (
 PUBLIC = PROJECT_ROOT / "public" / "template-breadth-v3.json"
 PUBLIC_DETAILS = PROJECT_ROOT / "public" / "template-breadth-v3-details"
 PUBLIC_RANKINGS = PROJECT_ROOT / "public" / "template-rankings"
+PUBLIC_TIMELINES = PROJECT_ROOT / "public" / "template-breadth-v3-timelines"
 PUBLIC_DEFINITIONS = PROJECT_ROOT / "public" / "template-definitions"
 REGISTRY = PROJECT_ROOT / "config" / "similarity_templates.json"
 TOP_K = 100
 CHANGE_WINDOWS = (10, 20)
 DEFAULT_CHANGE_WINDOW = 10
 DISPLAY_DAYS = 60
+TIMELINE_HISTORY_DAYS = 252
+TIMELINE_SAMPLE_STEP = 5
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", type=Path, default=SOURCE)
+    parser.add_argument("--public", type=Path, default=PUBLIC)
+    parser.add_argument(
+        "--public-details",
+        type=Path,
+        default=PUBLIC_DETAILS,
+    )
+    parser.add_argument(
+        "--public-rankings",
+        type=Path,
+        default=PUBLIC_RANKINGS,
+    )
+    parser.add_argument(
+        "--public-timelines",
+        type=Path,
+        default=PUBLIC_TIMELINES,
+    )
+    return parser.parse_args()
 
 
 def all_keys(value: object) -> set[str]:
@@ -33,19 +59,25 @@ def all_keys(value: object) -> set[str]:
 
 
 def main() -> None:
+    args = parse_args()
+    source = args.source.resolve()
+    public = args.public.resolve()
+    public_details = args.public_details.resolve()
+    public_rankings = args.public_rankings.resolve()
+    public_timelines = args.public_timelines.resolve()
     membership = pd.read_csv(
-        SOURCE / "top100_membership_daily.csv",
+        source / "top100_membership_daily.csv",
         dtype={"trade_date": str, "window_start": str, "window_end": str},
     )
     industry = pd.read_csv(
-        SOURCE / "top100_industry_daily.csv",
+        source / "top100_industry_daily.csv",
         dtype={
             "trade_date": str,
             "comparison_trade_date": str,
         },
         keep_default_na=False,
     )
-    payload = json.loads(PUBLIC.read_text(encoding="utf-8"))
+    payload = json.loads(public.read_text(encoding="utf-8"))
     registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
     registry_by_key = {
         item["key"]: item for item in registry["templates"]
@@ -80,7 +112,7 @@ def main() -> None:
         }
     )
     assert len(payload["templates"]) == 4
-    assert PUBLIC.stat().st_size < 200_000
+    assert public.stat().st_size < 200_000
 
     checks = []
     for template in payload["templates"]:
@@ -209,14 +241,16 @@ def main() -> None:
             )
             assert other["component_industry_count"] == len(low)
 
-        detail_path = PUBLIC_DETAILS / f"{key}.json"
-        ranking_path = PUBLIC_RANKINGS / f"{key}.json"
+        detail_path = public_details / f"{key}.json"
+        ranking_path = public_rankings / f"{key}.json"
+        timeline_path = public_timelines / f"{key}.json"
         definition_path = PUBLIC_DEFINITIONS / f"{key}.json"
         assert template["detail_url"] == (
             f"/template-breadth-v3-details/{key}.json"
         )
         detail = json.loads(detail_path.read_text(encoding="utf-8"))
         ranking = json.loads(ranking_path.read_text(encoding="utf-8"))
+        timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
         definition = json.loads(
             definition_path.read_text(encoding="utf-8")
         )
@@ -292,6 +326,87 @@ def main() -> None:
         assert definition["bars"][0]["trade_date"] == frozen["start_date"]
         assert definition["bars"][-1]["trade_date"] == frozen["end_date"]
         assert len(definition["curve"]) == int(frozen["window_bars"])
+        assert template["timeline_url"] == (
+            f"/template-breadth-v3-timelines/{key}.json"
+        )
+        assert timeline["template_id"] == key
+        assert timeline["as_of"] == as_of
+        assert timeline["sampling"]["history_trading_days"] == (
+            TIMELINE_HISTORY_DAYS
+        )
+        assert timeline["sampling"]["trading_day_step"] == (
+            TIMELINE_SAMPLE_STEP
+        )
+        assert timeline["sampling"]["latest_always_included"] is True
+        assert len(timeline["snapshots"]) == template["timeline"][
+            "sampled_points"
+        ]
+        assert timeline["snapshots"][-1]["date"] == as_of
+        assert timeline_path.stat().st_size < 300_000
+        assert not (
+            all_keys(timeline)
+            & {
+                "current_stocks",
+                "new_stocks",
+                "retained_stocks",
+                "exit_stocks",
+                "stocks",
+                "bars",
+                "score",
+                "rank",
+                "ts_code",
+            }
+        )
+        snapshot_dates = [
+            snapshot["date"] for snapshot in timeline["snapshots"]
+        ]
+        snapshot_positions = [
+            member_dates.index(current) for current in snapshot_dates
+        ]
+        assert all(
+            right - left == TIMELINE_SAMPLE_STEP
+            for left, right in zip(
+                snapshot_positions[:-2],
+                snapshot_positions[1:-1],
+                strict=True,
+            )
+        )
+        assert 1 <= (
+            snapshot_positions[-1] - snapshot_positions[-2]
+        ) <= TIMELINE_SAMPLE_STEP
+        layout_position = {
+            code: index
+            for index, code in enumerate(timeline["layout_order"])
+        }
+        for snapshot in timeline["snapshots"]:
+            assert sum(
+                item["top100_count"]
+                for item in snapshot["treemap_industries"]
+            ) == TOP_K
+            assert [
+                item["industry_code"]
+                for item in snapshot["treemap_industries"]
+            ] == sorted(
+                [
+                    item["industry_code"]
+                    for item in snapshot["treemap_industries"]
+                ],
+                key=layout_position.__getitem__,
+            )
+            current_position = member_dates.index(snapshot["date"])
+            for comparison_days in CHANGE_WINDOWS:
+                expected_date = member_dates[
+                    current_position - comparison_days
+                ]
+                assert snapshot["comparison_dates"][
+                    str(comparison_days)
+                ] == expected_date
+                assert {
+                    item["changes"][str(comparison_days)][
+                        "comparison_date"
+                    ]
+                    for item in snapshot["treemap_industries"]
+                } == {expected_date}
         assert definition["boundaries"] == {
             "data_source": r"C:\Users\hp\Documents\zer0share",
             "network_used": False,
@@ -317,6 +432,8 @@ def main() -> None:
                 "detailBytes": detail_path.stat().st_size,
                 "rankingBytes": ranking_path.stat().st_size,
                 "templateDefinitionBytes": definition_path.stat().st_size,
+                "timelinePoints": len(timeline["snapshots"]),
+                "timelineBytes": timeline_path.stat().st_size,
             }
         )
 
@@ -326,7 +443,7 @@ def main() -> None:
         "topK": TOP_K,
         "defaultChangeWindow": DEFAULT_CHANGE_WINDOW,
         "comparisonTradingDays": list(CHANGE_WINDOWS),
-        "initialPayloadBytes": PUBLIC.stat().st_size,
+        "initialPayloadBytes": public.stat().st_size,
         "initialPayloadHasStockLists": False,
         "initialPayloadHasKlineBars": False,
         "parabolicFrozenWindow": {
@@ -338,7 +455,7 @@ def main() -> None:
         "templates": checks,
         "leakageAudit": payload["boundaries"],
     }
-    (SOURCE / "qa-independent-results.json").write_text(
+    (source / "qa-independent-results.json").write_text(
         json.dumps(result, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )

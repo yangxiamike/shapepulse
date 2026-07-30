@@ -55,6 +55,10 @@ test("Top100 Treemap keeps area semantics while 10/20-day color context changes"
   );
   await expect(map.locator('[data-direction="expand"]').first()).toBeVisible();
   await expect(map.locator('[data-direction="contract"]').first()).toBeVisible();
+  await expect(
+    page.getByRole("slider", { name: "选择行业空间历史交易日" }),
+  ).toBeVisible();
+  await page.waitForTimeout(250);
 
   const centered = await map
     .getByRole("button")
@@ -110,7 +114,7 @@ test("Top100 Treemap keeps area semantics while 10/20-day color context changes"
     page.getByRole("heading", { name: /其他行业（\d+个行业，\d+只）/ }),
   ).toBeVisible();
   await expect(page.getByText("“其他行业”具体构成")).toBeVisible();
-  await expect(page.getByText(/当前入选股票/)).toBeVisible();
+  await expect(page.getByText(/最新交易日入选股票/)).toBeVisible();
   await expect(page.getByText(/行业 Top100 数量时间序列/)).toBeVisible();
 
   expect(consoleErrors).toEqual([]);

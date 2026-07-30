@@ -87,11 +87,43 @@ type TemplateData = {
   industries: Industry[];
   treemap_industries?: Industry[];
   detail_url?: string;
+  timeline_url?: string;
+  layout_order?: string[];
+  timeline?: {
+    start_date: string;
+    end_date: string;
+    history_trading_days: number;
+    trading_day_step: number;
+    sampled_points: number;
+    latest_always_included: boolean;
+    anchor?: string;
+  };
   industrySeries?: Array<{
     industryCode: string;
     industry: string;
     points: Point[];
   }>;
+};
+type TimelineSnapshot = {
+  date: string;
+  comparison_dates: Record<string, string>;
+  treemap_industries: Industry[];
+};
+type TimelinePayload = {
+  version: string;
+  as_of: string;
+  template_id: string;
+  start_date: string;
+  end_date: string;
+  layout_order: string[];
+  sampling: {
+    history_trading_days: number;
+    trading_day_step: number;
+    sampled_points: number;
+    latest_always_included: boolean;
+    anchor?: string;
+  };
+  snapshots: TimelineSnapshot[];
 };
 type Payload = {
   asOf: string;
@@ -163,13 +195,25 @@ function worst(row: Array<{ item: Industry; area: number }>, side: number) {
   );
 }
 
-function squarify(items: Industry[], width: number, height: number): Rect[] {
+function squarify(
+  items: Industry[],
+  width: number,
+  height: number,
+  layoutOrder: string[] = [],
+): Rect[] {
+  const positions = new Map(
+    layoutOrder.map((code, index) => [code, index]),
+  );
   const weighted = items
     .filter(item => item.top100_count > 0)
     .sort(
       (a, b) =>
-        b.top100_count - a.top100_count ||
-        a.industry.localeCompare(b.industry, "zh-CN"),
+        (positions.get(a.industry_code) ?? Number.MAX_SAFE_INTEGER) -
+          (positions.get(b.industry_code) ?? Number.MAX_SAFE_INTEGER) ||
+        (layoutOrder.length
+          ? a.industry.localeCompare(b.industry, "zh-CN")
+          : b.top100_count - a.top100_count ||
+            a.industry.localeCompare(b.industry, "zh-CN")),
     );
   const total = weighted.reduce((sum, item) => sum + item.top100_count, 0);
   if (!total || width <= 0 || height <= 0) return [];
@@ -257,6 +301,11 @@ export function TemplateBreadthV3Client() {
   const detailCache = useRef(new Map<string, Industry[]>());
   const detailRequests = useRef(new Map<string, Promise<Industry[]>>());
   const detailLoadSequence = useRef(0);
+  const timelineCache = useRef(new Map<string, TimelinePayload>());
+  const timelineRequests = useRef(
+    new Map<string, Promise<TimelinePayload>>(),
+  );
+  const timelineLoadSequence = useRef(0);
   const selectedKeyRef = useRef("");
   const [data, setData] = useState<Payload | null>(null);
   const [selectedKey, setSelectedKey] = useState("");
@@ -266,6 +315,10 @@ export function TemplateBreadthV3Client() {
   const [detailIndustries, setDetailIndustries] = useState<Industry[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [timeline, setTimeline] = useState<TimelinePayload | null>(null);
+  const [timelineIndex, setTimelineIndex] = useState(0);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState("");
   const [mapSize, setMapSize] = useState({ width: 1000, height: 560 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -329,22 +382,116 @@ export function TemplateBreadthV3Client() {
       null,
     [data, selectedKey],
   );
+  const loadTimeline = useCallback(async (item: TemplateData) => {
+    const templateKey = item.key;
+    const sequence = ++timelineLoadSequence.current;
+    setTimelineError("");
+    const cached = timelineCache.current.get(templateKey);
+    if (cached) {
+      if (
+        sequence === timelineLoadSequence.current &&
+        selectedKeyRef.current === templateKey
+      ) {
+        setTimeline(cached);
+        setTimelineIndex(Math.max(0, cached.snapshots.length - 1));
+      }
+      return;
+    }
+    if (!item.timeline_url) {
+      setTimeline(null);
+      setTimelineError("该模板缺少历史时间轴地址");
+      return;
+    }
+    setTimelineLoading(true);
+    try {
+      let pending = timelineRequests.current.get(templateKey);
+      if (!pending) {
+        pending = fetch(item.timeline_url, { cache: "force-cache" })
+          .then(async response => {
+            if (!response.ok) {
+              throw new Error(`历史时间轴返回 ${response.status}`);
+            }
+            const payload = (await response.json()) as TimelinePayload;
+            if (
+              payload.template_id !== templateKey ||
+              !payload.snapshots?.length
+            ) {
+              throw new Error("历史时间轴与当前模板不匹配");
+            }
+            timelineCache.current.set(templateKey, payload);
+            return payload;
+          })
+          .finally(() => timelineRequests.current.delete(templateKey));
+        timelineRequests.current.set(templateKey, pending);
+      }
+      const payload = await pending;
+      if (
+        sequence === timelineLoadSequence.current &&
+        selectedKeyRef.current === templateKey
+      ) {
+        setTimeline(payload);
+        setTimelineIndex(Math.max(0, payload.snapshots.length - 1));
+      }
+    } catch (reason) {
+      if (
+        sequence === timelineLoadSequence.current &&
+        selectedKeyRef.current === templateKey
+      ) {
+        setTimeline(null);
+        setTimelineError(
+          reason instanceof Error ? reason.message : "历史时间轴加载失败",
+        );
+      }
+    } finally {
+      if (
+        sequence === timelineLoadSequence.current &&
+        selectedKeyRef.current === templateKey
+      ) {
+        setTimelineLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!template) return;
+    const timer = window.setTimeout(
+      () => void loadTimeline(template),
+      0,
+    );
+    return () => window.clearTimeout(timer);
+  }, [loadTimeline, template]);
+
+  const activeSnapshot =
+    timeline && timeline.template_id === template?.key
+      ? timeline.snapshots[timelineIndex] ||
+        timeline.snapshots.at(-1) ||
+        null
+      : null;
+  const viewDate = activeSnapshot?.date || data?.asOf || "";
+  const isLatestDate = Boolean(data && viewDate === data.asOf);
   const mapIndustries = useMemo(
-    () => template?.treemap_industries || template?.industries || [],
-    [template],
+    () =>
+      activeSnapshot?.treemap_industries ||
+      template?.treemap_industries ||
+      template?.industries ||
+      [],
+    [activeSnapshot, template],
   );
   const rects = useMemo(
-    () => squarify(mapIndustries, mapSize.width, mapSize.height),
-    [mapIndustries, mapSize],
+    () =>
+      squarify(
+        mapIndustries,
+        mapSize.width,
+        mapSize.height,
+        timeline?.layout_order || template?.layout_order || [],
+      ),
+    [mapIndustries, mapSize, template?.layout_order, timeline?.layout_order],
   );
   const selectedSummary = useMemo(
     () =>
       mapIndustries.find(item => item.industry_code === selectedIndustry) ||
-      template?.industries.find(
-        item => item.industry_code === selectedIndustry,
-      ) ||
       null,
-    [mapIndustries, selectedIndustry, template],
+    [mapIndustries, selectedIndustry],
   );
   const selectedDetail = useMemo(
     () =>
@@ -353,7 +500,9 @@ export function TemplateBreadthV3Client() {
       ) || null,
     [detailIndustries, selectedIndustry],
   );
-  const selected = selectedDetail || selectedSummary;
+  const selected = isLatestDate
+    ? selectedDetail || selectedSummary
+    : selectedSummary;
   const focusItem = useMemo(
     () =>
       mapIndustries.find(
@@ -411,6 +560,10 @@ export function TemplateBreadthV3Client() {
       setSelectedIndustry(item.industry_code);
       setFocusedIndustry(item.industry_code);
       setDetailError("");
+      if (!isLatestDate) {
+        setDetailLoading(false);
+        return;
+      }
       const cached = detailCache.current.get(templateKey);
       if (cached) {
         if (
@@ -476,11 +629,21 @@ export function TemplateBreadthV3Client() {
         }
       }
     },
-    [template],
+    [isLatestDate, template],
   );
+
+  const previousLatest = useRef(true);
+  useEffect(() => {
+    const returnedToLatest = isLatestDate && !previousLatest.current;
+    previousLatest.current = isLatestDate;
+    if (returnedToLatest && selectedSummary) {
+      void selectIndustry(selectedSummary);
+    }
+  }, [isLatestDate, selectIndustry, selectedSummary]);
 
   function switchTemplate(key: string) {
     ++detailLoadSequence.current;
+    ++timelineLoadSequence.current;
     selectedKeyRef.current = key;
     setSelectedKey(key);
     setSelectedIndustry("");
@@ -488,7 +651,31 @@ export function TemplateBreadthV3Client() {
     setDetailIndustries(detailCache.current.get(key) || []);
     setDetailError("");
     setDetailLoading(false);
+    const cachedTimeline = timelineCache.current.get(key) || null;
+    setTimeline(cachedTimeline);
+    setTimelineIndex(
+      cachedTimeline ? Math.max(0, cachedTimeline.snapshots.length - 1) : 0,
+    );
+    setTimelineError("");
+    setTimelineLoading(!cachedTimeline);
   }
+
+  const chooseTimelineIndex = useCallback(
+    (nextIndex: number) => {
+      if (!timeline?.snapshots.length) return;
+      const clamped = Math.max(
+        0,
+        Math.min(nextIndex, timeline.snapshots.length - 1),
+      );
+      const nextSnapshot = timeline.snapshots[clamped];
+      setTimelineIndex(clamped);
+      if (!data || nextSnapshot.date === data.asOf) return;
+      ++detailLoadSequence.current;
+      setDetailLoading(false);
+      setDetailError("");
+    },
+    [data, timeline],
+  );
 
   return (
     <div className={`app-shell ${styles.shell}`}>
@@ -508,7 +695,11 @@ export function TemplateBreadthV3Client() {
               个实际交易日前的净变化。
             </p>
           </div>
-          {data ? <time>数据日期 {date(data.asOf)}</time> : null}
+          {data ? (
+            <time>
+              {isLatestDate ? "最新交易日" : "回溯交易日"} {date(viewDate)}
+            </time>
+          ) : null}
         </header>
 
         {loading ? (
@@ -562,7 +753,7 @@ export function TemplateBreadthV3Client() {
                     ? `${widest.industry} ${widest.top100_count}只`
                     : "—"}
                 </strong>
-                <small>面积只由当前 Top100 数量决定</small>
+                <small>面积只由所选日期 Top100 数量决定</small>
               </article>
               <article>
                 <span>{changeWindow}日净扩张最多</span>
@@ -592,16 +783,16 @@ export function TemplateBreadthV3Client() {
               <section className={styles.mapCard}>
                 <div className={styles.sectionHead}>
                   <div>
-                    <span>当前宽度 · 申万一级行业</span>
+                    <span>所选日期宽度 · 申万一级行业</span>
                     <h2>Top100 行业空间</h2>
                     <p>
-                      面积 = {date(data.asOf)} 当日 Top100 行业数量（只）；
+                      面积 = {date(viewDate)} 当日 Top100 行业数量（只）；
                       颜色 = 相对 {changeWindow} 个实际交易日前净变化。
                     </p>
                   </div>
                   <small>
-                    {date(data.asOf)} vs {date(comparisonDate)} ·
-                    当前合计 {mapTotal}只
+                    {date(viewDate)} vs {date(comparisonDate)} ·
+                    当日合计 {mapTotal}只
                   </small>
                 </div>
                 <div className={styles.legend}>
@@ -622,7 +813,10 @@ export function TemplateBreadthV3Client() {
                 </div>
                 <div
                   ref={mapRef}
-                  className={styles.treemap}
+                  className={[
+                    styles.treemap,
+                    timeline ? styles.treemapAnimated : "",
+                  ].join(" ")}
                   role="group"
                   aria-label={`${template.label} Top100 行业矩形树图`}
                   data-total={mapTotal}
@@ -666,8 +860,8 @@ export function TemplateBreadthV3Client() {
                         data-direction={direction}
                         data-industry-code={industry.industry_code}
                         data-count={industry.top100_count}
-                        title={`${industry.industry}｜当前 ${industry.top100_count}只｜${otherText}｜${date(data.asOf)} vs ${date(change.comparison_date)}`}
-                        aria-label={`${industry.industry}，当前 Top100 ${industry.top100_count}只，${otherText}，点击查看明细`}
+                        title={`${industry.industry}｜当日 ${industry.top100_count}只｜${otherText}｜${date(viewDate)} vs ${date(change.comparison_date)}`}
+                        aria-label={`${industry.industry}，当日 Top100 ${industry.top100_count}只，${otherText}，点击查看行业统计`}
                         aria-pressed={
                           industry.industry_code === selectedIndustry
                         }
@@ -696,10 +890,18 @@ export function TemplateBreadthV3Client() {
                     );
                   })}
                 </div>
+                <Timeline
+                  payload={timeline}
+                  index={timelineIndex}
+                  loading={timelineLoading}
+                  error={timelineError}
+                  onChange={chooseTimelineIndex}
+                  onRetry={() => template && void loadTimeline(template)}
+                />
                 {focusItem ? (
-                  <div className={styles.focusStrip} aria-live="polite">
+                  <div className={styles.focusStrip}>
                     <strong>{focusItem.industry}</strong>
-                    <span>当前 {focusItem.top100_count}只</span>
+                    <span>{date(viewDate)} · {focusItem.top100_count}只</span>
                     <span>{changeLabel(focusItem, changeWindow)}</span>
                     {focusItem.industry_code === "other" ? (
                       <span>
@@ -828,7 +1030,9 @@ export function TemplateBreadthV3Client() {
                 <>
                   <div className={styles.detailHead}>
                     <div>
-                      <span>已选行业 · {changeWindow}日变化</span>
+                      <span>
+                        已选行业 · {date(viewDate)} · {changeWindow}日变化
+                      </span>
                       <h2>
                         {selected.industry}
                         {selected.industry_code === "other"
@@ -836,7 +1040,7 @@ export function TemplateBreadthV3Client() {
                           : ""}
                       </h2>
                       <p>
-                        {date(data.asOf)}：当前 Top100{" "}
+                        {date(viewDate)}：当日 Top100{" "}
                         {selected.top100_count}只；比较日{" "}
                         {date(
                           changeFor(selected, changeWindow).comparison_date,
@@ -866,7 +1070,45 @@ export function TemplateBreadthV3Client() {
                     </button>
                   </div>
 
-                  {detailLoading ? (
+                  {!isLatestDate ? (
+                    <div className={styles.historyDetail}>
+                      <div className={styles.historyNotice} role="status">
+                        <TriangleAlert aria-hidden="true" />
+                        <p>
+                          <strong>历史日期仅显示行业统计。</strong>
+                          逐股名单只支持最新交易日 {date(data.asOf)}；
+                          这里不会用最新股票清单代替 {date(viewDate)} 的历史清单。
+                        </p>
+                      </div>
+                      <div
+                        className={styles.historyMetrics}
+                        aria-label={`${selected.industry} ${date(viewDate)} 行业统计`}
+                      >
+                        <article>
+                          <span>当日 Top100 数量</span>
+                          <strong>{selected.top100_count}只</strong>
+                        </article>
+                        <article>
+                          <span>{changeWindow}日新进入</span>
+                          <strong>
+                            {changeFor(selected, changeWindow).new_count}只
+                          </strong>
+                        </article>
+                        <article>
+                          <span>{changeWindow}日保留</span>
+                          <strong>
+                            {changeFor(selected, changeWindow).retained_count}只
+                          </strong>
+                        </article>
+                        <article>
+                          <span>{changeWindow}日退出</span>
+                          <strong>
+                            {changeFor(selected, changeWindow).exit_count}只
+                          </strong>
+                        </article>
+                      </div>
+                    </div>
+                  ) : detailLoading ? (
                     <div className={styles.detailState} role="status">
                       <LoaderCircle className="spin" aria-hidden="true" />
                       行业摘要已显示，正在加载股票与时间序列…
@@ -910,7 +1152,7 @@ export function TemplateBreadthV3Client() {
                       ) : null}
                       <div className={styles.detailGrid}>
                         <div className={styles.currentStocks}>
-                          <h3>当前入选股票</h3>
+                          <h3>最新交易日入选股票</h3>
                           <StockList
                             items={
                               selected.current_stocks ||
@@ -1001,10 +1243,10 @@ export function TemplateBreadthV3Client() {
                 </>
               ) : (
                 <div className={styles.prompt}>
-                  <strong>点击行业块查看股票与时间序列</strong>
+                  <strong>点击行业块查看所选日期统计</strong>
                   <span>
-                    首屏只读取轻量摘要；明细按行业点击后加载，不阻塞
-                    Treemap。
+                    最新交易日可按需加载股票与时间序列；历史日期只显示
+                    行业统计，不会混用最新清单。
                   </span>
                 </div>
               )}
@@ -1024,6 +1266,121 @@ export function TemplateBreadthV3Client() {
         ) : null}
       </main>
     </div>
+  );
+}
+
+function Timeline({
+  payload,
+  index,
+  loading,
+  error,
+  onChange,
+  onRetry,
+}: {
+  payload: TimelinePayload | null;
+  index: number;
+  loading: boolean;
+  error: string;
+  onChange: (index: number) => void;
+  onRetry: () => void;
+}) {
+  if (loading && !payload) {
+    return (
+      <section className={styles.timelineState} role="status">
+        <LoaderCircle className="spin" aria-hidden="true" />
+        正在读取一年行业历史摘要…
+      </section>
+    );
+  }
+  if (error && !payload) {
+    return (
+      <section className={styles.timelineState} role="alert">
+        <TriangleAlert aria-hidden="true" />
+        <span>{error}</span>
+        <button type="button" onClick={onRetry}>
+          <RotateCcw aria-hidden="true" />
+          重试
+        </button>
+      </section>
+    );
+  }
+  if (!payload?.snapshots.length) return null;
+
+  const max = payload.snapshots.length - 1;
+  const current = payload.snapshots[Math.min(index, max)];
+  const progress = max ? (Math.min(index, max) / max) * 100 : 100;
+  const monthTicks = payload.snapshots.reduce<
+    Array<{ index: number; label: string }>
+  >((ticks, snapshot, snapshotIndex) => {
+    const normalized = date(snapshot.date);
+    const month = normalized.slice(0, 7);
+    const prior = ticks.at(-1);
+    const priorMonth = prior
+      ? date(payload.snapshots[prior.index].date).slice(0, 7)
+      : "";
+    if (month === priorMonth) return ticks;
+    const monthNumber = Number(month.slice(5, 7));
+    ticks.push({
+      index: snapshotIndex,
+      label:
+        snapshotIndex === 0 || monthNumber === 1
+          ? `${month.slice(0, 4)}年${monthNumber}月`
+          : `${monthNumber}月`,
+    });
+    return ticks;
+  }, []);
+
+  return (
+    <section
+      className={styles.timeline}
+      aria-label="Top100 行业空间一年回溯"
+    >
+      <div className={styles.timelineHead}>
+        <div>
+          <span>一年回溯 · 每 5 个实际交易日采样</span>
+          <strong>{date(current.date)}</strong>
+        </div>
+        <output aria-live="off">
+          第 {Math.min(index, max) + 1} / {payload.snapshots.length} 个采样点
+        </output>
+      </div>
+      <div
+        className={styles.timelineControl}
+        style={
+          {
+            "--timeline-progress": `${progress}%`,
+          } as CSSProperties
+        }
+      >
+        <div className={styles.timelineTicks} aria-hidden="true">
+          {monthTicks.map(tick => (
+            <i
+              key={`${tick.index}-${tick.label}`}
+              style={{
+                left: `${max ? (tick.index / max) * 100 : 0}%`,
+              }}
+            >
+              <span>{tick.label}</span>
+            </i>
+          ))}
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={max}
+          step={1}
+          value={Math.min(index, max)}
+          aria-label="选择行业空间历史交易日"
+          aria-valuetext={`${date(current.date)}，第 ${Math.min(index, max) + 1} 个采样点，共 ${payload.snapshots.length} 个`}
+          onChange={event => onChange(Number(event.currentTarget.value))}
+        />
+      </div>
+      <div className={styles.timelineFoot}>
+        <time>{date(payload.start_date)}</time>
+        <span>点击或拖动；左右方向键逐采样点移动</span>
+        <time>{date(payload.end_date)}</time>
+      </div>
+    </section>
   );
 }
 

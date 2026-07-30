@@ -268,6 +268,18 @@
   text-align: center;
   border: 2px solid #fff;
   transition:
+    background-color 140ms linear,
+    filter 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.treemapAnimated .mapBlock {
+  transition:
+    left 190ms ease-out,
+    top 190ms ease-out,
+    width 190ms ease-out,
+    height 190ms ease-out,
+    background-color 140ms linear,
     filter 120ms ease,
     box-shadow 120ms ease;
 }
@@ -328,6 +340,173 @@
   color: #fff;
   background: #101715;
   border-radius: 50%;
+}
+
+.timeline {
+  padding: 12px 14px 10px;
+  background: #fbfaf7;
+  border-top: 1px solid var(--line);
+}
+
+.timelineHead,
+.timelineFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timelineHead > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.timelineHead span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.timelineHead strong {
+  font-size: 17px;
+}
+
+.timelineHead output,
+.timelineFoot {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.timelineControl {
+  position: relative;
+  height: 61px;
+  margin: 5px 8px 0;
+}
+
+.timelineControl input {
+  position: absolute;
+  z-index: 2;
+  inset: 13px -8px auto;
+  width: calc(100% + 16px);
+  height: 44px;
+  margin: 0;
+  appearance: none;
+  cursor: pointer;
+  background: transparent;
+  touch-action: pan-y;
+}
+
+.timelineControl input::-webkit-slider-runnable-track {
+  height: 6px;
+  background:
+    linear-gradient(
+      90deg,
+      var(--accent) 0 var(--timeline-progress),
+      #d5d1c8 var(--timeline-progress) 100%
+    );
+  border: 1px solid #9d988d;
+  border-radius: 999px;
+}
+
+.timelineControl input::-webkit-slider-thumb {
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  appearance: none;
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 1px 4px #0003;
+}
+
+.timelineControl input::-moz-range-track {
+  height: 6px;
+  background: #d5d1c8;
+  border: 1px solid #9d988d;
+  border-radius: 999px;
+}
+
+.timelineControl input::-moz-range-progress {
+  height: 6px;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.timelineControl input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 1px 4px #0003;
+}
+
+.timelineControl input:focus-visible {
+  outline: 3px solid #1f6f58;
+  outline-offset: 3px;
+}
+
+.timelineTicks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.timelineTicks i {
+  position: absolute;
+  top: 31px;
+  bottom: 7px;
+  width: 1px;
+  background: #aaa59b;
+}
+
+.timelineTicks span {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.timelineTicks i:first-child span {
+  transform: none;
+}
+
+.timelineFoot time {
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.timelineState {
+  min-height: 86px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  background: #fbfaf7;
+  border-top: 1px solid var(--line);
+}
+
+.timelineState svg {
+  width: 19px;
+}
+
+.timelineState button {
+  min-height: 36px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #fff;
+  background: var(--ink);
+  border: 0;
+  border-radius: 7px;
 }
 
 .focusStrip {
@@ -513,6 +692,58 @@
 .detailState > svg {
   width: 22px;
   flex: 0 0 22px;
+}
+
+.historyDetail {
+  padding: 16px;
+}
+
+.historyNotice {
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #5f501d;
+  background: #fff8dc;
+  border: 1px solid #d9c97b;
+  border-radius: 9px;
+}
+
+.historyNotice svg {
+  width: 20px;
+  flex: 0 0 20px;
+}
+
+.historyNotice p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.historyMetrics {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.historyMetrics article {
+  min-height: 82px;
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #f5f3ed;
+  border: 1px solid #d7d3ca;
+  border-radius: 8px;
+}
+
+.historyMetrics span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.historyMetrics strong {
+  font-size: 20px;
 }
 
 .otherComponents {
@@ -799,6 +1030,10 @@
   .treemap {
     height: 500px;
   }
+
+  .historyMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 600px) {
@@ -904,6 +1139,34 @@
     padding: 3px;
   }
 
+  .timeline {
+    padding-inline: 10px;
+  }
+
+  .timelineHead {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .timelineHead > div {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .timelineControl {
+    margin-inline: 6px;
+  }
+
+  .timelineTicks i:nth-child(even) span {
+    display: none;
+  }
+
+  .timelineFoot span {
+    max-width: 150px;
+    text-align: center;
+  }
+
   .windowSwitch {
     width: 100%;
   }
@@ -938,6 +1201,14 @@
     flex-direction: column;
   }
 
+  .historyDetail {
+    padding: 10px;
+  }
+
+  .historyMetrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .detailGrid {
     grid-template-columns: 1fr;
   }
@@ -958,7 +1229,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mapBlock {
+  .mapBlock,
+  .treemapAnimated .mapBlock {
     transition: none;
   }
 }

@@ -29,13 +29,18 @@ SIMILARITY_ALGORITHM = (
 CHANGE_WINDOWS = (10, 20)
 DEFAULT_CHANGE_WINDOW = 10
 DISPLAY_DAYS = 60
-CALCULATION_DAYS = DISPLAY_DAYS + max(CHANGE_WINDOWS)
+TIMELINE_HISTORY_DAYS = 252
+TIMELINE_SAMPLE_STEP = 5
+CALCULATION_DAYS = TIMELINE_HISTORY_DAYS + max(CHANGE_WINDOWS)
 DEFAULT_OUTPUT = (
     PROJECT_ROOT / "outputs" / "shape-v2" / "top100-breadth-20260730"
 )
 DEFAULT_PUBLIC = PROJECT_ROOT / "public" / "template-breadth-v3.json"
 DEFAULT_PUBLIC_DETAILS = PROJECT_ROOT / "public" / "template-breadth-v3-details"
 DEFAULT_PUBLIC_RANKINGS = PROJECT_ROOT / "public" / "template-rankings"
+DEFAULT_PUBLIC_TIMELINES = (
+    PROJECT_ROOT / "public" / "template-breadth-v3-timelines"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,6 +56,11 @@ def parse_args() -> argparse.Namespace:
         "--public-rankings",
         type=Path,
         default=DEFAULT_PUBLIC_RANKINGS,
+    )
+    parser.add_argument(
+        "--public-timelines",
+        type=Path,
+        default=DEFAULT_PUBLIC_TIMELINES,
     )
     parser.add_argument(
         "--dry-run",
@@ -250,15 +260,212 @@ def lightweight_industry(
     }
 
 
+def timeline_sample_dates(
+    dates: tuple[str, ...],
+    ordinals: tuple[int, ...],
+) -> tuple[str, ...]:
+    if not dates:
+        return ()
+    if len(dates) != len(ordinals):
+        raise RuntimeError("时间轴日期与全局交易日序号长度不一致")
+    sampled = [
+        current
+        for current, ordinal in zip(dates, ordinals, strict=True)
+        if ordinal % TIMELINE_SAMPLE_STEP == 0
+    ]
+    if not sampled:
+        sampled = [dates[0]]
+    if sampled[-1] != dates[-1]:
+        sampled.append(dates[-1])
+    return tuple(sampled)
+
+
+def build_snapshot(
+    *,
+    industry: pd.DataFrame,
+    trade_date: str,
+) -> dict:
+    current = industry[industry["trade_date"].astype(str) == trade_date]
+    base = current[
+        current["comparison_trading_days"] == DEFAULT_CHANGE_WINDOW
+    ].copy()
+    summary_items: list[dict] = []
+    comparison_dates: dict[str, str] = {}
+
+    for row in base.sort_values(
+        ["top100_count", "selection_rate", "industry"],
+        ascending=[False, False, True],
+    ).itertuples(index=False):
+        code = str(row.industry_code)
+        changes: dict[str, dict] = {}
+        for comparison_days in CHANGE_WINDOWS:
+            change_rows = current[
+                (
+                    current["comparison_trading_days"]
+                    == comparison_days
+                )
+                & (current["industry_code"].astype(str) == code)
+            ]
+            if len(change_rows) != 1:
+                raise RuntimeError(
+                    f"{trade_date} {code} {comparison_days} 日快照行数错误"
+                )
+            change = change_rows.iloc[0]
+            comparison_date = str(change["comparison_trade_date"])
+            comparison_dates[str(comparison_days)] = comparison_date
+            changes[str(comparison_days)] = {
+                "comparison_date": comparison_date,
+                "new_count": int(change["new_count"]),
+                "retained_count": int(change["retained_count"]),
+                "exit_count": int(change["exit_count"]),
+                "net_change": int(change["new_count"])
+                - int(change["exit_count"]),
+            }
+        summary_items.append(
+            lightweight_industry(
+                code=code,
+                name=str(row.industry),
+                eligible_count=int(row.eligible_count),
+                top100_count=int(row.top100_count),
+                changes=changes,
+            )
+        )
+
+    low_summary = [
+        item for item in summary_items if item["top100_count"] in (1, 2)
+    ]
+    normal_treemap = [
+        item for item in summary_items if int(item["top100_count"]) >= 3
+    ]
+    if low_summary:
+        other_changes: dict[str, dict] = {}
+        for comparison_days in CHANGE_WINDOWS:
+            window = str(comparison_days)
+            other_changes[window] = {
+                "comparison_date": comparison_dates[window],
+                "new_count": sum(
+                    int(item["changes"][window]["new_count"])
+                    for item in low_summary
+                ),
+                "retained_count": sum(
+                    int(item["changes"][window]["retained_count"])
+                    for item in low_summary
+                ),
+                "exit_count": sum(
+                    int(item["changes"][window]["exit_count"])
+                    for item in low_summary
+                ),
+            }
+            other_changes[window]["net_change"] = (
+                other_changes[window]["new_count"]
+                - other_changes[window]["exit_count"]
+            )
+        other = lightweight_industry(
+            code="other",
+            name="其他行业",
+            eligible_count=sum(
+                int(item["eligible_count"]) for item in low_summary
+            ),
+            top100_count=sum(
+                int(item["top100_count"]) for item in low_summary
+            ),
+            changes=other_changes,
+        )
+        other.update(
+            {
+                "neutral": True,
+                "component_industry_count": len(low_summary),
+                "component_industry_codes": sorted(
+                    str(item["industry_code"]) for item in low_summary
+                ),
+            }
+        )
+        normal_treemap.append(other)
+
+    summary_items.sort(
+        key=lambda item: (
+            -int(item["top100_count"]),
+            str(item["industry"]),
+        )
+    )
+    normal_treemap.sort(
+        key=lambda item: (
+            -int(item["top100_count"]),
+            str(item["industry"]),
+        )
+    )
+    return {
+        "date": trade_date,
+        "comparison_dates": comparison_dates,
+        "treemap_industries": normal_treemap,
+    }
+
+
+def build_timeline_payload(
+    *,
+    template_key: str,
+    industry: pd.DataFrame,
+    history_dates: tuple[str, ...],
+    sampled_dates: tuple[str, ...],
+) -> dict:
+    snapshots = [
+        build_snapshot(industry=industry, trade_date=current)
+        for current in sampled_dates
+    ]
+    counts: dict[str, int] = {}
+    names: dict[str, str] = {}
+    for snapshot in snapshots:
+        for item in snapshot["treemap_industries"]:
+            code = str(item["industry_code"])
+            names[code] = str(item["industry"])
+            counts[code] = counts.get(code, 0) + int(item["top100_count"])
+    layout_order = sorted(
+        names,
+        key=lambda code: (
+            -counts.get(code, 0),
+            names[code],
+            code,
+        ),
+    )
+    order = {code: index for index, code in enumerate(layout_order)}
+    for snapshot in snapshots:
+        snapshot["treemap_industries"].sort(
+            key=lambda item: order[str(item["industry_code"])]
+        )
+
+    return {
+        "version": "template-top100-breadth-timeline-v1",
+        "as_of": history_dates[-1],
+        "template_id": template_key,
+        "start_date": sampled_dates[0],
+        "end_date": history_dates[-1],
+        "layout_order": layout_order,
+        "sampling": {
+            "history_trading_days": len(history_dates),
+            "trading_day_step": TIMELINE_SAMPLE_STEP,
+            "sampled_points": len(sampled_dates),
+            "latest_always_included": True,
+            "anchor": "共同评分历史真实交易日序号模5",
+        },
+        "snapshots": snapshots,
+    }
+
+
 def build_page_data(
     memberships: pd.DataFrame,
     industries: pd.DataFrame,
     eligible_counts: pd.DataFrame,
     as_of: str,
-) -> tuple[dict, dict[str, dict], dict[str, dict]]:
+) -> tuple[
+    dict,
+    dict[str, dict],
+    dict[str, dict],
+    dict[str, dict],
+]:
     templates: list[dict] = []
     detail_payloads: dict[str, dict] = {}
     ranking_payloads: dict[str, dict] = {}
+    timeline_payloads: dict[str, dict] = {}
     history_starts: list[str] = []
 
     for template in TEMPLATES:
@@ -283,10 +490,18 @@ def build_page_data(
                 eligible_counts["template"] == template.key
             ]
             .sort_values("trade_date")
-            .tail(DISPLAY_DAYS)
+            .tail(TIMELINE_HISTORY_DAYS)
         )
-        display_dates = tuple(by_date["trade_date"].astype(str))
-        history_starts.append(display_dates[0])
+        history_dates = tuple(by_date["trade_date"].astype(str))
+        history_ordinals = tuple(
+            int(value) for value in by_date["trading_day_ordinal"]
+        )
+        sampled_dates = timeline_sample_dates(
+            history_dates,
+            history_ordinals,
+        )
+        display_dates = history_dates[-DISPLAY_DAYS:]
+        history_starts.append(sampled_dates[0])
         current_codes = set(current["ts_code"])
 
         contexts: dict[int, dict[str, object]] = {}
@@ -593,6 +808,20 @@ def build_page_data(
                 str(item["industry"]),
             )
         )
+        timeline_payload = build_timeline_payload(
+            template_key=template.key,
+            industry=industry,
+            history_dates=history_dates,
+            sampled_dates=sampled_dates,
+        )
+        timeline_payloads[template.key] = timeline_payload
+        layout_order = timeline_payload["layout_order"]
+        layout_position = {
+            code: index for index, code in enumerate(layout_order)
+        }
+        normal_treemap.sort(
+            key=lambda item: layout_position[str(item["industry_code"])]
+        )
         templates.append(
             {
                 "key": template.key,
@@ -614,6 +843,15 @@ def build_page_data(
                 "detail_url": (
                     f"/template-breadth-v3-details/{template.key}.json"
                 ),
+                "timeline_url": (
+                    f"/template-breadth-v3-timelines/{template.key}.json"
+                ),
+                "timeline": {
+                    "start_date": timeline_payload["start_date"],
+                    "end_date": timeline_payload["end_date"],
+                    **timeline_payload["sampling"],
+                },
+                "layout_order": layout_order,
                 "industries": summary_items,
                 "treemap_industries": normal_treemap,
             }
@@ -655,7 +893,7 @@ def build_page_data(
         }
 
     payload = {
-        "version": "template-top100-breadth-v2",
+        "version": "template-top100-breadth-v3",
         "asOf": as_of,
         "historyStart": min(history_starts),
         "defaultChangeWindow": DEFAULT_CHANGE_WINDOW,
@@ -679,15 +917,17 @@ def build_page_data(
             "crossTemplateRankingUsed": False,
         },
     }
-    return payload, detail_payloads, ranking_payloads
+    return payload, detail_payloads, ranking_payloads, timeline_payloads
 
 
 def validate(
     memberships: pd.DataFrame,
     industries: pd.DataFrame,
+    eligible_counts: pd.DataFrame,
     payload: dict,
     detail_payloads: dict[str, dict],
     ranking_payloads: dict[str, dict],
+    timeline_payloads: dict[str, dict],
 ) -> dict:
     def all_keys(value: object) -> set[str]:
         if isinstance(value, dict):
@@ -713,6 +953,20 @@ def validate(
         "selectedThreshold",
     }
     assert not (all_keys(payload) & forbidden_initial_keys)
+    assert not (
+        all_keys(timeline_payloads)
+        & {
+            "current_stocks",
+            "new_stocks",
+            "retained_stocks",
+            "exit_stocks",
+            "stocks",
+            "bars",
+            "score",
+            "rank",
+            "ts_code",
+        }
+    )
     assert payload["defaultChangeWindow"] == DEFAULT_CHANGE_WINDOW
     assert payload["changeWindows"] == list(CHANGE_WINDOWS)
     assert payload["selection"]["topK"] == TOP_K
@@ -767,6 +1021,88 @@ def validate(
         page_template = next(
             item for item in payload["templates"] if item["key"] == template.key
         )
+        timeline = timeline_payloads[template.key]
+        snapshots = timeline["snapshots"]
+        sampled_dates = [snapshot["date"] for snapshot in snapshots]
+        membership_dates = sorted(membership["trade_date"].astype(str).unique())
+        history_dates = membership_dates[-TIMELINE_HISTORY_DAYS:]
+        template_eligible = (
+            eligible_counts[
+                eligible_counts["template"] == template.key
+            ]
+            .sort_values("trade_date")
+            .tail(TIMELINE_HISTORY_DAYS)
+        )
+        history_ordinals = tuple(
+            int(value)
+            for value in template_eligible["trading_day_ordinal"]
+        )
+        expected_sampled_dates = list(
+            timeline_sample_dates(
+                tuple(history_dates),
+                history_ordinals,
+            )
+        )
+        assert timeline["start_date"] == expected_sampled_dates[0]
+        assert timeline["end_date"] == history_dates[-1]
+        assert sampled_dates == expected_sampled_dates
+        assert sampled_dates[-1] == payload["asOf"]
+        assert timeline["sampling"] == {
+            "history_trading_days": len(history_dates),
+            "trading_day_step": TIMELINE_SAMPLE_STEP,
+            "sampled_points": len(sampled_dates),
+            "latest_always_included": True,
+            "anchor": "共同评分历史真实交易日序号模5",
+        }
+        assert page_template["timeline"] == {
+            "start_date": timeline["start_date"],
+            "end_date": timeline["end_date"],
+            **timeline["sampling"],
+        }
+        assert page_template["layout_order"] == timeline["layout_order"]
+        date_position = {
+            current: index for index, current in enumerate(membership_dates)
+        }
+        for snapshot in snapshots:
+            snapshot_industry = industry[
+                (
+                    industry["trade_date"].astype(str)
+                    == snapshot["date"]
+                )
+                & (
+                    industry["comparison_trading_days"]
+                    == DEFAULT_CHANGE_WINDOW
+                )
+            ]
+            assert snapshot_industry["top100_count"].sum() == TOP_K
+            assert sum(
+                item["top100_count"]
+                for item in snapshot["treemap_industries"]
+            ) == TOP_K
+            assert [
+                item["industry_code"]
+                for item in snapshot["treemap_industries"]
+            ] == sorted(
+                [
+                    item["industry_code"]
+                    for item in snapshot["treemap_industries"]
+                ],
+                key=timeline["layout_order"].index,
+            )
+            current_position = date_position[snapshot["date"]]
+            for comparison_days in CHANGE_WINDOWS:
+                expected_comparison = membership_dates[
+                    current_position - comparison_days
+                ]
+                assert snapshot["comparison_dates"][
+                    str(comparison_days)
+                ] == expected_comparison
+                assert {
+                    item["changes"][str(comparison_days)][
+                        "comparison_date"
+                    ]
+                    for item in snapshot["treemap_industries"]
+                } == {expected_comparison}
         assert sum(
             item["top100_count"] for item in page_template["industries"]
         ) == TOP_K
@@ -902,6 +1238,16 @@ def validate(
                         separators=(",", ":"),
                     ).encode("utf-8")
                 ),
+                "timelinePoints": len(snapshots),
+                "timelineStart": timeline["start_date"],
+                "timelineEnd": timeline["end_date"],
+                "timelineBytes": len(
+                    json.dumps(
+                        timeline,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ),
             }
         )
     manifest_bytes = len(
@@ -932,11 +1278,13 @@ def main() -> None:
     public = args.public.resolve()
     public_details = args.public_details.resolve()
     public_rankings = args.public_rankings.resolve()
+    public_timelines = args.public_timelines.resolve()
     workspace_targets = (
         output,
         public,
         public_details,
         public_rankings,
+        public_timelines,
     )
     if any(PROJECT_ROOT not in path.parents for path in workspace_targets):
         raise RuntimeError("输出必须位于工作区")
@@ -949,6 +1297,10 @@ def main() -> None:
     if not args.dry_run and public_rankings.exists():
         raise RuntimeError(
             f"拒绝覆盖现有冻结排名目录：{public_rankings}"
+        )
+    if not args.dry_run and public_timelines.exists():
+        raise RuntimeError(
+            f"拒绝覆盖现有历史时间轴目录：{public_timelines}"
         )
 
     previous_cwd = Path.cwd()
@@ -981,7 +1333,12 @@ def main() -> None:
         scores = rolling_scores(
             series, stocks, templates[template.key]["z"], template.bars, as_of
         )
-        recent_dates = sorted(scores["trade_date"].unique())[-CALCULATION_DAYS:]
+        all_score_dates = sorted(scores["trade_date"].astype(str).unique())
+        trading_day_ordinals = {
+            current: index
+            for index, current in enumerate(all_score_dates)
+        }
+        recent_dates = all_score_dates[-CALCULATION_DAYS:]
         recent_scores = scores[scores["trade_date"].isin(recent_dates)].copy()
         membership, industry = build_template_frames(
             scores=recent_scores,
@@ -998,6 +1355,7 @@ def main() -> None:
                 "trade_date": str(date),
                 "template": template.key,
                 "eligible_count": int(len(frame)),
+                "trading_day_ordinal": trading_day_ordinals[str(date)],
             }
             for date, frame in recent_scores.groupby("trade_date", sort=True)
         )
@@ -1005,15 +1363,22 @@ def main() -> None:
     memberships = pd.concat(all_memberships, ignore_index=True)
     industries = pd.concat(all_industries, ignore_index=True)
     eligible = pd.DataFrame(eligible_rows)
-    payload, detail_payloads, ranking_payloads = build_page_data(
+    (
+        payload,
+        detail_payloads,
+        ranking_payloads,
+        timeline_payloads,
+    ) = build_page_data(
         memberships, industries, eligible, as_of
     )
     qa = validate(
         memberships,
         industries,
+        eligible,
         payload,
         detail_payloads,
         ranking_payloads,
+        timeline_payloads,
     )
     if args.dry_run:
         print(json.dumps(qa, ensure_ascii=False, indent=2))
@@ -1022,10 +1387,13 @@ def main() -> None:
     output.mkdir(parents=True)
     output_details = output / "details"
     output_rankings = output / "rankings"
+    output_timelines = output / "timelines"
     output_details.mkdir()
     output_rankings.mkdir()
+    output_timelines.mkdir()
     public_details.mkdir(parents=True)
     public_rankings.mkdir(parents=True)
+    public_timelines.mkdir(parents=True)
     memberships.to_csv(
         output / "top100_membership_daily.csv",
         index=False,
@@ -1079,6 +1447,21 @@ def main() -> None:
         )
         (public_rankings / f"{template_key}.json").write_text(
             compact_ranking, encoding="utf-8"
+        )
+    for template_key, timeline in timeline_payloads.items():
+        pretty_timeline = json.dumps(
+            timeline, ensure_ascii=False, indent=2
+        )
+        compact_timeline = json.dumps(
+            timeline,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        (output_timelines / f"{template_key}.json").write_text(
+            pretty_timeline, encoding="utf-8"
+        )
+        (public_timelines / f"{template_key}.json").write_text(
+            compact_timeline, encoding="utf-8"
         )
     print(json.dumps(qa, ensure_ascii=False, indent=2))
 
