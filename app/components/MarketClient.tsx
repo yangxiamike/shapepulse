@@ -120,6 +120,13 @@ export function MarketClient() {
   const operationStarted = useRef(0);
   const loadSequence = useRef(0);
   const barsLoadSequence = useRef(0);
+  const fullHistorySequence = useRef(0);
+  const fullHistoryRequest = useRef({
+    key: "",
+    sequence: 0,
+    loading: false,
+    complete: false,
+  });
   const templateLoadSequence = useRef(0);
   const shellRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
@@ -214,30 +221,94 @@ export function MarketClient() {
     }
   }, [loadTemplatePool]);
 
+  const loadCompleteHistory = useCallback(async (
+    code: string,
+    activePeriod: string,
+    sequence: number,
+  ) => {
+    const key = `${code}:${activePeriod}`;
+    const current = fullHistoryRequest.current;
+    if (
+      current.key === key
+      && current.sequence === sequence
+      && (current.loading || current.complete)
+    ) return;
+    fullHistoryRequest.current = { key, sequence, loading: true, complete: false };
+    try {
+      const history = await api.barsComplete(code, activePeriod);
+      const latest = fullHistoryRequest.current;
+      if (
+        latest.key !== key
+        || latest.sequence !== sequence
+        || fullHistorySequence.current !== sequence
+      ) return;
+      fullHistoryRequest.current = { key, sequence, loading: false, complete: true };
+      setBars(history.items);
+      setStatus(currentStatus =>
+        `${currentStatus.split(" · 完整历史")[0]} · 完整历史 ${history.items.length} 根`
+      );
+    } catch (e) {
+      const latest = fullHistoryRequest.current;
+      if (latest.key === key && latest.sequence === sequence) {
+        fullHistoryRequest.current = { key, sequence, loading: false, complete: false };
+        setStatus(e instanceof Error ? `完整历史补载失败：${e.message}` : "完整历史补载失败");
+      }
+    }
+  }, []);
+
+  const requestOlderHistory = useCallback(() => {
+    if (!stock) return;
+    void loadCompleteHistory(stock.code, period, fullHistorySequence.current);
+  }, [loadCompleteHistory, period, stock]);
+
   const loadStock = useCallback(async (code: string, nextPeriod = "D", nextRange = "6M", preserveContext = false) => {
     const sequence = ++loadSequence.current;
     ++barsLoadSequence.current;
+    const historySequence = ++fullHistorySequence.current;
+    fullHistoryRequest.current = {
+      key: `${code}:${nextPeriod}`,
+      sequence: historySequence,
+      loading: false,
+      complete: false,
+    };
     const started = performance.now();
     operationStarted.current = started;
     setLoading(true); setError(""); setStatus("正在读取本地行情…");
     try {
-      const [detailResult, history] = await Promise.all([api.stock(code), api.bars(code, nextPeriod, nextRange)]);
+      const [detailResult, history] = await Promise.all([
+        api.stock(code),
+        nextRange === "ALL"
+          ? api.barsComplete(code, nextPeriod)
+          : api.bars(code, nextPeriod, nextRange),
+      ]);
       if (sequence !== loadSequence.current) return;
       const detail = detailResult.item;
       setStock(detail); setBars(history.items); setPeriod(nextPeriod); setRange(nextRange);
       setTemplatePendingCode(null);
       setPerf(current => ({ ...current, frontendMs: performance.now() - started, httpMs: Math.max(detailResult.httpMs, history.http_ms || 0), queryMs: history.timings.total_ms || 0, cache: detailResult.cacheHit && Boolean(history.client_cache_hit) }));
-      const visibleBars = Math.min(history.items.length, rangeLimits[nextRange]?.[nextPeriod] || history.items.length);
+      const visibleBars = nextRange === "ALL"
+        ? history.items.length
+        : Math.min(history.items.length, rangeLimits[nextRange]?.[nextPeriod] || history.items.length);
       setStatus(`${history.client_cache_hit ? "前端缓存" : history.cache_hit ? "后端缓存" : "本地快照"} · ${formatDate(history.as_of.daily)} · ${visibleBars} 根可见 / ${history.items.length} 根已读`);
       setSearchOpen(false); setQuery(""); if (!preserveContext) setRightOpen(false);
       window.history.replaceState(null, "", marketPath(detail.code, templateIdRef.current));
       void api.updateState(detail.code, "viewed").catch(() => undefined);
+      if (nextRange === "ALL") {
+        fullHistoryRequest.current = {
+          key: `${code}:${nextPeriod}`,
+          sequence: historySequence,
+          loading: false,
+          complete: true,
+        };
+      } else {
+        void loadCompleteHistory(code, nextPeriod, historySequence);
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "本地行情加载失败";
       setError(message); setStatus(message);
       if (sequence === loadSequence.current) setTemplatePendingCode(null);
     } finally { if (sequence === loadSequence.current) setLoading(false); }
-  }, [marketPath]);
+  }, [loadCompleteHistory, marketPath]);
 
   const chooseTemplateStock = useCallback((code: string) => {
     const index = templatePool.findIndex(item => item.code === code);
@@ -368,6 +439,13 @@ export function MarketClient() {
   const changeBars = useCallback(async (nextPeriod: string, nextRange = range) => {
     if (!stock || (nextPeriod === period && nextRange === range)) return;
     const sequence = ++barsLoadSequence.current;
+    const historySequence = ++fullHistorySequence.current;
+    fullHistoryRequest.current = {
+      key: `${stock.code}:${nextPeriod}`,
+      sequence: historySequence,
+      loading: false,
+      complete: false,
+    };
     const previousPeriod = period;
     const previousRange = range;
     const started = performance.now();
@@ -375,12 +453,26 @@ export function MarketClient() {
     setPeriod(nextPeriod); setRange(nextRange);
     setLoading(true); setError(""); setStatus("切换 K 线周期…");
     try {
-      const history = await api.bars(stock.code, nextPeriod, nextRange);
+      const history = nextRange === "ALL"
+        ? await api.barsComplete(stock.code, nextPeriod)
+        : await api.bars(stock.code, nextPeriod, nextRange);
       if (sequence !== barsLoadSequence.current) return;
       setBars(history.items);
       setPerf(current => ({ ...current, frontendMs: performance.now() - started, httpMs: history.http_ms || 0, queryMs: history.timings.total_ms || 0, cache: Boolean(history.client_cache_hit || history.cache_hit) }));
-      const visibleBars = Math.min(history.items.length, rangeLimits[nextRange]?.[nextPeriod] || history.items.length);
+      const visibleBars = nextRange === "ALL"
+        ? history.items.length
+        : Math.min(history.items.length, rangeLimits[nextRange]?.[nextPeriod] || history.items.length);
       setStatus(`${history.client_cache_hit ? "前端缓存" : history.cache_hit ? "后端缓存" : "本地聚合"} · ${periodLabel(nextPeriod)} · ${visibleBars} 根可见 / ${history.items.length} 根已读`);
+      if (nextRange === "ALL") {
+        fullHistoryRequest.current = {
+          key: `${stock.code}:${nextPeriod}`,
+          sequence: historySequence,
+          loading: false,
+          complete: true,
+        };
+      } else {
+        void loadCompleteHistory(stock.code, nextPeriod, historySequence);
+      }
     } catch (e) {
       if (sequence !== barsLoadSequence.current) return;
       const message = e instanceof Error ? e.message : "周期切换失败";
@@ -388,7 +480,7 @@ export function MarketClient() {
     } finally {
       if (sequence === barsLoadSequence.current) setLoading(false);
     }
-  }, [period, range, stock]);
+  }, [loadCompleteHistory, period, range, stock]);
 
   function onSearch(value: string) {
     setQuery(value); setSearchOpen(Boolean(value.trim())); setActiveResult(0);
@@ -589,7 +681,9 @@ export function MarketClient() {
   const latest = bars.at(-1);
   const maLegend = useMemo(() => latest ? [latest.ma5, latest.ma10, latest.ma20] : [], [latest]);
   const watched = Boolean(stock && state.watchlist.some(item => item.code === stock.code));
-  const visibleCount = rangeLimits[range]?.[period] || 110;
+  const visibleCount = range === "ALL"
+    ? Math.max(1, bars.length)
+    : rangeLimits[range]?.[period] || 110;
   const visibleBars = bars.slice(-visibleCount);
   const paneIndexes = maximizedPane == null ? Array.from({ length: layout }, (_value, index) => index) : [maximizedPane];
   const activeTemplateStock = templatePool.find(item => item.code === (templatePendingCode || stock?.code)) || null;
@@ -671,7 +765,7 @@ export function MarketClient() {
             {drawings.length > 0 && <DrawingButton label="清除画线（全部）" active onClick={() => { setDrawings([]); setSelectedDrawing(null); setDrawingMode(null); }}><Trash2 /></DrawingButton>}
           </div>
         </div>
-        <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart key={`${stock?.code || "none"}-${period}-${range}-${index}`} ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} rightPaddingBars={10} enablePriceScaleMenu onResetDefault={() => void changeBars("D", "6M")} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} fibonacciLevels={drawingMode === "fibonacci-extension" ? fibonacciDefaults["fibonacci-extension"] : fibonacciDefaults.fibonacci} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onDrawingDoubleClick={openFibonacciSettings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
+        <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart key={`${stock?.code || "none"}-${period}-${range}-${index}`} ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} rightPaddingBars={10} onNeedMoreHistory={requestOlderHistory} enablePriceScaleMenu onResetDefault={() => void changeBars("D", "6M")} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} fibonacciLevels={drawingMode === "fibonacci-extension" ? fibonacciDefaults["fibonacci-extension"] : fibonacciDefaults.fibonacci} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onDrawingDoubleClick={openFibonacciSettings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
         <div className="range-toolbar">{ranges.map(([label, value]) => <button className={range === value ? "active" : ""} key={value} onClick={() => void changeBars(period, value)}>{label}</button>)}<b>{visibleBars[0]?.time || "—"} 至 {visibleBars.at(-1)?.time || "—"}　<CalendarDays /></b></div>
       </section>
     </main>

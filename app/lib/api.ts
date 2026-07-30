@@ -36,6 +36,33 @@ let templatesCache: TemplateDefinition[] | null = null;
 let templatesRequest: Promise<TemplateDefinition[]> | null = null;
 const industryStrengthCache = new Map<string, IndustryStrengthResponse>();
 const industryStrengthRequests = new Map<string, Promise<IndustryStrengthResponse>>();
+const MAX_BARS_CACHE_ENTRIES = 12;
+const MAX_CACHED_BARS = 30_000;
+const MAX_STOCK_CACHE_ENTRIES = 32;
+
+function lruGet<K, V>(cache: Map<K, V>, key: K): V | undefined {
+  const value = cache.get(key);
+  if (value === undefined) return undefined;
+  cache.delete(key);
+  cache.set(key, value);
+  return value;
+}
+
+function lruSet<K, V>(cache: Map<K, V>, key: K, value: V, maxEntries: number) {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > maxEntries) cache.delete(cache.keys().next().value!);
+}
+
+function cacheBars(key: string, response: BarsResponse) {
+  lruSet(barsCache, key, response, MAX_BARS_CACHE_ENTRIES);
+  let cachedBars = [...barsCache.values()].reduce((sum, item) => sum + item.items.length, 0);
+  while (cachedBars > MAX_CACHED_BARS && barsCache.size > 1) {
+    const oldest = barsCache.keys().next().value!;
+    cachedBars -= barsCache.get(oldest)?.items.length || 0;
+    barsCache.delete(oldest);
+  }
+}
 const frozenTemplateDescriptions: Record<string, string> = {
   fresh_breakout: "价格刚离开原有整理区，随后仍能站稳，重点看突破后的承接。",
   healthy_uptrend: "价格沿较平缓的方向逐步抬高，回撤有限，整体节奏较稳定。",
@@ -376,8 +403,9 @@ async function loadBars(
   query: URLSearchParams,
   force = false,
 ): Promise<BarsResponse> {
-  if (!force && barsCache.has(cacheKey)) {
-    return { ...barsCache.get(cacheKey)!, client_cache_hit: true, http_ms: 0 };
+  const cached = !force ? lruGet(barsCache, cacheKey) : undefined;
+  if (cached) {
+    return { ...cached, client_cache_hit: true, http_ms: 0 };
   }
   if (!force && barsRequests.has(cacheKey)) return barsRequests.get(cacheKey)!;
   const pending = request<BarsWireResponse>(`/bars/${encodeURIComponent(code)}?${query}`)
@@ -396,8 +424,7 @@ async function loadBars(
         history_start: historyRange.oldest_available ? String(historyRange.oldest_available) : null,
         history_end: historyRange.newest_available ? String(historyRange.newest_available) : null,
       };
-      barsCache.set(cacheKey, response);
-      while (barsCache.size > 48) barsCache.delete(barsCache.keys().next().value!);
+      cacheBars(cacheKey, response);
       return response;
     })
     .finally(() => barsRequests.delete(cacheKey));
@@ -429,12 +456,13 @@ export const api = {
   },
   stock: async (code: string, force = false) => {
     const key = symbolOf(code);
-    if (!force && stockCache.has(key)) return { item: stockCache.get(key)!, cacheHit: true, httpMs: 0 };
+    const cached = !force ? lruGet(stockCache, key) : undefined;
+    if (cached) return { item: cached, cacheHit: true, httpMs: 0 };
     if (!force && stockRequests.has(key)) return stockRequests.get(key)!;
     const pending = request<Raw>(`/stock/${encodeURIComponent(code)}`)
       .then(({ data, httpMs }) => {
         const item = mapStock(data);
-        stockCache.set(key, item);
+        lruSet(stockCache, key, item, MAX_STOCK_CACHE_ENTRIES);
         return { item, cacheHit: false, httpMs };
       })
       .finally(() => stockRequests.delete(key));
@@ -451,21 +479,25 @@ export const api = {
     const query = new URLSearchParams({ period: wirePeriod, adjust: "qfq", limit: String(requestLimit) });
     return loadBars(code, wirePeriod, requestLimit, key, query, force);
   },
-  barsAll: async (code: string, force = false): Promise<BarsResponse> => {
-    let page = await api.bars(code, "D", "ALL", force);
+  barsComplete: async (code: string, period = "D", force = false): Promise<BarsResponse> => {
+    const periodMap: Record<string, string> = { D: "1d", W: "1w", M: "1m", Q: "1q", Y: "1y" };
+    const wirePeriod = periodMap[period] || period;
+    const firstKey = `${symbolOf(code)}:${wirePeriod}:qfq:full:latest:10000`;
+    const firstQuery = new URLSearchParams({ period: wirePeriod, adjust: "qfq", limit: "10000" });
+    let page = await loadBars(code, wirePeriod, 10000, firstKey, firstQuery, force);
     const pages = [page];
     let cursor = page.items[0]?.trade_date || page.items[0]?.time || "";
     for (let pageIndex = 1; page.has_more && pageIndex < 32; pageIndex += 1) {
       if (!cursor) throw new Error("完整历史分页缺少起始日期");
       const end = previousCalendarDate(cursor);
-      const cacheKey = `${symbolOf(code)}:1d:qfq:before:${end}:10000`;
+      const cacheKey = `${symbolOf(code)}:${wirePeriod}:qfq:before:${end}:10000`;
       const query = new URLSearchParams({
-        period: "1d",
+        period: wirePeriod,
         adjust: "qfq",
         end,
         limit: "10000",
       });
-      const older = await loadBars(code, "1d", 10000, cacheKey, query, force);
+      const older = await loadBars(code, wirePeriod, 10000, cacheKey, query, force);
       const nextCursor = older.items[0]?.trade_date || older.items[0]?.time || "";
       if (!older.items.length || !nextCursor || nextCursor >= cursor) {
         throw new Error("完整历史分页没有继续向前推进");
@@ -499,6 +531,8 @@ export const api = {
       history_end: items.at(-1)?.trade_date || items.at(-1)?.time || null,
     };
   },
+  barsAll: async (code: string, force = false): Promise<BarsResponse> =>
+    api.barsComplete(code, "D", force),
   barsWindow: async (
     code: string,
     startDate: string,
@@ -564,8 +598,9 @@ export const api = {
     const query = new URLSearchParams({ pattern });
     if (endDate) query.set("end_date", endDate.replace(/-/g, ""));
     const key = query.toString();
-    if (!force && industryStrengthCache.has(key)) {
-      return { ...industryStrengthCache.get(key)!, client_cache_hit: true, http_ms: 0 };
+    const cached = !force ? lruGet(industryStrengthCache, key) : undefined;
+    if (cached) {
+      return { ...cached, client_cache_hit: true, http_ms: 0 };
     }
     if (!force && industryStrengthRequests.has(key)) {
       return industryStrengthRequests.get(key)!;
@@ -573,10 +608,7 @@ export const api = {
     const pending = request<IndustryStrengthResponse>(`/industry-strength?${query}`)
       .then(({ data, httpMs }) => {
         const result = { ...data, client_cache_hit: false, http_ms: httpMs };
-        industryStrengthCache.set(key, result);
-        while (industryStrengthCache.size > 8) {
-          industryStrengthCache.delete(industryStrengthCache.keys().next().value!);
-        }
+        lruSet(industryStrengthCache, key, result, 2);
         return result;
       })
       .finally(() => industryStrengthRequests.delete(key));

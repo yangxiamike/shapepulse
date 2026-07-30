@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 from zer0share.api import LocalPro
 
+from .cache import BoundedTTLCache
+
 
 TABLE_PATHS = {
     "daily_kline": ("stock", "daily_kline"),
@@ -75,7 +77,23 @@ class LocalMarketRepository:
         self._lock = threading.RLock()
         self._query_lock = threading.RLock()
         self._duck = duckdb.connect()
-        self._cache: dict[str, tuple[object, Any]] = {}
+        # DuckDB otherwise sizes its worker and buffer pools for the host machine,
+        # which is too aggressive when this app is deployed on a 2 GB PC.
+        self._duck.execute("SET threads=2")
+        self._duck.execute("SET memory_limit='512MB'")
+        self._duck.execute("SET preserve_insertion_order=false")
+        # Metadata and all-market snapshots are few but may be large. Stock-specific
+        # frames and serialized bars are isolated so browsing many symbols cannot
+        # crowd out stable reference data or grow without bound.
+        self._cache: BoundedTTLCache[str, tuple[object, Any]] = BoundedTTLCache(
+            32, 30 * 60
+        )
+        self._stock_frame_cache: BoundedTTLCache[
+            str, tuple[object, pd.DataFrame]
+        ] = BoundedTTLCache(8, 10 * 60)
+        self._bars_cache: BoundedTTLCache[
+            str, tuple[object, dict[str, Any]]
+        ] = BoundedTTLCache(8, 10 * 60)
 
     def _read_data_dir(self) -> Path:
         with self.config_path.open("rb") as handle:
@@ -264,8 +282,20 @@ class LocalMarketRepository:
             lambda: pd.read_parquet(path),
         )
 
-    def recent_daily(self, start_date: str, end_date: str) -> pd.DataFrame:
+    def recent_daily(
+        self, start_date: str, end_date: str, *, cache: bool = True
+    ) -> pd.DataFrame:
         token = (start_date, end_date, self.latest_partition("daily_kline"))
+        if not cache:
+            with self._query_lock:
+                return self.pro.daily(
+                    start_date=start_date,
+                    end_date=end_date,
+                    fields=(
+                        "ts_code,trade_date,open,high,low,close,pre_close,"
+                        "pct_chg,vol,amount"
+                    ),
+                )
         return self._cached(
             "recent_daily",
             token,
@@ -382,8 +412,11 @@ class LocalMarketRepository:
         latest_adj = self.latest_partition("adj_factor")
         token = (latest_daily, latest_adj)
         key = f"daily-source:{code}:{start_date}:{end_date}:{include_factors}:{limit}"
+        # A complete stock history is serialized immediately by bars(). Keeping
+        # the same history as a DataFrame as well would nearly double its residency.
+        cache_frame = limit is not None and limit < 1_000
         with self._lock:
-            hit = self._cache.get(key)
+            hit = self._stock_frame_cache.get(key) if cache_frame else None
             if hit is not None and hit[0] == token:
                 return hit[1].copy()
         query_start = start_date
@@ -432,8 +465,9 @@ class LocalMarketRepository:
             sql += " ORDER BY d.trade_date"
         with self._query_lock:
             frame = self._duck.execute(sql, params).fetchdf()
-        with self._lock:
-            self._cache[key] = (token, frame.copy())
+        if cache_frame:
+            with self._lock:
+                self._stock_frame_cache[key] = (token, frame.copy())
         return frame
 
     def bar_bounds(self, code: str) -> tuple[str | None, str | None]:
@@ -627,7 +661,7 @@ class LocalMarketRepository:
         token = (latest_daily, adj_as_of)
         cache_key = f"bars:{code}:{start_date}:{effective_end}:{adjust}:{period}:{limit}"
         with self._lock:
-            hit = self._cache.get(cache_key)
+            hit = self._bars_cache.get(cache_key)
             if hit is not None and hit[0] == token:
                 payload = copy.deepcopy(hit[1])
                 payload["cache_hit"] = True
@@ -765,8 +799,16 @@ class LocalMarketRepository:
             },
         }
         with self._lock:
-            self._cache[cache_key] = (token, copy.deepcopy(payload))
+            self._bars_cache[cache_key] = (token, copy.deepcopy(payload))
         return payload
+
+    def cache_info(self) -> dict[str, dict[str, int | float]]:
+        with self._lock:
+            return {
+                "metadata": self._cache.info(),
+                "stock_frames": self._stock_frame_cache.info(),
+                "bars": self._bars_cache.info(),
+            }
 
     @staticmethod
     def _resample(frame: pd.DataFrame, period: str) -> pd.DataFrame:

@@ -677,6 +677,18 @@ export const MarketChart = forwardRef<MarketChartHandle, Props>(function MarketC
         container.dataset.visibleFrom = range.from.toFixed(3);
         container.dataset.visibleTo = range.to.toFixed(3);
         const latestIndex = previousTimeline.current.length - 1;
+        const visibleFirstIndex = Math.max(
+          0,
+          Math.min(latestIndex, Math.ceil(range.from)),
+        );
+        const visibleLastIndex = Math.max(
+          0,
+          Math.min(latestIndex, Math.floor(range.to)),
+        );
+        container.dataset.visibleFirstTime =
+          previousTimeline.current[visibleFirstIndex] || "";
+        container.dataset.visibleLastTime =
+          previousTimeline.current[visibleLastIndex] || "";
         container.dataset.visibleRightPadding = latestIndex >= 0 ? (range.to - latestIndex).toFixed(3) : "0";
         const latestX = latestIndex >= 0 ? chart.timeScale().logicalToCoordinate(latestIndex as Logical) : null;
         if (latestX != null) container.dataset.latestBarRightGap = (container.clientWidth - latestX).toFixed(1);

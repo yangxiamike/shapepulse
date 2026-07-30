@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from .config import Settings, load_settings, load_thresholds
+from .cache import BoundedTTLCache
 from .industry_strength import (
     LOOKBACK_TRADING_DAYS,
     SAMPLE_COUNT,
@@ -57,12 +58,23 @@ class MarketService:
         self._similarity_score_cache: dict[tuple, pd.DataFrame] = {}
         self._similarity_lock = threading.RLock()
         self._screen_lock = threading.RLock()
-        self._screen_cache: dict[tuple, dict[str, Any]] = {}
+        self._screen_cache: BoundedTTLCache[
+            tuple, dict[str, Any]
+        ] = BoundedTTLCache(2, 10 * 60)
         self._completed_screens: dict[str, dict[str, Any]] = {}
-        self._industry_strength_cache: dict[tuple, dict[str, Any]] = {}
-        self._industry_strength_input_cache: dict[tuple, dict[str, Any]] = {}
+        self._industry_strength_cache: BoundedTTLCache[
+            tuple, dict[str, Any]
+        ] = BoundedTTLCache(2, 10 * 60)
+        # The prepared input contains large NumPy arrays for the whole board.
+        # A 2 GB machine should never retain multiple historical cutoffs.
+        self._industry_strength_input_cache: BoundedTTLCache[
+            tuple, dict[str, Any]
+        ] = BoundedTTLCache(1, 10 * 60)
         self._industry_strength_inflight: dict[tuple, threading.Event] = {}
         self._industry_strength_lock = threading.RLock()
+        # Full-market screening and industry strength both build large temporary
+        # frames. Serializing them prevents two peaks from overlapping.
+        self._heavy_compute_lock = threading.Lock()
 
     def health(self) -> dict[str, Any]:
         payload = self.repository.health()
@@ -772,18 +784,23 @@ class MarketService:
             return self.industry_strength(pattern, requested)
 
         try:
-            payload = self._calculate_industry_strength(
-                pattern=pattern,
-                requested=requested,
-                cutoff=cutoff,
-                snapshots=snapshots,
-                source_token=source_token,
-                request_started=request_started,
-            )
+            heavy_lock = getattr(self, "_heavy_compute_lock", None)
+            if heavy_lock is None:
+                heavy_lock = threading.Lock()
+                self._heavy_compute_lock = heavy_lock
+            with heavy_lock:
+                payload = self._calculate_industry_strength(
+                    pattern=pattern,
+                    requested=requested,
+                    cutoff=cutoff,
+                    snapshots=snapshots,
+                    source_token=source_token,
+                    request_started=request_started,
+                )
             with lock:
                 cache = getattr(self, "_industry_strength_cache", {})
                 cache[cache_key] = copy.deepcopy(payload)
-                while len(cache) > 6:
+                while len(cache) > 2:
                     cache.pop(next(iter(cache)))
                 self._industry_strength_cache = cache
             return payload
@@ -843,7 +860,9 @@ class MarketService:
         if not sample_dates:
             raise ValueError("截止日期之前没有足够的真实交易日")
         query_start = trade_dates[0]
-        daily = self.repository.recent_daily(query_start, sample_dates[-1])
+        daily = self.repository.recent_daily(
+            query_start, sample_dates[-1], cache=False
+        )
         securities = self.repository.security_history().copy()
         industry_history = self.repository.industry_history().copy()
         st_history = self.repository.st_history(sample_dates[0], sample_dates[-1])
@@ -935,7 +954,7 @@ class MarketService:
         with lock:
             cache = getattr(self, "_industry_strength_input_cache", {})
             cache[cache_key] = prepared
-            while len(cache) > 3:
+            while len(cache) > 1:
                 cache.pop(next(iter(cache)))
             self._industry_strength_input_cache = cache
         return prepared
@@ -1004,7 +1023,7 @@ class MarketService:
 
         scoring_started = time.perf_counter()
         with ThreadPoolExecutor(
-            max_workers=4, thread_name_prefix="industry-strength"
+            max_workers=2, thread_name_prefix="industry-strength"
         ) as pool:
             for stock_matches in pool.map(score_code, grouped, chunksize=8):
                 for date, item in stock_matches:
@@ -1155,9 +1174,14 @@ class MarketService:
         with self._screen_lock:
             cached = self._screen_cache.get(cache_key)
         if cached is None:
-            payload = self._run_screen(filters, snapshots, notify)
+            heavy_lock = getattr(self, "_heavy_compute_lock", None)
+            if heavy_lock is None:
+                heavy_lock = threading.Lock()
+                self._heavy_compute_lock = heavy_lock
+            with heavy_lock:
+                payload = self._run_screen(filters, snapshots, notify)
             with self._screen_lock:
-                if len(self._screen_cache) >= 8:
+                if len(self._screen_cache) >= 2:
                     self._screen_cache.pop(next(iter(self._screen_cache)))
                 self._screen_cache[cache_key] = copy.deepcopy(payload)
         else:
@@ -1206,11 +1230,11 @@ class MarketService:
             expired = [
                 token
                 for token, item in self._completed_screens.items()
-                if now - float(item["created_monotonic"]) > 15 * 60
+                if now - float(item["created_monotonic"]) > 10 * 60
             ]
             for token in expired:
                 self._completed_screens.pop(token, None)
-            while len(self._completed_screens) >= 32:
+            while len(self._completed_screens) >= 8:
                 self._completed_screens.pop(next(iter(self._completed_screens)))
             self._completed_screens[screen_token] = {
                 "created_monotonic": now,
@@ -1308,7 +1332,7 @@ class MarketService:
             raise FileNotFoundError("daily_kline and daily_basic are required for screening")
         reference_started = time.perf_counter()
         progress("读取股票、估值和 ST 快照", 0, 3)
-        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="market-ref") as pool:
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="market-ref") as pool:
             basic_future = pool.submit(self.repository.basic)
             valuation_future = pool.submit(self.repository.daily_basic_snapshot)
             st_future = pool.submit(self.repository.st_snapshot)
@@ -1341,7 +1365,9 @@ class MarketService:
         start = (end - timedelta(days=220)).strftime("%Y%m%d")
         query_started = time.perf_counter()
         progress("读取近 220 天本地日线", 0, 1)
-        recent = self.repository.recent_daily(start, snapshots.daily_kline)
+        recent = self.repository.recent_daily(
+            start, snapshots.daily_kline, cache=False
+        )
         recent = recent[recent["ts_code"].isin(set(eligible["ts_code"]))]
         recent = recent.sort_values(["ts_code", "trade_date"])
         daily_query_ms = (time.perf_counter() - query_started) * 1000
@@ -1552,7 +1578,7 @@ class MarketService:
                 entry = self._completed_screens.get(token)
                 if entry is not None and time.monotonic() - float(
                     entry["created_monotonic"]
-                ) > 15 * 60:
+                ) > 10 * 60:
                     self._completed_screens.pop(token, None)
                     entry = None
             if entry is None and fallback_filters is None:

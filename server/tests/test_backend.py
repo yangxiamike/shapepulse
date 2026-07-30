@@ -3,12 +3,14 @@ from __future__ import annotations
 import tempfile
 import threading
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 
+from server.cache import BoundedTTLCache
 from server.config import PROJECT_ROOT, load_settings, load_thresholds
 from server.industry_strength import (
     build_industry_strength,
@@ -152,6 +154,95 @@ class AggregationTests(unittest.TestCase):
         self.assertGreaterEqual(row["high"], max(row["open"], row["close"]))
         self.assertLessEqual(row["low"], min(row["open"], row["close"]))
         self.assertGreaterEqual(row["vol"], 0)
+
+
+class CacheAndHistoryTests(unittest.TestCase):
+    def test_bounded_cache_uses_lru_and_ttl(self):
+        now = [100.0]
+        cache = BoundedTTLCache(2, 10, clock=lambda: now[0])
+        cache["a"] = 1
+        cache["b"] = 2
+        self.assertEqual(cache.get("a"), 1)
+        cache["c"] = 3
+        self.assertNotIn("b", cache)
+        self.assertEqual(list(cache), ["a", "c"])
+        now[0] = 111.0
+        self.assertEqual(len(cache), 0)
+        self.assertEqual(cache.info()["evictions"], 1)
+        self.assertEqual(cache.info()["expirations"], 2)
+
+    def test_repository_cache_reloads_when_snapshot_token_changes(self):
+        repository = LocalMarketRepository.__new__(LocalMarketRepository)
+        repository._lock = threading.RLock()
+        repository._cache = BoundedTTLCache(2, 60)
+        calls: list[str] = []
+
+        first = repository._cached("daily", "20260729", lambda: calls.append("old") or 1)
+        repeat = repository._cached("daily", "20260729", lambda: calls.append("repeat") or 2)
+        refreshed = repository._cached("daily", "20260730", lambda: calls.append("new") or 3)
+
+        self.assertEqual((first, repeat, refreshed), (1, 1, 3))
+        self.assertEqual(calls, ["old", "new"])
+
+    def test_bar_pages_merge_to_complete_history_without_duplicates(self):
+        repository = LocalMarketRepository.__new__(LocalMarketRepository)
+        repository._lock = threading.RLock()
+        repository._cache = BoundedTTLCache(8, 60)
+        repository._stock_frame_cache = BoundedTTLCache(2, 60)
+        repository._bars_cache = BoundedTTLCache(3, 60)
+        dates = ["20260102", "20260105", "20260106", "20260107", "20260108"]
+        source = pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ"] * len(dates),
+                "trade_date": dates,
+                "open": np.arange(10.0, 15.0),
+                "high": np.arange(10.5, 15.5),
+                "low": np.arange(9.5, 14.5),
+                "close": np.arange(10.2, 15.2),
+                "pre_close": np.arange(10.0, 15.0),
+                "vol": np.arange(100.0, 105.0),
+                "amount": np.arange(1000.0, 1005.0),
+                "adj_factor": np.ones(len(dates)),
+            }
+        )
+        repository.resolve_code = lambda _raw: "000001.SZ"
+        repository.latest_partition = lambda table: "20260108"
+        repository.bar_bounds = lambda _code: (dates[0], dates[-1])
+        repository._latest_factor = lambda _code, _end: 1.0
+
+        def daily(_code, start, end, _factors, limit):
+            frame = source
+            if start:
+                frame = frame[frame["trade_date"].ge(start)]
+            if end:
+                frame = frame[frame["trade_date"].le(end)]
+            return frame.tail(limit).copy() if limit is not None else frame.copy()
+
+        repository._daily_with_factors = daily
+        pages: list[dict] = []
+        end = None
+        while True:
+            page = repository.bars("000001", None, end, "qfq", "1d", 2)
+            self.assertIsNotNone(page)
+            pages.append(page)
+            if not page["range"]["has_more_before"]:
+                break
+            first_date = datetime.strptime(page["bars"][0]["trade_date"], "%Y%m%d")
+            end = (first_date - timedelta(days=1)).strftime("%Y%m%d")
+
+        merged = {
+            item["trade_date"]: item
+            for page in pages
+            for item in page["bars"]
+        }
+        self.assertEqual(sorted(merged), dates)
+        self.assertEqual(sum(len(page["bars"]) for page in pages), len(dates))
+
+        complete = repository.bars("000001", None, None, "qfq", "1d", 10_000)
+        self.assertEqual([item["trade_date"] for item in complete["bars"]], dates)
+        self.assertFalse(complete["range"]["has_more_before"])
+        self.assertEqual(complete["range"]["oldest_available"], dates[0])
+        self.assertLessEqual(len(repository._bars_cache), 3)
 
 
 class IndustryStrengthTests(unittest.TestCase):
@@ -514,6 +605,21 @@ class ScreenTokenTests(unittest.TestCase):
         detail = self.service.saved_snapshot(first["history_run_id"])
         self.assertEqual(detail["results"][0]["score"], 88.8)
         self.assertEqual(self.service.saved_snapshots()["total"], 1)
+
+    def test_completed_screen_tokens_are_bounded(self):
+        payload = {
+            "as_of": {"daily": "20260716"},
+            "filters": {"mode": "combined", "top_k": 1},
+            "results": [],
+            "categories": {category: [] for category in ("breakout", "pullback", "range_bounce")},
+            "counts": {"by_category": {}},
+            "warnings": [],
+        }
+        for index in range(12):
+            self.service._remember_completed_screen(f"token-{index}", payload, [])
+        self.assertEqual(len(self.service._completed_screens), 8)
+        self.assertNotIn("token-0", self.service._completed_screens)
+        self.assertIn("token-11", self.service._completed_screens)
 
 
 class StateStoreTests(unittest.TestCase):

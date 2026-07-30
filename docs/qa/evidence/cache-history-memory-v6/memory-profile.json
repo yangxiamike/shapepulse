@@ -1,0 +1,67 @@
+{
+  "environment": {
+    "date": "2026-07-30",
+    "source": "local zer0share only",
+    "process": "one MarketService process",
+    "metric": "Windows process working set (RSS)"
+  },
+  "baseline_v5": {
+    "commit": "6fb928d1bb423c151a2ab413a65409678df38612",
+    "history_limit": 170,
+    "screen": {"rss_mb": 247.2, "peak_rss_mb": 638.3},
+    "view_40": {
+      "rss_mb": 366.9,
+      "peak_rss_mb": 638.3,
+      "repository_entries": 88,
+      "bars_entries": 40,
+      "daily_source_entries": 40
+    },
+    "industry_strength": {
+      "rss_mb": 754.6,
+      "peak_rss_mb": 1123.0,
+      "repository_entries": 92,
+      "industry_input_entries": 1
+    }
+  },
+  "optimized_v6_same_170_bar_workload": {
+    "history_limit": 170,
+    "screen": {"rss_mb": 198.6, "peak_rss_mb": 639.4},
+    "view_40": {
+      "rss_mb": 329.7,
+      "peak_rss_mb": 639.4,
+      "metadata_entries": 7,
+      "stock_frame_entries": 8,
+      "bars_entries": 8,
+      "bars_evictions": 32
+    },
+    "industry_strength": {
+      "rss_mb": 650.7,
+      "peak_rss_mb": 1069.8,
+      "industry_input_entries": 1
+    }
+  },
+  "optimized_v6_complete_history_workload": {
+    "history_limit": 10000,
+    "duckdb": {
+      "threads": 2,
+      "memory_limit": "512MB",
+      "preserve_insertion_order": false
+    },
+    "view_20": {"rss_mb": 729.1, "peak_rss_mb": 729.6, "bars_entries": 8},
+    "view_30": {"rss_mb": 730.6, "peak_rss_mb": 730.7, "bars_entries": 8},
+    "view_40": {
+      "rss_mb": 732.2,
+      "peak_rss_mb": 732.8,
+      "metadata_entries": 32,
+      "stock_frame_entries": 0,
+      "bars_entries": 8,
+      "bars_evictions": 32
+    },
+    "industry_strength": {
+      "rss_mb": 970.3,
+      "peak_rss_mb": 1429.5,
+      "bars_entries": 8,
+      "industry_input_entries": 1
+    }
+  }
+}
