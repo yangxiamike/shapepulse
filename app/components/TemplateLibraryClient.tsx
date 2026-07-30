@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRight,
   Edit3,
@@ -12,7 +12,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { TemplateDefinition, TemplateStock } from "../lib/types";
+import type { Bar, TemplateDefinition, TemplateStock } from "../lib/types";
 import { AppSidebar } from "./AppSidebar";
 import { CandlestickPreview } from "./CandlestickPreview";
 import styles from "./TemplateLibraryClient.module.css";
@@ -31,24 +31,51 @@ export function TemplateLibraryClient() {
   const [editingName, setEditingName] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [rankingLoading, setRankingLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [rankingError, setRankingError] = useState("");
+  const detailSequence = useRef(0);
 
   const loadDetail = useCallback(async (id: string) => {
+    const sequence = ++detailSequence.current;
     setSelectedId(id);
+    setSelected(null);
+    setStocks([]);
+    setTotal(0);
     setDetailLoading(true);
+    setRankingLoading(true);
     setError("");
-    try {
-      const [detail, ranked] = await Promise.all([api.template(id), api.templateStocks(id, 100)]);
-      setSelected(detail);
-      setEditingName(detail.name);
-      setStocks(ranked.items);
-      setTotal(ranked.total);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "模板详情读取失败");
-    } finally {
-      setDetailLoading(false);
-    }
+    setRankingError("");
+    const detailTask = api.template(id)
+      .then(detail => {
+        if (sequence !== detailSequence.current) return;
+        setSelected(detail);
+        setEditingName(detail.name);
+      })
+      .catch(reason => {
+        if (sequence === detailSequence.current) {
+          setError(reason instanceof Error ? reason.message : "模板真实 K 线读取失败");
+        }
+      })
+      .finally(() => {
+        if (sequence === detailSequence.current) setDetailLoading(false);
+      });
+    const rankingTask = api.templateStocks(id, 100)
+      .then(ranked => {
+        if (sequence !== detailSequence.current) return;
+        setStocks(ranked.items);
+        setTotal(ranked.total);
+      })
+      .catch(reason => {
+        if (sequence === detailSequence.current) {
+          setRankingError(reason instanceof Error ? reason.message : "Top100 排名读取失败");
+        }
+      })
+      .finally(() => {
+        if (sequence === detailSequence.current) setRankingLoading(false);
+      });
+    await Promise.allSettled([detailTask, rankingTask]);
   }, []);
 
   const load = useCallback(async () => {
@@ -59,7 +86,7 @@ export function TemplateLibraryClient() {
       setTemplates(items);
       const query = typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("template") || "";
       const first = items.find(item => item.id === query)?.id || items[0]?.id || "";
-      if (first) await loadDetail(first);
+      if (first) void loadDetail(first);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "模板库读取失败");
     } finally {
@@ -125,7 +152,7 @@ export function TemplateLibraryClient() {
             </aside>
 
             <section className={styles.detailCard}>
-              {detailLoading ? <StateCard title="正在分析模板" text="正在读取真实窗口与同模板 Top 股票。" /> :
+              {detailLoading && !selected ? <StateCard title="正在读取模板 K 线" text="排名和缩略图不会阻塞这张主图。" /> :
                 selected ? <>
                   <div className={styles.detailHead}>
                     <div>
@@ -158,8 +185,8 @@ export function TemplateLibraryClient() {
 
                   <section className={styles.stockSection}>
                     <div className={styles.stockHead}>
-                      <div><span>本模板内独立排名</span><h3>Top 股票</h3></div>
-                      <small>整行可进入行情页，并保留模板与列表上下文。</small>
+                      <div><span>本模板内独立排名</span><h3>Top100 股票</h3></div>
+                      <small>{rankingLoading ? "正在读取预计算排名…" : rankingError ? rankingError : "排名已就绪 · 缩略图按可见行加载"}</small>
                     </div>
                     <div className={styles.stockTable}>
                       {stocks.map(item => (
@@ -167,11 +194,12 @@ export function TemplateLibraryClient() {
                           <b>{item.rank}</b>
                           <span><strong>{item.name}</strong><small>{item.code} · {item.industry || "行业待补"}</small></span>
                           <span className={styles.window}><strong>{item.score.toFixed(3)}</strong><small>{formatDate(item.start_date)} → {formatDate(item.end_date)}</small></span>
-                          <CandlestickPreview className={styles.miniCandle} bars={item.bars} height={56} label={`${item.name}候选窗口真实前复权 K 线`} />
+                          <LazyCandidatePreview item={item} />
                           <ChevronRight aria-hidden="true" />
                         </Link>
                       ))}
-                      {!stocks.length ? <p>这个模板暂时没有可展示的候选股票。</p> : null}
+                      {rankingLoading ? <p className={styles.rankingState}>正在加载 Top100 排名，主模板 K 线可先查看。</p> : null}
+                      {!rankingLoading && !stocks.length ? <p>这个模板暂时没有可展示的候选股票。</p> : null}
                     </div>
                   </section>
                 </> : <StateCard title="请选择模板" text="从左侧选择冻结模板或自定义模板。" />}
@@ -180,6 +208,52 @@ export function TemplateLibraryClient() {
       </main>
     </div>
   );
+}
+
+function LazyCandidatePreview({ item }: { item: TemplateStock }) {
+  const host = useRef<HTMLDivElement>(null);
+  const [bars, setBars] = useState<Bar[]>(item.bars || []);
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "error">(item.bars?.length ? "ready" : "idle");
+
+  useEffect(() => {
+    if (bars.length || !item.start_date || !item.end_date) return;
+    const element = host.current;
+    if (!element) return;
+    let active = true;
+    const load = () => {
+      if (!active) return;
+      setState("loading");
+      void api.barsWindow(item.code, item.start_date!, item.end_date!, item.window_length || 240)
+        .then(result => {
+          if (!active) return;
+          setBars(result.items);
+          setState("ready");
+        })
+        .catch(() => {
+          if (active) setState("error");
+        });
+    };
+    if (!("IntersectionObserver" in window)) {
+      load();
+      return () => { active = false; };
+    }
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      observer.disconnect();
+      load();
+    }, { rootMargin: "240px 0px" });
+    observer.observe(element);
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [bars.length, item.code, item.end_date, item.start_date, item.window_length]);
+
+  return <div ref={host} className={styles.thumbnailCell} data-thumbnail-state={state}>
+    {bars.length
+      ? <CandlestickPreview className={styles.miniCandle} bars={bars} height={56} label={`${item.name}候选窗口真实前复权 K 线`} />
+      : <span>{state === "loading" ? "加载缩略图…" : state === "error" ? "缩略图稍后重试" : "滚动到此处加载缩略图"}</span>}
+  </div>;
 }
 
 function TemplateGroup({ title, note, items, selectedId, onSelect, empty }: {

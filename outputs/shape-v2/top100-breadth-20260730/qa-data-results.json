@@ -1,0 +1,85 @@
+{
+  "pass": true,
+  "asOf": "20260729",
+  "topK": 100,
+  "defaultChangeWindow": 10,
+  "comparisonTradingDays": [
+    10,
+    20
+  ],
+  "initialPayloadBytes": 60564,
+  "initialPayloadHasStockLists": false,
+  "initialPayloadHasKlineBars": false,
+  "templates": [
+    {
+      "template": "fresh_breakout",
+      "dates": 80,
+      "latestEligible": 5496,
+      "latestTop100": 100,
+      "industryCount": 31,
+      "otherTop100Count": 20,
+      "otherIndustryCount": 13,
+      "comparisonIdentities": {
+        "10": true,
+        "20": true
+      },
+      "detailBytes": 381109,
+      "rankingBytes": 17903
+    },
+    {
+      "template": "healthy_uptrend",
+      "dates": 80,
+      "latestEligible": 5471,
+      "latestTop100": 100,
+      "industryCount": 31,
+      "otherTop100Count": 14,
+      "otherIndustryCount": 12,
+      "comparisonIdentities": {
+        "10": true,
+        "20": true
+      },
+      "detailBytes": 347878,
+      "rankingBytes": 17701
+    },
+    {
+      "template": "pullback_strengthening",
+      "dates": 80,
+      "latestEligible": 5492,
+      "latestTop100": 100,
+      "industryCount": 31,
+      "otherTop100Count": 16,
+      "otherIndustryCount": 13,
+      "comparisonIdentities": {
+        "10": true,
+        "20": true
+      },
+      "detailBytes": 370811,
+      "rankingBytes": 17792
+    },
+    {
+      "template": "parabolic_uptrend",
+      "dates": 80,
+      "latestEligible": 5471,
+      "latestTop100": 100,
+      "industryCount": 31,
+      "otherTop100Count": 22,
+      "otherIndustryCount": 15,
+      "comparisonIdentities": {
+        "10": true,
+        "20": true
+      },
+      "detailBytes": 375228,
+      "rankingBytes": 17741
+    }
+  ],
+  "leakageAudit": {
+    "dataSource": "C:\\Users\\hp\\Documents\\zer0share",
+    "networkUsed": false,
+    "sealedFinalRead": false,
+    "futureReturnUsed": false,
+    "icUsed": false,
+    "strategyPerformanceUsed": false,
+    "algorithm": "前复权 log-close；窗口内独立 z；单窗口 Pearson",
+    "crossTemplateRankingUsed": false
+  }
+}

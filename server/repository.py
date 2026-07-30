@@ -6,6 +6,7 @@ import threading
 import time
 import tomllib
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -110,6 +111,33 @@ class LocalMarketRepository:
         with self._lock:
             self._cache[key] = (token, value)
         return value
+
+    def _partition_files(
+        self,
+        table: str,
+        start_date: str | None,
+        end_date: str | None,
+        latest: str | None,
+    ) -> list[str]:
+        table_dir = self.data_dir.joinpath(*TABLE_PATHS[table])
+        token = (latest, table_dir.stat().st_mtime_ns)
+
+        def load() -> tuple[tuple[str, str], ...]:
+            files: list[tuple[str, str]] = []
+            for partition in table_dir.glob("date=*"):
+                value = partition.name.partition("=")[2]
+                file = partition / "data.parquet"
+                if len(value) == 8 and value.isdigit() and file.is_file():
+                    files.append((value, str(file)))
+            return tuple(sorted(files))
+
+        available = self._cached(f"partition-files:{table}", token, load)
+        return [
+            path
+            for value, path in available
+            if (start_date is None or value >= start_date)
+            and (end_date is None or value <= end_date)
+        ]
 
     def basic(self) -> pd.DataFrame:
         path = self.data_dir / "stock" / "basic" / "data.parquet"
@@ -358,18 +386,27 @@ class LocalMarketRepository:
             hit = self._cache.get(key)
             if hit is not None and hit[0] == token:
                 return hit[1].copy()
-        daily_source = str(
-            self.data_dir / "stock" / "daily_kline" / "date=*" / "data.parquet"
+        query_start = start_date
+        if query_start is None and limit is not None:
+            range_end = datetime.strptime(end_date or latest_daily, "%Y%m%d")
+            calendar_days = max(45, int(limit * 1.8) + 30)
+            query_start = (range_end - timedelta(days=calendar_days)).strftime("%Y%m%d")
+        daily_source = self._partition_files(
+            "daily_kline", query_start, end_date, latest_daily
         )
+        if not daily_source:
+            return pd.DataFrame()
         columns = (
             "d.ts_code,d.trade_date,d.open,d.high,d.low,d.close,"
             "d.pre_close,d.vol,d.amount"
         )
         params: list[object] = [daily_source]
         if include_factors:
-            adj_source = str(
-                self.data_dir / "stock" / "adj_factor" / "date=*" / "data.parquet"
+            adj_source = self._partition_files(
+                "adj_factor", query_start, end_date, latest_adj
             )
+            if not adj_source:
+                return pd.DataFrame()
             sql = (
                 f"SELECT {columns},a.adj_factor "
                 "FROM read_parquet(?, hive_partitioning=true) d "
@@ -381,9 +418,9 @@ class LocalMarketRepository:
             sql = f"SELECT {columns} FROM read_parquet(?, hive_partitioning=true) d "
         where = ["d.ts_code=?"]
         params.append(code)
-        if start_date is not None:
+        if query_start is not None:
             where.append("d.trade_date>=?")
-            params.append(start_date)
+            params.append(query_start)
         if end_date is not None:
             where.append("d.trade_date<=?")
             params.append(end_date)
@@ -576,7 +613,16 @@ class LocalMarketRepository:
         if latest_daily is None:
             raise FileNotFoundError("daily_kline data not found")
         effective_end = min(end_date or latest_daily, latest_daily)
-        oldest_available, newest_available = self.bar_bounds(code)
+        # Exact full-history bounds require a scan across every daily partition.
+        # The common latest-tail view and bounded thumbnail windows do not need it.
+        needs_exact_bounds = bool(
+            (start_date is not None and end_date is None)
+            or limit is None
+            or (limit is not None and limit >= 10_000)
+        )
+        oldest_available, newest_available = (
+            self.bar_bounds(code) if needs_exact_bounds else (None, None)
+        )
         adj_as_of = self.latest_partition("adj_factor")
         token = (latest_daily, adj_as_of)
         cache_key = f"bars:{code}:{start_date}:{effective_end}:{adjust}:{period}:{limit}"
@@ -594,12 +640,23 @@ class LocalMarketRepository:
                 }
                 return payload
         query_started = time.perf_counter()
+        source_limit = limit
+        if limit is not None and period != "1d":
+            # Limit the source daily rows as well. Previously every weekly/monthly
+            # request read the stock's full history before returning a tiny view.
+            source_multiplier = {
+                "1w": 8,
+                "1m": 35,
+                "1q": 100,
+                "1y": 380,
+            }[period]
+            source_limit = min(100_000, limit * source_multiplier + source_multiplier)
         daily = self._daily_with_factors(
             code,
             start_date,
             effective_end,
             adjust in {"qfq", "hfq"},
-            limit if period == "1d" else None,
+            source_limit,
         )
         daily = self._normalize_daily(daily)
         query_ms = (time.perf_counter() - query_started) * 1000
@@ -623,7 +680,14 @@ class LocalMarketRepository:
                 if adjust == "qfq":
                     # Every segment uses the same latest local factor. Otherwise an
                     # older page would jump vertically when prepended to the chart.
-                    anchor = self._latest_factor(code, latest_daily)
+                    latest_row_date = str(daily["trade_date"].iloc[-1])
+                    anchor = (
+                        float(daily["adj_factor"].iloc[-1])
+                        if effective_end == latest_daily
+                        and latest_row_date == latest_daily
+                        and pd.notna(daily["adj_factor"].iloc[-1])
+                        else self._latest_factor(code, latest_daily)
+                    )
                     if not anchor:
                         anchor = float(daily["adj_factor"].iloc[-1])
                     multiplier = daily["adj_factor"] / anchor
@@ -661,6 +725,16 @@ class LocalMarketRepository:
                 }
             )
         serialize_ms = (time.perf_counter() - serialize_started) * 1000
+        if not needs_exact_bounds and records:
+            newest_available = records[-1]["trade_date"]
+        has_more_before = bool(
+            records
+            and (
+                records[0]["trade_date"] > oldest_available
+                if oldest_available
+                else start_date is None and limit is not None and len(records) >= limit
+            )
+        )
         payload = {
             "code": code,
             "period": period,
@@ -675,9 +749,7 @@ class LocalMarketRepository:
                 "returned_end": None if not records else records[-1]["trade_date"],
                 "oldest_available": oldest_available,
                 "newest_available": newest_available,
-                "has_more_before": bool(
-                    records and oldest_available and records[0]["trade_date"] > oldest_available
-                ),
+                "has_more_before": has_more_before,
                 "has_more_after": bool(
                     records and newest_available and records[-1]["trade_date"] < newest_available
                 ),

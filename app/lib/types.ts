@@ -380,6 +380,7 @@ export type TemplateStock = {
   score: number;
   start_date?: string | null;
   end_date?: string | null;
+  window_length?: number;
   curve: number[];
   bars: Bar[];
 };

@@ -8,20 +8,42 @@
 - 行业块面积只使用 `top100_count`。
 - 行业入选率 `selection_rate = top100_count / eligible_count`；`eligible_count` 是该模板、该交易日有完整候选窗口且仍在上市期内、归属于该行业的股票数。单位是比例，页面转成百分比显示。
 
-## 5 日变化
+## 10 / 20 日变化
 
-- “5 日前”指当前交易日前第 5 个实际交易日，不是自然日。
-- `new_count`：当前 Top100、但不在 5 个交易日前 Top100。
-- `retained_count`：当前和 5 个交易日前都在 Top100。
-- `exit_count`：5 个交易日前在 Top100、当前不在。
-- 每模板必须满足 `new_count + retained_count = 100` 和 `exit_count + retained_count = 100`。
+- 默认窗口是 10 个交易日；页面可切换到 20 个交易日。两者都按实际交易日偏移，不按自然日。
+- `new_count`：当前 Top100、但不在所选比较日 Top100。
+- `retained_count`：当前和所选比较日都在 Top100。
+- `exit_count`：所选比较日在 Top100、当前不在。
+- 每模板、每个比较窗口必须满足 `new_count + retained_count = 100` 和 `exit_count + retained_count = 100`。
 - 当前、新进、保留股票使用当前截面的分数、排名和行业；退出股票使用比较日截面的分数、排名和行业。
+
+## “其他行业”
+
+- 当前 Top100 中只有 1 或 2 只的行业不删除，按当前截面合并为 `industry_code = "other"` 的“其他行业”。
+- “其他行业”面积等于这些行业当前 `top100_count` 之和，并提供合计只数、具体行业数和行业代码。
+- 普通行业与“其他行业”的面积总和必须仍为 100；“其他行业”由页面使用中性色。
+- 详情文件保留组成行业、当前股票、10 / 20 日新进/保留/退出和 60 日序列，可以展开追溯。
 
 ## 文件
 
-- `outputs/shape-v2/top100-breadth-20260729/top100_membership_daily.csv`：四模板最近 65 个交易日的逐股 Top100 成员、排名、分数和候选窗口日期。
-- `outputs/shape-v2/top100-breadth-20260729/top100_industry_daily.csv`：逐日行业分母、Top100 数量、入选率和 5 日迁移。
-- `public/template-breadth-v3.json`：页面数据，保留旧页面可复用的 `top30`、`marketSeries`、`industrySeries` 键，但不含主产品阈值字段。
+- `outputs/shape-v2/top100-breadth-20260730/top100_membership_daily.csv`：四模板最近 80 个交易日的逐股 Top100 成员、排名、分数和真实候选窗口日期。
+- `outputs/shape-v2/top100-breadth-20260730/top100_industry_daily.csv`：逐日行业分母、Top100 数量、入选率以及 10 / 20 日迁移。
+- `public/template-breadth-v3.json`：约 60KB 的首屏轻摘要，只含行业数字、10 / 20 日变化和 Treemap 聚合，不含股票清单、时间序列或 K 线。
+- `public/template-breadth-v3-details/{template}.json`：用户点击行业后才加载的股票清单、组成行业和时间序列。
+- `public/template-rankings/{template}.json`：服务端直接读取的最新冻结 Top100 排名，只含元数据和窗口日期，不含 K 线 bars；文件绑定算法、源股票、模板起止日和窗口长度，任一不符即放弃预计算并回退本地计算。
+- `public/template-definitions/{template}.json`：冻结模板自身的真实前复权 K 线；服务冷启动直接读取，不在首次点击时扫描全市场分区。
+
+### 明细 schema 注意
+
+- 首屏 `templates[].industries` 只放 31 个真实行业摘要；合成的“其他行业”只出现在 `templates[].treemap_industries`。
+- 明细包的 `industries` 仍只放真实行业；合成项位于明细顶层 `other`，不是 `industries` 内的一行。
+- UI 选中 `industry_code = "other"` 时应读取明细顶层 `other`；其 `components` 含组成行业和各自股票清单。
+
+## 抛物线上升模板
+
+- 冻结源 K 线使用德明利 `001309.SZ` 的真实前复权 80 根：`20260115`–`20260520`。
+- 80 根由原 160 根内部的阶段形态规则选出：二次项为正、两半段斜率均为正且后半段更快，再按窗口内二次拟合度确定。
+- 选择不使用候选股票的未来收益、IC 或策略表现。80 / 160 的排名重合和跨日稳定性只用于说明窗口敏感性，不用于预测有效性结论。
 
 ## 数据边界
 

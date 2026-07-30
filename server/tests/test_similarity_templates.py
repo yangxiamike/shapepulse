@@ -48,7 +48,10 @@ class SimilarityAlgorithmTests(unittest.TestCase):
                 "parabolic_uptrend",
             ],
         )
-        self.assertEqual([item.window_bars for item in templates], [50, 80, 55, 160])
+        self.assertEqual([item.window_bars for item in templates], [50, 80, 55, 80])
+        parabolic = templates[-1]
+        self.assertEqual(parabolic.start_date, "20260115")
+        self.assertEqual(parabolic.end_date, "20260520")
         self.assertTrue(all(item.public_dict()["algorithm"] == ALGORITHM for item in templates))
 
     def test_similarity_equals_independent_log_z_pearson(self):
@@ -206,6 +209,115 @@ class MarketTemplateServiceTests(unittest.TestCase):
         service._similarity_lock = threading.RLock()
         return service
 
+    def test_frozen_template_prefers_verified_precomputed_real_bars(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self.make_service(root / "state.sqlite3")
+            service.settings = SimpleNamespace(project_root=root)
+            definition = service.frozen_templates[0]
+            dates = [
+                value.strftime("%Y%m%d")
+                for value in pd.bdate_range(
+                    start=definition.start_date,
+                    end=definition.end_date,
+                )
+            ]
+            self.assertEqual(len(dates), definition.window_bars)
+            bars = [
+                {
+                    "trade_date": date,
+                    "time": f"{date[:4]}-{date[4:6]}-{date[6:]}",
+                    "open": 10.0 + index * 0.1,
+                    "high": 10.2 + index * 0.1,
+                    "low": 9.8 + index * 0.1,
+                    "close": 10.1 + index * 0.1,
+                    "volume": 1000.0,
+                }
+                for index, date in enumerate(dates)
+            ]
+            target = (
+                root
+                / "public"
+                / "template-definitions"
+                / f"{definition.key}.json"
+            )
+            target.parent.mkdir(parents=True)
+            target.write_text(
+                json.dumps(
+                    {
+                        "algorithm": ALGORITHM,
+                        "data_as_of": "20260729",
+                        "template": definition.public_dict(),
+                        "bars": bars,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            service.repository.recent_qfq_daily = lambda *_args, **_kwargs: (
+                self.fail("verified precomputed bars should avoid a data scan")
+            )
+            actual = service.template(definition.key)
+            self.assertEqual(len(actual["bars"]), definition.window_bars)
+            self.assertEqual(actual["bars"][0]["trade_date"], definition.start_date)
+            self.assertEqual(actual["bars"][-1]["trade_date"], definition.end_date)
+            self.assertEqual(actual["data_as_of"], "20260729")
+
+    def test_precomputed_ranking_rejects_mismatched_template_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            service = self.make_service(root / "state.sqlite3")
+            service.settings = SimpleNamespace(project_root=root)
+            definition = service.frozen_templates[0]
+            as_of = service.repository.dates[-1]
+            target = (
+                root
+                / "public"
+                / "template-rankings"
+                / f"{definition.key}.json"
+            )
+            target.parent.mkdir(parents=True)
+            items = [
+                {
+                    "rank": index,
+                    "ts_code": f"{index:06d}.SZ",
+                    "code": f"{index:06d}",
+                    "name": f"stock-{index}",
+                    "industry": "test",
+                    "score": 1.0 - index / 1000,
+                    "start_date": service.repository.dates[0],
+                    "end_date": as_of,
+                    "window_bars": definition.window_bars,
+                }
+                for index in range(1, 101)
+            ]
+            payload = {
+                "as_of": as_of,
+                "template_id": definition.key,
+                "algorithm": ALGORITHM,
+                "template": {
+                    "source_ts_code": definition.source_ts_code,
+                    "start_date": definition.start_date,
+                    "end_date": definition.end_date,
+                    "window_bars": definition.window_bars,
+                },
+                "total_eligible": 100,
+                "items": items,
+            }
+            target.write_text(json.dumps(payload), encoding="utf-8")
+            template = {**definition.public_dict(), "name": definition.label}
+            actual = service._precomputed_template_scores(template, as_of)
+            self.assertIsNotNone(actual)
+            self.assertEqual(len(actual[0]), 100)
+
+            payload["template_id"] = "wrong_template"
+            target.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertIsNone(service._precomputed_template_scores(template, as_of))
+
+            payload["template_id"] = definition.key
+            payload["items"][0]["window_bars"] = definition.window_bars + 1
+            target.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertIsNone(service._precomputed_template_scores(template, as_of))
+
     def test_custom_service_crud_and_within_template_topk(self):
         with tempfile.TemporaryDirectory() as directory:
             service = self.make_service(Path(directory) / "state.sqlite3")
@@ -238,6 +350,10 @@ class MarketTemplateServiceTests(unittest.TestCase):
                     for item in stocks["items"]
                 )
             )
+            metadata = service.template_stocks(created["id"], 2, False)
+            self.assertEqual(metadata["payload_mode"], "ranking_metadata")
+            self.assertTrue(metadata["cache_hit"])
+            self.assertTrue(all("bars" not in item for item in metadata["items"]))
             renamed = service.rename_template(created["id"], {"name": "新名字"})
             self.assertEqual(renamed["name"], "新名字")
             with self.assertRaises(ValueError):
@@ -258,8 +374,13 @@ class TemplateHttpRouteTests(unittest.TestCase):
             def template(self, template_id):
                 return {"id": template_id}
 
-            def template_stocks(self, template_id, limit):
-                return {"id": template_id, "limit": int(limit), "items": []}
+            def template_stocks(self, template_id, limit, include_bars=True):
+                return {
+                    "id": template_id,
+                    "limit": int(limit),
+                    "include_bars": str(include_bars),
+                    "items": [],
+                }
 
             def create_template(self, body):
                 return {"id": "custom_1", **body}
@@ -288,6 +409,13 @@ class TemplateHttpRouteTests(unittest.TestCase):
             self.assertEqual(request("GET", "/api/templates")[0], 200)
             self.assertEqual(request("GET", "/api/templates/fresh_breakout")[1]["id"], "fresh_breakout")
             self.assertEqual(request("GET", "/api/templates/fresh_breakout/stocks?limit=30")[1]["limit"], 30)
+            self.assertEqual(
+                request(
+                    "GET",
+                    "/api/templates/fresh_breakout/stocks?limit=30&include_bars=0",
+                )[1]["include_bars"],
+                "0",
+            )
             self.assertEqual(request("POST", "/api/templates", {"name": "x"})[0], 201)
             self.assertEqual(request("PATCH", "/api/templates/custom_1", {"name": "y"})[1]["name"], "y")
             self.assertTrue(request("DELETE", "/api/templates/custom_1")[1]["deleted"])

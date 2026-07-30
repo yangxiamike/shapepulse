@@ -30,9 +30,9 @@
       "key": "parabolic_uptrend",
       "label": "抛物线上升",
       "source_ts_code": "001309.SZ",
-      "start_date": "20251031",
-      "end_date": "20260630",
-      "window_bars": 160
+      "start_date": "20260115",
+      "end_date": "20260520",
+      "window_bars": 80
     }
   ]
 }

@@ -352,6 +352,7 @@ button.top-card { color: inherit; }
 .period-tabs button.active { color: #fff; background: #090b0e; }
 .period-tabs button:disabled { color: #9b9e9b; text-decoration: line-through; }
 .chart-actions { display: flex; align-items: center; }
+.local-period-note { margin-right: 6px; color: var(--muted); font-size: calc(11px + var(--ui-font-adjust)); white-space: nowrap; }
 .chart-actions button, .chart-actions .save-template-link { height: 32px; padding: 0 6px; display: flex; align-items: center; gap: 3px; background: transparent; border: 0; font-size: calc(12px + var(--ui-font-adjust)); }
 .chart-actions .save-template-link { color: #0b5b43; background: #e4f4ed; border: 1px solid #9ec7b8; border-radius: 6px; font-weight: 750; white-space: nowrap; }
 .chart-actions button:disabled { color: #969a98; }
@@ -413,7 +414,7 @@ button.top-card { color: inherit; }
 .market-right-resizer::before { content: ""; position: absolute; inset: 0 4px; background: #d4d1c9; transition: background .1s ease, box-shadow .1s ease; }
 .market-right-resizer:hover::before, .market-right-resizer:focus-visible::before { background: var(--blue); box-shadow: 0 0 0 3px rgba(40,92,245,.13); }
 .rightbar-mobile-head { display: none; }
-.right-tabs { min-height: 69px; padding: 0 7px; display: grid; grid-template-columns: repeat(5,1fr); border-bottom: 1px solid var(--line); }
+.right-tabs { min-height: 69px; padding: 0 7px; display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid var(--line); }
 .right-tabs button { position: relative; padding: 0 4px; background: transparent; border: 0; font-size: calc(13px + var(--ui-font-adjust)); }
 .right-tabs button.active { font-weight: 850; }
 .right-tabs button.active::after { content: ""; position: absolute; inset: auto 7px 0; height: 2px; background: #111; }
@@ -510,6 +511,9 @@ button.top-card { color: inherit; }
 .template-kline-pair .candle-up { fill: #d54242; stroke: #d54242; }
 .template-kline-pair .candle-down { fill: #149370; stroke: #149370; }
 .template-kline-pair .candle-preview-empty { min-height: 132px; display: grid; place-items: center; color: var(--muted); background: #fff; }
+.candidate-kline-loading, .candidate-kline-retry { width: 100%; min-height: 132px; padding: 14px; display: grid; place-items: center; color: var(--muted); background: #fff; border: 0; border-top: 1px solid #e0dcd3; text-align: center; }
+.candidate-kline-retry { color: var(--mint-deep); cursor: pointer; font-weight: 800; }
+.candidate-kline-retry:hover, .candidate-kline-retry:focus-visible { background: #edf7f3; }
 .template-comparison-facts { margin: 0 0 10px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
 .template-comparison-facts > div { min-width: 0; padding: 7px 8px; background: #f0eee8; border-radius: 6px; }
 .template-comparison-facts dt { color: var(--muted); font-size: calc(11px + var(--ui-font-adjust)); }

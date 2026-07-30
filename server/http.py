@@ -175,7 +175,9 @@ def make_handler(service: MarketService):
                         self._send(
                             HTTPStatus.OK,
                             service.template_stocks(
-                                template_id, _first(query, "limit", "100")
+                                template_id,
+                                _first(query, "limit", "100"),
+                                _first(query, "include_bars", "1"),
                             ),
                         )
                     else:

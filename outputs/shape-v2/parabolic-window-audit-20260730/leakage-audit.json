@@ -1,0 +1,17 @@
+{
+  "data_source": "C:\\Users\\hp\\Documents\\zer0share",
+  "local_interfaces": [
+    "daily",
+    "adj_factor",
+    "stock_basic"
+  ],
+  "network_used": false,
+  "sealed_final_read": false,
+  "future_return_used": false,
+  "ic_used": false,
+  "strategy_performance_used": false,
+  "post_window_return_used_for_selection": false,
+  "selection_uses_only_in_window_bars": true,
+  "algorithm": "前复权 log-close；窗口内独立 z；单窗口 Pearson",
+  "cross_template_ranking_used": false
+}

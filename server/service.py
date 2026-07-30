@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import re
 import threading
 import time
@@ -188,24 +189,114 @@ class MarketService:
         self, definition: FrozenTemplate
     ) -> dict[str, Any]:
         snapshots = self.repository.snapshots()
-        key = (definition.key, snapshots.daily_kline, snapshots.adj_factor)
+        precomputed_path = (
+            self.settings.project_root
+            / "public"
+            / "template-definitions"
+            / f"{definition.key}.json"
+        )
+        precomputed_token = (
+            precomputed_path.stat().st_mtime_ns
+            if precomputed_path.is_file()
+            else None
+        )
+        key = (
+            definition.key,
+            snapshots.daily_kline,
+            snapshots.adj_factor,
+            precomputed_token,
+        )
         with self._similarity_lock:
             cached = self._materialized_frozen_templates.get(key)
         if cached is not None:
             return copy.deepcopy(cached)
-        bars, vector = self._load_source_window(
-            definition.source_ts_code,
-            definition.start_date,
-            definition.end_date,
-            definition.window_bars,
-        )
+        bars: list[dict[str, Any]] | None = None
+        vector: list[float] | None = None
+        precomputed_data_as_of: str | None = None
+        if precomputed_token is not None:
+            try:
+                payload = json.loads(precomputed_path.read_text(encoding="utf-8"))
+                metadata = payload.get("template", {})
+                raw_bars = payload.get("bars", [])
+                valid = (
+                    payload.get("algorithm") == SIMILARITY_ALGORITHM
+                    and metadata.get("id") == definition.key
+                    and metadata.get("source_ts_code")
+                    == definition.source_ts_code
+                    and metadata.get("start_date") == definition.start_date
+                    and metadata.get("end_date") == definition.end_date
+                    and int(metadata.get("window_bars", 0))
+                    == definition.window_bars
+                    and len(raw_bars) == definition.window_bars
+                    and str(raw_bars[0].get("trade_date", ""))
+                    == definition.start_date
+                    and str(raw_bars[-1].get("trade_date", ""))
+                    == definition.end_date
+                )
+                if valid:
+                    dates = [
+                        str(row.get("trade_date", ""))
+                        for row in raw_bars
+                    ]
+                    valid = (
+                        dates == sorted(set(dates))
+                        and all(re.fullmatch(r"\d{8}", value) for value in dates)
+                    )
+                if valid:
+                    for row in raw_bars:
+                        open_price = float(row["open"])
+                        high_price = float(row["high"])
+                        low_price = float(row["low"])
+                        close_price = float(row["close"])
+                        if not (
+                            np.isfinite(
+                                [open_price, high_price, low_price, close_price]
+                            ).all()
+                            and 0 < low_price
+                            and low_price <= min(open_price, close_price)
+                            and high_price >= max(open_price, close_price)
+                        ):
+                            valid = False
+                            break
+                if valid:
+                    closes = [float(row["close"]) for row in raw_bars]
+                    vector = z_log_close(closes).tolist()
+                    bars = [
+                        {
+                            "trade_date": str(row["trade_date"]),
+                            "time": str(row["time"]),
+                            "open": float(row["open"]),
+                            "high": float(row["high"]),
+                            "low": float(row["low"]),
+                            "close": float(row["close"]),
+                            "volume": float(row.get("volume", 0)),
+                        }
+                        for row in raw_bars
+                    ]
+                    precomputed_data_as_of = str(
+                        payload.get("data_as_of", "")
+                    )
+            except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+                bars = None
+                vector = None
+        if bars is None or vector is None:
+            bars, vector = self._load_source_window(
+                definition.source_ts_code,
+                definition.start_date,
+                definition.end_date,
+                definition.window_bars,
+            )
         item = {
             **definition.public_dict(),
             "name": definition.label,
             "bars": bars,
             "curve": self._normalized_curve(bars),
             "z_values": vector,
-            "data_as_of": snapshots.adj_factor or definition.end_date,
+            "data_as_of": (
+                precomputed_data_as_of
+                or snapshots.adj_factor
+                or definition.end_date
+            ),
         }
         with self._similarity_lock:
             self._materialized_frozen_templates[key] = copy.deepcopy(item)
@@ -222,6 +313,140 @@ class MarketService:
         custom["algorithm"] = SIMILARITY_ALGORITHM
         custom["curve"] = self._normalized_curve(custom["bars"])
         return custom
+
+    def _precomputed_template_scores(
+        self, template: dict[str, Any], as_of: str
+    ) -> tuple[pd.DataFrame, int, str] | None:
+        template_id = str(template["id"])
+        if template_id not in self._frozen_templates_by_id:
+            return None
+        project_root = getattr(getattr(self, "settings", None), "project_root", None)
+        if project_root is None:
+            project_root = self.settings.project_root if hasattr(self, "settings") else None
+        if project_root is None:
+            return None
+        candidates = [
+            project_root / "public" / "template-rankings" / f"{template_id}.json",
+            project_root / "public" / "template-breadth-v3.json",
+        ]
+        cache = getattr(self, "_precomputed_similarity_cache", {})
+        for path in candidates:
+            if not path.exists():
+                continue
+            token = path.stat().st_mtime_ns
+            cache_key = (str(path), token, template_id, as_of)
+            cached = cache.get(cache_key)
+            if cached is not None:
+                frame, total, source = cached
+                return frame.copy(), total, source
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if path.name == "template-breadth-v3.json":
+                payload_as_of = str(payload.get("asOf", payload.get("as_of", "")))
+                template_payload = next(
+                    (
+                        item
+                        for item in payload.get("templates", [])
+                        if str(item.get("key", item.get("id", ""))) == template_id
+                    ),
+                    None,
+                )
+                if template_payload is None:
+                    continue
+                raw_items = template_payload.get("top100", [])
+                summary = template_payload.get("summary", {})
+                total = int(
+                    summary.get(
+                        "eligibleCount",
+                        summary.get("eligible_count", len(raw_items)),
+                    )
+                )
+            else:
+                payload_as_of = str(payload.get("as_of", payload.get("asOf", "")))
+                if str(payload.get("template_id", "")) != template_id:
+                    continue
+                metadata = payload.get("template", {})
+                if (
+                    payload.get("algorithm") != SIMILARITY_ALGORITHM
+                    or str(metadata.get("source_ts_code", ""))
+                    != str(template.get("source_ts_code", ""))
+                    or str(metadata.get("start_date", ""))
+                    != str(template.get("start_date", ""))
+                    or str(metadata.get("end_date", ""))
+                    != str(template.get("end_date", ""))
+                    or int(metadata.get("window_bars", 0))
+                    != int(template["window_bars"])
+                ):
+                    continue
+                raw_items = payload.get("items", [])
+                total = int(
+                    payload.get(
+                        "total_eligible",
+                        payload.get("totalEligible", len(raw_items)),
+                    )
+                )
+            if payload_as_of.replace("-", "") != as_of or len(raw_items) < 100:
+                continue
+            rows = []
+            for index, raw in enumerate(raw_items[:100], 1):
+                start_date = str(
+                    raw.get("start_date", raw.get("window_start", ""))
+                ).replace("-", "")
+                end_date = str(
+                    raw.get("end_date", raw.get("window_end", ""))
+                ).replace("-", "")
+                if len(start_date) != 8 or len(end_date) != 8:
+                    rows = []
+                    break
+                ts_code = str(raw.get("ts_code", ""))
+                rank = int(raw.get("rank", index))
+                window_bars = int(
+                    raw.get("window_bars", template["window_bars"])
+                )
+                score = float(raw["score"])
+                if (
+                    rank != index
+                    or not ts_code
+                    or end_date != as_of
+                    or window_bars != int(template["window_bars"])
+                    or not np.isfinite(score)
+                ):
+                    rows = []
+                    break
+                rows.append(
+                    {
+                        "rank": rank,
+                        "ts_code": ts_code,
+                        "code": str(raw.get("code", ts_code.split(".")[0])),
+                        "name": str(raw.get("name", ts_code)),
+                        "industry": str(
+                            raw.get("industry", raw.get("industry_name", ""))
+                        ),
+                        "score": score,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "window_bars": window_bars,
+                    }
+                )
+            if (
+                len(rows) != 100
+                or len({row["ts_code"] for row in rows}) != 100
+                or any(
+                    rows[index]["score"] < rows[index + 1]["score"]
+                    for index in range(len(rows) - 1)
+                )
+            ):
+                continue
+            frame = pd.DataFrame(rows).sort_values("rank").reset_index(drop=True)
+            source = str(path.relative_to(project_root)).replace("\\", "/")
+            cache[cache_key] = (frame.copy(), total, source)
+            while len(cache) > 12:
+                cache.pop(next(iter(cache)))
+            self._precomputed_similarity_cache = cache
+            return frame, total, source
+        return None
 
     def templates(self) -> dict[str, Any]:
         frozen = [
@@ -288,7 +513,9 @@ class MarketService:
             raise LookupError(f"template not found: {template_id}")
         item["algorithm"] = SIMILARITY_ALGORITHM
         item["curve"] = self._normalized_curve(item["bars"])
-        return self._template_public(item, include_bars=True)
+        # Renaming does not alter the selected window or its similarity signature.
+        # Keep the response lightweight and leave the score cache intact.
+        return self._template_public(item)
 
     def delete_template(self, template_id: str) -> dict[str, Any]:
         if template_id in self._frozen_templates_by_id:
@@ -303,27 +530,64 @@ class MarketService:
             }
         return {"deleted": True, "id": template_id}
 
-    def template_stocks(self, template_id: str, limit: Any = 100) -> dict[str, Any]:
+    def template_stocks(
+        self,
+        template_id: str,
+        limit: Any = 100,
+        include_bars: Any = True,
+    ) -> dict[str, Any]:
+        request_started = time.perf_counter()
         parsed_limit = self._positive_integer(limit, "limit")
-        if parsed_limit > 1000:
-            raise ValueError("limit cannot exceed 1000")
-        template = self._template_record(template_id)
+        if parsed_limit > 100:
+            raise ValueError("limit cannot exceed the product Top100")
+        if isinstance(include_bars, str):
+            include_candidate_bars = include_bars.strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+        else:
+            include_candidate_bars = bool(include_bars)
+        resolved_template_id = str(template_id or "").strip()
+        frozen_definition = self._frozen_templates_by_id.get(resolved_template_id)
+        template = (
+            {**frozen_definition.public_dict(), "name": frozen_definition.label}
+            if frozen_definition is not None
+            else self._template_record(resolved_template_id)
+        )
         snapshots = self.repository.snapshots()
         as_of = snapshots.daily_kline
         if as_of is None:
             raise FileNotFoundError("daily_kline data not found")
-        vector = [float(value) for value in template["z_values"]]
-        signature = hashlib.sha256(
-            np.asarray(vector, dtype=np.float64).tobytes()
-        ).hexdigest()
-        cache_key = (
-            str(template["id"]),
-            signature,
-            as_of,
-            snapshots.adj_factor,
-        )
-        with self._similarity_lock:
-            scores = self._similarity_score_cache.get(cache_key)
+        ranking_started = time.perf_counter()
+        ranking_cache_hit = False
+        ranking_source = "computed"
+        total_eligible: int | None = None
+        precomputed = self._precomputed_template_scores(template, as_of)
+        scores: pd.DataFrame | None = None
+        vector: list[float] = []
+        cache_key: tuple[Any, ...] | None = None
+        if precomputed is not None:
+            scores, total_eligible, ranking_source = precomputed
+            ranking_cache_hit = True
+        else:
+            if frozen_definition is not None:
+                template = self._materialize_frozen_template(frozen_definition)
+            vector = [float(value) for value in template["z_values"]]
+            signature = hashlib.sha256(
+                np.asarray(vector, dtype=np.float64).tobytes()
+            ).hexdigest()
+            cache_key = (
+                str(template["id"]),
+                signature,
+                as_of,
+                snapshots.adj_factor,
+            )
+            with self._similarity_lock:
+                scores = self._similarity_score_cache.get(cache_key)
+            if scores is not None:
+                ranking_cache_hit = True
         if scores is None:
             start = (
                 datetime.strptime(as_of, "%Y%m%d") - timedelta(days=400)
@@ -342,29 +606,42 @@ class MarketService:
                     self._similarity_score_cache.pop(
                         next(iter(self._similarity_score_cache))
                     )
+                assert cache_key is not None
                 self._similarity_score_cache[cache_key] = scores.copy()
-        active = self.repository.basic()
-        names = active.set_index("ts_code")["name"].astype(str).to_dict()
-        symbols = active.set_index("ts_code")["symbol"].astype(str).to_dict()
-        industries = self.repository.industries()
-        industry_map = (
-            industries.drop_duplicates("ts_code")
-            .set_index("ts_code")["l1_name"]
-            .fillna("")
-            .astype(str)
-            .to_dict()
-        )
+        ranking_ms = (time.perf_counter() - ranking_started) * 1000
+        has_public_metadata = {
+            "code",
+            "name",
+            "industry",
+        }.issubset(scores.columns)
+        names: dict[str, str] = {}
+        symbols: dict[str, str] = {}
+        industry_map: dict[str, str] = {}
+        if not has_public_metadata:
+            active = self.repository.basic()
+            names = active.set_index("ts_code")["name"].astype(str).to_dict()
+            symbols = active.set_index("ts_code")["symbol"].astype(str).to_dict()
+            industries = self.repository.industries()
+            industry_map = (
+                industries.drop_duplicates("ts_code")
+                .set_index("ts_code")["l1_name"]
+                .fillna("")
+                .astype(str)
+                .to_dict()
+            )
         selected_scores = scores.head(parsed_limit)
         selected_codes = set(selected_scores["ts_code"].astype(str))
+        candidate_bars_started = time.perf_counter()
         candidate_bars = (
             self.repository.recent_qfq_daily(
                 str(selected_scores["start_date"].min()),
                 str(selected_scores["end_date"].max()),
                 selected_codes,
             )
-            if selected_codes
+            if include_candidate_bars and selected_codes
             else pd.DataFrame()
         )
+        candidate_bars_ms = (time.perf_counter() - candidate_bars_started) * 1000
         items = []
         for rank, row in enumerate(selected_scores.itertuples(index=False), 1):
             code = str(row.ts_code)
@@ -381,28 +658,53 @@ class MarketService:
             items.append(
                 {
                     "template_id": str(template["id"]),
-                    "rank": rank,
+                    "rank": int(getattr(row, "rank", rank)),
                     "ts_code": code,
-                    "code": symbols.get(code, code.split(".")[0]),
-                    "name": names.get(code, code),
-                    "industry": industry_map.get(code, ""),
+                    "code": str(
+                        getattr(row, "code", "")
+                        or symbols.get(code, code.split(".")[0])
+                    ),
+                    "name": str(
+                        getattr(row, "name", "") or names.get(code, code)
+                    ),
+                    "industry": str(
+                        getattr(row, "industry", "")
+                        or industry_map.get(code, "")
+                    ),
                     "score": float(row.score),
                     "start_date": str(row.start_date),
                     "end_date": str(row.end_date),
                     "window_bars": int(row.window_bars),
-                    "bars": self._source_bars(window_frame),
+                    **(
+                        {"bars": self._source_bars(window_frame)}
+                        if include_candidate_bars
+                        else {}
+                    ),
                 }
             )
+        total = total_eligible if total_eligible is not None else len(scores)
         return {
             "template": self._template_public(template),
             "items": items,
-            "total": len(scores),
-            "total_eligible": len(scores),
+            "total": total,
+            "total_eligible": total,
             "limit": parsed_limit,
             "as_of": as_of,
             "algorithm": SIMILARITY_ALGORITHM,
             "threshold_used": None,
             "ranking_scope": "within_template_only",
+            "ranking_source": ranking_source,
+            "cache_hit": ranking_cache_hit,
+            "payload_mode": "with_candidate_bars"
+            if include_candidate_bars
+            else "ranking_metadata",
+            "timings": {
+                "ranking_ms": round(ranking_ms, 1),
+                "candidate_bars_ms": round(candidate_bars_ms, 1),
+                "total_ms": round(
+                    (time.perf_counter() - request_started) * 1000, 1
+                ),
+            },
         }
 
     def industry_strength(

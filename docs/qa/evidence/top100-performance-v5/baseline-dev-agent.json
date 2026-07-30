@@ -1,0 +1,71 @@
+{
+  "recorded_at": "2026-07-30T00:31:00+08:00",
+  "branch": "codex/top100-performance-ux-v5",
+  "commit": "9c1109cc2924bcdc3a3528adcdec4b2c3a33cbcb",
+  "source_boundary": "C:\\Users\\hp\\Documents\\zer0share and repository non-sealed artifacts only",
+  "environment": {
+    "backend": "current worktree server on http://127.0.0.1:18765",
+    "snapshot": "20260729",
+    "active_stocks": 5534
+  },
+  "method": {
+    "client": "curl.exe without Accept-Encoding compression",
+    "timing": "curl time_total, seconds",
+    "payload": "curl size_download, uncompressed bytes",
+    "sequence": "new backend process; cold request first; immediate repeat for warm result"
+  },
+  "measurements": [
+    {
+      "name": "frozen_template_top100_cold",
+      "url": "/api/templates/fresh_breakout/stocks?limit=100",
+      "http_status": 200,
+      "time_total_ms": 7096.608,
+      "payload_bytes": 576714,
+      "observation": "cold request calculates the full active cross-section and embeds all 100 candidate K-line windows"
+    },
+    {
+      "name": "frozen_template_top100_warm",
+      "url": "/api/templates/fresh_breakout/stocks?limit=100",
+      "http_status": 200,
+      "time_total_ms": 326.751,
+      "payload_bytes": 576714,
+      "observation": "similarity scores are cached, but candidate K-line bars are still re-read and serialized"
+    },
+    {
+      "name": "template_detail_warm",
+      "url": "/api/templates/fresh_breakout",
+      "http_status": 200,
+      "time_total_ms": 71.636,
+      "payload_bytes": 6746
+    },
+    {
+      "name": "template_manifest_warm",
+      "url": "/api/templates",
+      "http_status": 200,
+      "time_total_ms": 2.684,
+      "payload_bytes": 1330
+    },
+    {
+      "name": "stock_detail_warm",
+      "url": "/api/stock/000001",
+      "http_status": 200,
+      "time_total_ms": 32.18,
+      "payload_bytes": 881
+    },
+    {
+      "name": "market_daily_limit10000_cold",
+      "url": "/api/bars/000001?period=1d&adjust=qfq&limit=10000",
+      "http_status": 200,
+      "time_total_ms": 1565.184,
+      "payload_bytes": 633987,
+      "observation": "the client uses limit=10000 even for the default six-month view"
+    },
+    {
+      "name": "market_daily_limit10000_warm",
+      "url": "/api/bars/000001?period=1d&adjust=qfq&limit=10000",
+      "http_status": 200,
+      "time_total_ms": 47.769,
+      "payload_bytes": 633979
+    }
+  ]
+}

@@ -25,7 +25,15 @@ export const API_BASE = process.env.NEXT_PUBLIC_MARKET_API || "http://127.0.0.1:
 type Raw = Record<string, unknown>;
 
 const barsCache = new Map<string, BarsResponse>();
+const barsRequests = new Map<string, Promise<BarsResponse>>();
 const stockCache = new Map<string, Stock>();
+const stockRequests = new Map<string, Promise<{ item: Stock; cacheHit: boolean; httpMs: number }>>();
+const templateCache = new Map<string, TemplateDefinition>();
+const templateRequests = new Map<string, Promise<TemplateDefinition>>();
+const templateStocksCache = new Map<string, TemplateStocksResponse>();
+const templateStocksRequests = new Map<string, Promise<TemplateStocksResponse>>();
+let templatesCache: TemplateDefinition[] | null = null;
+let templatesRequest: Promise<TemplateDefinition[]> | null = null;
 const industryStrengthCache = new Map<string, IndustryStrengthResponse>();
 const industryStrengthRequests = new Map<string, Promise<IndustryStrengthResponse>>();
 const frozenTemplateDescriptions: Record<string, string> = {
@@ -312,6 +320,7 @@ function mapTemplateStock(raw: Raw, index: number): TemplateStock {
     end_date: raw.end_date == null && raw.window_end == null
       ? null
       : String(raw.end_date || raw.window_end),
+    window_length: numeric(raw.window_bars || raw.window_length) || undefined,
     curve: numericArray(curve),
     bars: bars.map(bar => ({
       time: String(bar.time || bar.trade_date || ""),
@@ -336,6 +345,79 @@ function normalizeScreenFilters(filters: ScreenFilters) {
   return { ...filters, board: boardMap[filters.board] || filters.board };
 }
 
+const barRangeLimits: Record<string, Record<string, number>> = {
+  "1D": { D: 1, W: 1, M: 1, Q: 1, Y: 1 },
+  "5D": { D: 5, W: 2, M: 1, Q: 1, Y: 1 },
+  "1M": { D: 22, W: 5, M: 1, Q: 1, Y: 1 },
+  "3M": { D: 66, W: 14, M: 3, Q: 1, Y: 1 },
+  "6M": { D: 110, W: 27, M: 6, Q: 2, Y: 1 },
+  YTD: { D: 160, W: 32, M: 8, Q: 3, Y: 1 },
+  "1Y": { D: 250, W: 53, M: 12, Q: 4, Y: 1 },
+  "3Y": { D: 750, W: 160, M: 36, Q: 12, Y: 3 },
+  "5Y": { D: 1250, W: 266, M: 60, Q: 20, Y: 5 },
+  ALL: { D: 10000, W: 2500, M: 600, Q: 200, Y: 50 },
+};
+
+type BarsWireResponse = {
+  bars: Bar[];
+  period: string;
+  as_of: DataDates;
+  warnings: string[];
+  timings: Record<string, number>;
+  cache_hit: boolean;
+  range?: Raw;
+};
+
+async function loadBars(
+  code: string,
+  period: string,
+  requestLimit: number,
+  cacheKey: string,
+  query: URLSearchParams,
+  force = false,
+): Promise<BarsResponse> {
+  if (!force && barsCache.has(cacheKey)) {
+    return { ...barsCache.get(cacheKey)!, client_cache_hit: true, http_ms: 0 };
+  }
+  if (!force && barsRequests.has(cacheKey)) return barsRequests.get(cacheKey)!;
+  const pending = request<BarsWireResponse>(`/bars/${encodeURIComponent(code)}?${query}`)
+    .then(({ data, httpMs }) => {
+      const historyRange = data.range || {};
+      const response: BarsResponse = {
+        items: withMovingAverages(data.bars || []),
+        period: data.period,
+        as_of: data.as_of || {},
+        warnings: data.warnings || [],
+        timings: data.timings || {},
+        cache_hit: Boolean(data.cache_hit),
+        client_cache_hit: false,
+        http_ms: httpMs,
+        has_more: Boolean(historyRange.has_more_before),
+        history_start: historyRange.oldest_available ? String(historyRange.oldest_available) : null,
+        history_end: historyRange.newest_available ? String(historyRange.newest_available) : null,
+      };
+      barsCache.set(cacheKey, response);
+      while (barsCache.size > 48) barsCache.delete(barsCache.keys().next().value!);
+      return response;
+    })
+    .finally(() => barsRequests.delete(cacheKey));
+  void requestLimit;
+  barsRequests.set(cacheKey, pending);
+  return pending;
+}
+
+function previousCalendarDate(value: string): string {
+  const digits = String(value || "").replaceAll("-", "");
+  if (!/^\d{8}$/.test(digits)) throw new Error("历史分页日期无效");
+  const date = new Date(Date.UTC(
+    Number(digits.slice(0, 4)),
+    Number(digits.slice(4, 6)) - 1,
+    Number(digits.slice(6, 8)),
+  ));
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10).replaceAll("-", "");
+}
+
 export const api = {
   health: async () => {
     const { data, httpMs } = await request<Raw>("/health");
@@ -348,37 +430,94 @@ export const api = {
   stock: async (code: string, force = false) => {
     const key = symbolOf(code);
     if (!force && stockCache.has(key)) return { item: stockCache.get(key)!, cacheHit: true, httpMs: 0 };
-    const { data, httpMs } = await request<Raw>(`/stock/${encodeURIComponent(code)}`);
-    const item = mapStock(data);
-    stockCache.set(key, item);
-    return { item, cacheHit: false, httpMs };
+    if (!force && stockRequests.has(key)) return stockRequests.get(key)!;
+    const pending = request<Raw>(`/stock/${encodeURIComponent(code)}`)
+      .then(({ data, httpMs }) => {
+        const item = mapStock(data);
+        stockCache.set(key, item);
+        return { item, cacheHit: false, httpMs };
+      })
+      .finally(() => stockRequests.delete(key));
+    stockRequests.set(key, pending);
+    return pending;
   },
-  bars: async (code: string, period = "D", _range = "6M", force = false): Promise<BarsResponse> => {
-    void _range;
-    const key = `${symbolOf(code)}:${period}:qfq:full`;
-    if (!force && barsCache.has(key)) {
-      return { ...barsCache.get(key)!, client_cache_hit: true, http_ms: 0 };
-    }
+  bars: async (code: string, period = "D", range = "6M", force = false): Promise<BarsResponse> => {
     const periodMap: Record<string, string> = { D: "1d", W: "1w", M: "1m", Q: "1q", Y: "1y" };
-    const { data, httpMs } = await request<{ bars: Bar[]; period: string; as_of: DataDates; warnings: string[]; timings: Record<string, number>; cache_hit: boolean; range?: Raw }>(
-      `/bars/${encodeURIComponent(code)}?period=${periodMap[period] || period}&adjust=qfq&limit=10000`,
+    const visible = barRangeLimits[range]?.[period] || barRangeLimits["6M"][period] || 110;
+    // Keep a small warm-up tail so MA60 is valid without loading the full history.
+    const requestLimit = range === "ALL" ? visible : Math.min(10000, visible + 60);
+    const wirePeriod = periodMap[period] || period;
+    const key = `${symbolOf(code)}:${wirePeriod}:qfq:latest:${requestLimit}`;
+    const query = new URLSearchParams({ period: wirePeriod, adjust: "qfq", limit: String(requestLimit) });
+    return loadBars(code, wirePeriod, requestLimit, key, query, force);
+  },
+  barsAll: async (code: string, force = false): Promise<BarsResponse> => {
+    let page = await api.bars(code, "D", "ALL", force);
+    const pages = [page];
+    let cursor = page.items[0]?.trade_date || page.items[0]?.time || "";
+    for (let pageIndex = 1; page.has_more && pageIndex < 32; pageIndex += 1) {
+      if (!cursor) throw new Error("完整历史分页缺少起始日期");
+      const end = previousCalendarDate(cursor);
+      const cacheKey = `${symbolOf(code)}:1d:qfq:before:${end}:10000`;
+      const query = new URLSearchParams({
+        period: "1d",
+        adjust: "qfq",
+        end,
+        limit: "10000",
+      });
+      const older = await loadBars(code, "1d", 10000, cacheKey, query, force);
+      const nextCursor = older.items[0]?.trade_date || older.items[0]?.time || "";
+      if (!older.items.length || !nextCursor || nextCursor >= cursor) {
+        throw new Error("完整历史分页没有继续向前推进");
+      }
+      pages.unshift(older);
+      page = older;
+      cursor = nextCursor;
+    }
+    if (page.has_more) throw new Error("完整历史超过本地分页安全上限");
+    const merged = new Map<string, Bar>();
+    for (const chunk of pages) {
+      for (const item of chunk.items) {
+        merged.set(String(item.trade_date || item.time), item);
+      }
+    }
+    const items = [...merged.values()].sort((a, b) =>
+      String(a.trade_date || a.time).localeCompare(String(b.trade_date || b.time))
     );
-    const historyRange = data.range || {};
-    const response: BarsResponse = {
-      items: withMovingAverages(data.bars || []),
-      period: data.period,
-      as_of: data.as_of || {},
-      warnings: data.warnings || [],
-      timings: data.timings || {},
-      cache_hit: Boolean(data.cache_hit),
-      client_cache_hit: false,
-      http_ms: httpMs,
-      has_more: Boolean(historyRange.has_more_before),
-      history_start: historyRange.oldest_available ? String(historyRange.oldest_available) : null,
-      history_end: historyRange.newest_available ? String(historyRange.newest_available) : null,
+    return {
+      ...pages.at(-1)!,
+      items: withMovingAverages(items),
+      warnings: [...new Set(pages.flatMap(item => item.warnings))],
+      timings: {
+        total_ms: pages.reduce((sum, item) => sum + (item.timings.total_ms || 0), 0),
+      },
+      cache_hit: pages.every(item => item.cache_hit),
+      client_cache_hit: pages.every(item => item.client_cache_hit),
+      http_ms: pages.reduce((sum, item) => sum + (item.http_ms || 0), 0),
+      has_more: false,
+      history_start: items[0]?.trade_date || items[0]?.time || null,
+      history_end: items.at(-1)?.trade_date || items.at(-1)?.time || null,
     };
-    barsCache.set(key, response);
-    return response;
+  },
+  barsWindow: async (
+    code: string,
+    startDate: string,
+    endDate: string,
+    limit = 240,
+    force = false,
+  ): Promise<BarsResponse> => {
+    const start = String(startDate || "").replaceAll("-", "");
+    const end = String(endDate || "").replaceAll("-", "");
+    const safeLimit = Math.max(1, Math.min(10000, Math.floor(limit)));
+    const key = `${symbolOf(code)}:1d:qfq:${start}:${end}:${safeLimit}`;
+    const query = new URLSearchParams({
+      period: "1d",
+      adjust: "qfq",
+      start,
+      end,
+      limit: String(safeLimit),
+    });
+    return loadBars(code, "1d", safeLimit, key, query, force);
   },
   screen: async (input: ScreenFilters | string, onProgress?: (progress: ScreenProgress) => void): Promise<ScreenResponse> => {
     const incoming = typeof input === "string" ? new URLSearchParams(input) : null;
@@ -468,25 +607,58 @@ export const api = {
     return mapState((await request<Raw>("/state")).data);
   },
   pattern: async (code: string) => (await request<PatternResponse>(`/pattern/${encodeURIComponent(code)}?history_limit=12`)).data,
-  templates: async (): Promise<TemplateDefinition[]> => {
-    const { data } = await request<Raw>("/templates");
-    return Array.isArray(data.items) ? (data.items as Raw[]).map(mapTemplate) : [];
+  templates: async (force = false): Promise<TemplateDefinition[]> => {
+    if (!force && templatesCache) return templatesCache.map(item => ({ ...item }));
+    if (!force && templatesRequest) return templatesRequest;
+    const pending = request<Raw>("/templates")
+      .then(({ data }) => {
+        const items = Array.isArray(data.items) ? (data.items as Raw[]).map(mapTemplate) : [];
+        templatesCache = items;
+        for (const item of items) {
+          const existing = templateCache.get(item.id);
+          templateCache.set(item.id, existing?.bars.length ? { ...item, bars: existing.bars, curve: existing.curve } : item);
+        }
+        return items.map(item => ({ ...item }));
+      })
+      .finally(() => { templatesRequest = null; });
+    templatesRequest = pending;
+    return pending;
   },
-  template: async (id: string): Promise<TemplateDefinition> => {
-    const { data } = await request<Raw>(`/templates/${encodeURIComponent(id)}`);
-    return mapTemplate((data.template || data.item || data) as Raw);
+  template: async (id: string, force = false): Promise<TemplateDefinition> => {
+    if (!force && templateCache.get(id)?.bars.length) return { ...templateCache.get(id)! };
+    if (!force && templateRequests.has(id)) return templateRequests.get(id)!;
+    const pending = request<Raw>(`/templates/${encodeURIComponent(id)}`)
+      .then(({ data }) => {
+        const item = mapTemplate((data.template || data.item || data) as Raw);
+        templateCache.set(id, item);
+        return { ...item };
+      })
+      .finally(() => templateRequests.delete(id));
+    templateRequests.set(id, pending);
+    return pending;
   },
-  templateStocks: async (id: string, limit = 200): Promise<TemplateStocksResponse> => {
-    const { data } = await request<Raw>(`/templates/${encodeURIComponent(id)}/stocks?limit=${Math.max(1, Math.floor(limit))}`);
-    const rawTemplate = (data.template || {}) as Raw;
-    const items = Array.isArray(data.items)
-      ? (data.items as Raw[]).map(mapTemplateStock)
-      : [];
-    return {
-      template: mapTemplate(rawTemplate),
-      items,
-      total: numeric(data.total ?? data.total_eligible) || items.length,
-    };
+  templateStocks: async (id: string, limit = 100, force = false): Promise<TemplateStocksResponse> => {
+    const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+    const key = `${id}:${safeLimit}:metadata`;
+    if (!force && templateStocksCache.has(key)) return templateStocksCache.get(key)!;
+    if (!force && templateStocksRequests.has(key)) return templateStocksRequests.get(key)!;
+    const pending = request<Raw>(`/templates/${encodeURIComponent(id)}/stocks?limit=${safeLimit}&include_bars=0`)
+      .then(({ data }) => {
+        const rawTemplate = (data.template || {}) as Raw;
+        const items = Array.isArray(data.items)
+          ? (data.items as Raw[]).map(mapTemplateStock)
+          : [];
+        const result = {
+          template: mapTemplate(rawTemplate),
+          items,
+          total: numeric(data.total ?? data.total_eligible) || items.length,
+        };
+        templateStocksCache.set(key, result);
+        return result;
+      })
+      .finally(() => templateStocksRequests.delete(key));
+    templateStocksRequests.set(key, pending);
+    return pending;
   },
   createTemplate: async (input: { name: string; source_ts_code: string; start_date: string; end_date: string }): Promise<TemplateDefinition> => {
     const { data } = await request<Raw>("/templates", { method: "POST", body: JSON.stringify(input) });
@@ -494,12 +666,33 @@ export const api = {
   },
   renameTemplate: async (id: string, name: string): Promise<TemplateDefinition> => {
     const { data } = await request<Raw>(`/templates/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ name }) });
-    return mapTemplate((data.template || data.item || data) as Raw);
+    const mapped = mapTemplate((data.template || data.item || data) as Raw);
+    const previous = templateCache.get(id);
+    const item = !mapped.bars.length && previous?.bars.length
+      ? { ...mapped, bars: previous.bars, curve: previous.curve }
+      : mapped;
+    templateCache.set(id, item);
+    templatesCache = templatesCache?.map(template => template.id === id ? { ...template, name: item.name } : template) || null;
+    return item;
   },
   deleteTemplate: async (id: string): Promise<void> => {
     await request<Raw>(`/templates/${encodeURIComponent(id)}`, { method: "DELETE" });
+    templateCache.delete(id);
+    templatesCache = templatesCache?.filter(item => item.id !== id) || null;
+    for (const key of [...templateStocksCache.keys()]) if (key.startsWith(`${id}:`)) templateStocksCache.delete(key);
   },
-  clearCaches: () => { barsCache.clear(); stockCache.clear(); },
+  clearCaches: () => {
+    barsCache.clear();
+    barsRequests.clear();
+    stockCache.clear();
+    stockRequests.clear();
+    templateCache.clear();
+    templateRequests.clear();
+    templateStocksCache.clear();
+    templateStocksRequests.clear();
+    templatesCache = null;
+    templatesRequest = null;
+  },
 };
 
 export function fmtNumber(value?: number | null, digits = 2) {

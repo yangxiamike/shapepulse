@@ -4,10 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpRight,
-  Bell,
   Brush,
   CalendarDays,
-  Camera,
   ChevronDown,
   CircleDot,
   Clock3,
@@ -27,7 +25,6 @@ import {
   Palette,
   PenLine,
   Plus,
-  RotateCcw,
   Ruler,
   Search,
   Settings2,
@@ -54,11 +51,11 @@ import type { Bar, StateSnapshot, Stock, TemplateDefinition, TemplateStock } fro
 const periods = [
   ["日K", "D"], ["周K", "W"], ["月K", "M"], ["季K", "Q"], ["年K", "Y"],
 ] as const;
-const unavailablePeriods = ["分时", "5分", "15分", "30分", "60分"];
 const ranges = [["1天", "1D"], ["5天", "5D"], ["1个月", "1M"], ["3个月", "3M"], ["6个月", "6M"], ["YTD", "YTD"], ["1年", "1Y"], ["3年", "3Y"], ["5年", "5Y"], ["全部", "ALL"]] as const;
-const tabs = ["自选", "详情", "模板", "指标", "因子"] as const;
+const tabs = ["自选", "详情", "模板"] as const;
 type RightTab = typeof tabs[number];
 type FibonacciKind = "fibonacci" | "fibonacci-extension";
+type MarketOrigin = { from: string | null; industry: string | null; window: string | null };
 
 const DEFAULT_TEMPLATE_KEY = "fresh_breakout";
 const emptyState: StateSnapshot = { viewed: [], saved: [], pending: [], watchlist: [], history: { runs: [], recommendations: [] } };
@@ -109,9 +106,11 @@ export function MarketClient() {
   const [poolLoading, setPoolLoading] = useState(false);
   const [crosshairEnabled, setCrosshairEnabled] = useState(true);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [rightOverlayMode, setRightOverlayMode] = useState(false);
   const [rightWidth, setRightWidth] = useState(360);
   const [headerCompact, setHeaderCompact] = useState(false);
   const [templatePendingCode, setTemplatePendingCode] = useState<string | null>(null);
+  const [marketOrigin, setMarketOrigin] = useState<MarketOrigin>({ from: null, industry: null, window: null });
   const [status, setStatus] = useState("连接本地数据…");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -121,6 +120,7 @@ export function MarketClient() {
   const operationStarted = useRef(0);
   const loadSequence = useRef(0);
   const barsLoadSequence = useRef(0);
+  const templateLoadSequence = useRef(0);
   const shellRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
   const chartRefs = useRef<Array<MarketChartHandle | null>>([]);
@@ -129,6 +129,19 @@ export function MarketClient() {
   const rightResizeActive = useRef(false);
   const rightResizeFrame = useRef<number | null>(null);
   const fibonacciInputRef = useRef<HTMLInputElement>(null);
+  const rightCloseRef = useRef<HTMLButtonElement>(null);
+  const rightOpenRef = useRef<HTMLButtonElement>(null);
+  const drawerWasOpen = useRef(false);
+  const marketOriginRef = useRef<MarketOrigin>({ from: null, industry: null, window: null });
+
+  const marketPath = useCallback((code: string, activeTemplateId: string) => {
+    const params = new URLSearchParams({ code, template: activeTemplateId });
+    const origin = marketOriginRef.current;
+    if (origin.from) params.set("from", origin.from);
+    if (origin.industry) params.set("industry", origin.industry);
+    if (origin.window) params.set("window", origin.window);
+    return `/market?${params.toString()}`;
+  }, []);
 
   const refreshWatchlist = useCallback(async (snapshot: StateSnapshot) => {
     const items = await Promise.all(snapshot.watchlist.map(item => api.stock(item.code).then(result => result.item).catch(() => ({ code: item.code, ts_code: item.ts_code, name: item.name || item.code, close: 0, pct_chg: 0 } as Stock))));
@@ -136,21 +149,45 @@ export function MarketClient() {
   }, []);
 
   const loadTemplatePool = useCallback(async (id: string) => {
+    const sequence = ++templateLoadSequence.current;
     setPoolLoading(true);
+    setTemplateLoading(true);
     setTemplateError("");
-    try {
-      const [definition, result] = await Promise.all([
-        api.template(id),
-        api.templateStocks(id, 200),
-      ]);
-      setTemplate(definition);
-      setTemplatePool(result.items);
-    } catch (e) {
-      setTemplateError(e instanceof Error ? e.message : "模板股票列表加载失败");
-      setTemplate(null);
-      setTemplatePool([]);
-    }
-    finally { setPoolLoading(false); }
+    const definitionTask = api.template(id)
+      .then(definition => {
+        if (sequence === templateLoadSequence.current && templateIdRef.current === id) {
+          setTemplate(definition);
+        }
+      })
+      .catch(e => {
+        if (sequence === templateLoadSequence.current && templateIdRef.current === id) {
+          setTemplateError(e instanceof Error ? e.message : "模板 K 线加载失败");
+          setTemplate(null);
+        }
+      })
+      .finally(() => {
+        if (sequence === templateLoadSequence.current && templateIdRef.current === id) {
+          setTemplateLoading(false);
+        }
+      });
+    const rankingTask = api.templateStocks(id, 100)
+      .then(result => {
+        if (sequence === templateLoadSequence.current && templateIdRef.current === id) {
+          setTemplatePool(result.items);
+        }
+      })
+      .catch(e => {
+        if (sequence === templateLoadSequence.current && templateIdRef.current === id) {
+          setTemplateError(e instanceof Error ? e.message : "模板 Top100 加载失败");
+          setTemplatePool([]);
+        }
+      })
+      .finally(() => {
+        if (sequence === templateLoadSequence.current && templateIdRef.current === id) {
+          setPoolLoading(false);
+        }
+      });
+    await Promise.allSettled([definitionTask, rankingTask]);
   }, []);
 
   const loadTemplates = useCallback(async (requestedId?: string | null) => {
@@ -166,7 +203,6 @@ export function MarketClient() {
       const requestedIsValid = Boolean(requestedId && items.some(item => item.id === requestedId || item.key === requestedId));
       if (requestedIsValid) {
         setRightTab("模板");
-        if (window.matchMedia("(max-width: 1100px)").matches) setRightOpen(true);
       }
       templateIdRef.current = selected.id;
       setTemplateId(selected.id);
@@ -190,17 +226,18 @@ export function MarketClient() {
       const detail = detailResult.item;
       setStock(detail); setBars(history.items); setPeriod(nextPeriod); setRange(nextRange);
       setTemplatePendingCode(null);
-      setPerf(current => ({ ...current, frontendMs: performance.now() - started, httpMs: detailResult.httpMs + (history.http_ms || 0), queryMs: history.timings.total_ms || 0, cache: detailResult.cacheHit && Boolean(history.client_cache_hit) }));
-      setStatus(`${history.client_cache_hit ? "前端缓存" : history.cache_hit ? "后端缓存" : "本地快照"} · ${formatDate(history.as_of.daily)} · ${history.items.length} 根`);
+      setPerf(current => ({ ...current, frontendMs: performance.now() - started, httpMs: Math.max(detailResult.httpMs, history.http_ms || 0), queryMs: history.timings.total_ms || 0, cache: detailResult.cacheHit && Boolean(history.client_cache_hit) }));
+      const visibleBars = Math.min(history.items.length, rangeLimits[nextRange]?.[nextPeriod] || history.items.length);
+      setStatus(`${history.client_cache_hit ? "前端缓存" : history.cache_hit ? "后端缓存" : "本地快照"} · ${formatDate(history.as_of.daily)} · ${visibleBars} 根可见 / ${history.items.length} 根已读`);
       setSearchOpen(false); setQuery(""); if (!preserveContext) setRightOpen(false);
-      window.history.replaceState(null, "", `/market?code=${detail.code}&template=${encodeURIComponent(templateIdRef.current)}`);
+      window.history.replaceState(null, "", marketPath(detail.code, templateIdRef.current));
       void api.updateState(detail.code, "viewed").catch(() => undefined);
     } catch (e) {
       const message = e instanceof Error ? e.message : "本地行情加载失败";
       setError(message); setStatus(message);
       if (sequence === loadSequence.current) setTemplatePendingCode(null);
     } finally { if (sequence === loadSequence.current) setLoading(false); }
-  }, []);
+  }, [marketPath]);
 
   const chooseTemplateStock = useCallback((code: string) => {
     const index = templatePool.findIndex(item => item.code === code);
@@ -217,7 +254,10 @@ export function MarketClient() {
     }
     if (index < 0) index = direction > 0 ? -1 : templatePool.length;
     const nextIndex = Math.max(0, Math.min(templatePool.length - 1, index + direction));
-    if (nextIndex === index) return false;
+    if (nextIndex === index) {
+      setStatus(direction > 0 ? "已经是 Top100 最后一只" : "已经是 Top100 第一只");
+      return false;
+    }
     templateCursorRef.current = nextIndex;
     const code = templatePool[nextIndex].code;
     setTemplatePendingCode(code);
@@ -229,14 +269,19 @@ export function MarketClient() {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code") || "000001";
     const requestedTemplate = params.get("template");
+    const origin = {
+      from: params.get("from"),
+      industry: params.get("industry"),
+      window: params.get("window"),
+    };
+    marketOriginRef.current = origin;
     const updateClock = () => setClock(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
     const boot = window.setTimeout(() => {
-      void (async () => {
-        await loadTemplates(requestedTemplate);
-        await loadStock(code, "D", "6M", Boolean(requestedTemplate));
-        void api.state().then(snapshot => { setState(snapshot); void refreshWatchlist(snapshot); }).catch(() => undefined);
-        updateClock();
-      })();
+      setMarketOrigin(origin);
+      void loadStock(code, "D", "6M", Boolean(requestedTemplate));
+      if (requestedTemplate) void loadTemplates(requestedTemplate);
+      void api.state().then(snapshot => { setState(snapshot); void refreshWatchlist(snapshot); }).catch(() => undefined);
+      updateClock();
     }, 0);
     const timer = window.setInterval(updateClock, 1000);
     return () => { window.clearTimeout(boot); window.clearInterval(timer); };
@@ -253,6 +298,35 @@ export function MarketClient() {
     const index = templatePool.findIndex(item => item.code === (templatePendingCode || stock?.code));
     if (index >= 0) templateCursorRef.current = index;
   }, [stock?.code, templatePendingCode, templatePool]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1100px)");
+    const update = () => setRightOverlayMode(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!rightOpen) {
+      if (drawerWasOpen.current) {
+        drawerWasOpen.current = false;
+        const frame = window.requestAnimationFrame(() => rightOpenRef.current?.focus());
+        return () => window.cancelAnimationFrame(frame);
+      }
+      return;
+    }
+    drawerWasOpen.current = true;
+    const frame = window.requestAnimationFrame(() => rightCloseRef.current?.focus());
+    const closeDrawer = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setRightOpen(false);
+    };
+    window.addEventListener("keydown", closeDrawer);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", closeDrawer);
+    };
+  }, [rightOpen]);
 
   useEffect(() => {
     const onFullscreen = () => {
@@ -305,7 +379,8 @@ export function MarketClient() {
       if (sequence !== barsLoadSequence.current) return;
       setBars(history.items);
       setPerf(current => ({ ...current, frontendMs: performance.now() - started, httpMs: history.http_ms || 0, queryMs: history.timings.total_ms || 0, cache: Boolean(history.client_cache_hit || history.cache_hit) }));
-      setStatus(`${history.client_cache_hit ? "前端缓存" : history.cache_hit ? "后端缓存" : "本地聚合"} · ${periodLabel(nextPeriod)} · ${history.items.length} 根`);
+      const visibleBars = Math.min(history.items.length, rangeLimits[nextRange]?.[nextPeriod] || history.items.length);
+      setStatus(`${history.client_cache_hit ? "前端缓存" : history.cache_hit ? "后端缓存" : "本地聚合"} · ${periodLabel(nextPeriod)} · ${visibleBars} 根可见 / ${history.items.length} 根已读`);
     } catch (e) {
       if (sequence !== barsLoadSequence.current) return;
       const message = e instanceof Error ? e.message : "周期切换失败";
@@ -373,7 +448,7 @@ export function MarketClient() {
     templateCursorRef.current = -1;
     setTemplatePendingCode(null);
     setTemplateId(nextId);
-    if (stock) window.history.replaceState(null, "", `/market?code=${stock.code}&template=${encodeURIComponent(nextId)}`);
+    if (stock) window.history.replaceState(null, "", marketPath(stock.code, nextId));
     void loadTemplatePool(nextId);
   }
 
@@ -515,8 +590,13 @@ export function MarketClient() {
   const maLegend = useMemo(() => latest ? [latest.ma5, latest.ma10, latest.ma20] : [], [latest]);
   const watched = Boolean(stock && state.watchlist.some(item => item.code === stock.code));
   const visibleCount = rangeLimits[range]?.[period] || 110;
+  const visibleBars = bars.slice(-visibleCount);
   const paneIndexes = maximizedPane == null ? Array.from({ length: layout }, (_value, index) => index) : [maximizedPane];
   const activeTemplateStock = templatePool.find(item => item.code === (templatePendingCode || stock?.code)) || null;
+  const templateReturnHref = marketOrigin.from === "breadth"
+    ? `/template-breadth-v3?template=${encodeURIComponent(templateId)}${marketOrigin.industry ? `&industry=${encodeURIComponent(marketOrigin.industry)}` : ""}${marketOrigin.window ? `&window=${encodeURIComponent(marketOrigin.window)}` : ""}`
+    : `/templates?template=${encodeURIComponent(templateId)}`;
+  const templateReturnLabel = marketOrigin.from === "breadth" ? "回到行业宽度" : "回到模板库查看完整列表";
 
   return <div
     ref={shellRef}
@@ -533,7 +613,7 @@ export function MarketClient() {
           {query ? <button onClick={() => onSearch("")} aria-label="清空搜索"><X /></button> : <Search className="search-right" />}
           {searchOpen && <div className="search-results" role="listbox">{results.length ? results.map((item, index) => <button role="option" aria-selected={index === activeResult} key={item.code} className={index === activeResult ? "active" : ""} onMouseEnter={() => setActiveResult(index)} onClick={() => void loadStock(item.code, "D", "6M")}><span>{item.code}</span><b>{item.name}</b><em>{item.initials}</em></button>) : <p>没有匹配的本地股票</p>}</div>}
         </div>
-        <div className="layout-tools"><button className="header-density-toggle" onClick={() => { setHeaderCompact(value => !value); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-pressed={headerCompact} aria-label={headerCompact ? "展开行情页顶部" : "收起行情页顶部"} title={headerCompact ? "展开股票摘要与顶部工具" : "一键收起顶部，增加 K 线高度"}>{headerCompact ? <PanelTopOpen /> : <PanelTopClose />}<span>{headerCompact ? "展开顶部" : "收起顶部"}</span></button><div className="layout-picker"><button onClick={() => setLayoutOpen(value => !value)} aria-expanded={layoutOpen}><Grid2X2 /><span>{layout} 图布局</span><ChevronDown /></button>{layoutOpen && <div className="layout-menu">{([1, 2, 4] as const).map(value => <button key={value} className={layout === value ? "active" : ""} onClick={() => changeLayout(value)}>{value} 图</button>)}</div>}</div><button onClick={() => changeLayout(1)} title="恢复单图" aria-label="恢复单图"><Grid2X2 /><span>{maximizedPane == null ? `布局 ${layout}` : "单图放大"}</span></button><button onClick={() => chartRefs.current.forEach(chart => chart?.fitContent())} title="适配全部历史" aria-label="适配图表"><Settings2 /></button><button className="mobile-panel-button" onClick={() => setRightOpen(true)} aria-label="打开右侧面板"><PanelRightOpen /></button><button onClick={toggleRightbar} aria-label="折叠或展开右侧栏" aria-expanded={!rightCollapsed} title={rightCollapsed ? "展开右侧栏" : "折叠右侧栏"}><Menu /></button></div>
+        <div className="layout-tools"><button className="header-density-toggle" onClick={() => { setHeaderCompact(value => !value); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-pressed={headerCompact} aria-label={headerCompact ? "展开行情页顶部" : "收起行情页顶部"} title={headerCompact ? "展开股票摘要与顶部工具" : "一键收起顶部，增加 K 线高度"}>{headerCompact ? <PanelTopOpen /> : <PanelTopClose />}<span>{headerCompact ? "展开顶部" : "收起顶部"}</span></button><div className="layout-picker"><button onClick={() => setLayoutOpen(value => !value)} aria-expanded={layoutOpen}><Grid2X2 /><span>{layout} 图布局</span><ChevronDown /></button>{layoutOpen && <div className="layout-menu">{([1, 2, 4] as const).map(value => <button key={value} className={layout === value ? "active" : ""} onClick={() => changeLayout(value)}>{value} 图</button>)}</div>}</div>{(layout !== 1 || maximizedPane != null) && <button onClick={() => changeLayout(1)} title="恢复单图" aria-label="恢复单图"><Grid2X2 /><span>{maximizedPane == null ? `布局 ${layout}` : "单图放大"}</span></button>}<button onClick={() => chartRefs.current.forEach(chart => chart?.fitContent())} title="适配当前已读范围" aria-label="适配图表"><Settings2 /></button><button ref={rightOpenRef} className="mobile-panel-button" onClick={() => setRightOpen(true)} aria-label="打开右侧面板" aria-expanded={rightOpen}><PanelRightOpen /></button><button onClick={toggleRightbar} aria-label="折叠或展开右侧栏" aria-expanded={!rightCollapsed} title={rightCollapsed ? "展开右侧栏" : "折叠右侧栏"}><Menu /></button></div>
       </header>
 
       <section className="quote-summary">
@@ -548,8 +628,8 @@ export function MarketClient() {
 
       <section ref={workspaceRef} className="chart-workspace" data-layout={layout} data-fullscreen={fullscreen}>
         <div className="chart-toolbar">
-          <div className="period-tabs">{unavailablePeriods.map(label => <button key={label} disabled title="本地 zer0share 当前只有日线，分钟周期不可用">{label}</button>)}{periods.map(([label, value]) => <button key={label} className={period === value ? "active" : ""} onClick={() => void changeBars(value)}>{label}</button>)}</div>
-          <div className="chart-actions"><DisabledButton title="指标尚未实现">指标 <ChevronDown /></DisabledButton><i /><DisabledButton title="对比尚未实现">对比</DisabledButton><i /><DisabledButton title="预警尚未实现"><Bell />预警</DisabledButton><i /><DisabledButton title="回放尚未实现"><RotateCcw />回放</DisabledButton><i /><DisabledButton title="截图导出尚未实现" label="截图"><Camera /></DisabledButton><button onClick={() => void toggleFullscreen()} aria-label={fullscreen ? "退出全屏" : "进入全屏"} title={fullscreen ? "退出全屏" : "进入全屏"}><Fullscreen />{fullscreen ? "退出" : "全屏"}</button></div>
+          <div className="period-tabs">{periods.map(([label, value]) => <button key={label} className={period === value ? "active" : ""} onClick={() => void changeBars(value)}>{label}</button>)}</div>
+          <div className="chart-actions"><span className="local-period-note">本地真实前复权 K 线</span><button onClick={() => void toggleFullscreen()} aria-label={fullscreen ? "退出全屏" : "进入全屏"} title={fullscreen ? "退出全屏" : "进入全屏"}><Fullscreen />{fullscreen ? "退出" : "全屏"}</button></div>
           <div className="ma-legend">
             <span className="ma5">MA5　{fmtNumber(maLegend[0])}</span><span className="ma10">MA10　{fmtNumber(maLegend[1])}</span><span className="ma20">MA20　{fmtNumber(maLegend[2])}</span>
             <div className="drawing-style-controls" aria-label="画线样式">
@@ -587,12 +667,12 @@ export function MarketClient() {
           </div>
           <div className="drawing-tool-group drawing-tool-actions" role="group" aria-label="绘图操作">
             <DrawingButton label="放大图表" active={false} onClick={zoomIn}><ZoomIn /></DrawingButton>
-            <DrawingButton label="删除所选" active={selectedDrawing != null} onClick={() => selectedDrawing != null && deleteDrawing(selectedDrawing)}><Trash2 /></DrawingButton>
-            <DrawingButton label="清除画线（全部）" active={drawings.length > 0} onClick={() => { setDrawings([]); setSelectedDrawing(null); setDrawingMode(null); }}><Trash2 /></DrawingButton>
+            {selectedDrawing != null && <DrawingButton label="删除所选" active onClick={() => deleteDrawing(selectedDrawing)}><Trash2 /></DrawingButton>}
+            {drawings.length > 0 && <DrawingButton label="清除画线（全部）" active onClick={() => { setDrawings([]); setSelectedDrawing(null); setDrawingMode(null); }}><Trash2 /></DrawingButton>}
           </div>
         </div>
         <div className={`chart-stage chart-grid layout-${paneIndexes.length}`}>{error && !bars.length ? <div className="chart-error"><p>{error}</p><button onClick={() => stock && void loadStock(stock.code, period, range)}>重试</button></div> : paneIndexes.map(index => <div className="chart-pane" key={index} data-pane={index}><button className="pane-maximize" onClick={() => { setMaximizedPane(current => current === index ? null : index); window.setTimeout(() => chartRefs.current.forEach(chart => chart?.resize()), 40); }} aria-label={maximizedPane === index ? "退出单图放大" : `放大图表 ${index + 1}`}>{maximizedPane === index ? "恢复布局" : `图 ${index + 1} · 放大`}</button><MarketChart key={`${stock?.code || "none"}-${period}-${range}-${index}`} ref={handle => { chartRefs.current[index] = handle; }} bars={bars} visibleCount={visibleCount} rightPaddingBars={10} enablePriceScaleMenu onResetDefault={() => void changeBars("D", "6M")} drawingMode={drawingMode} crosshairEnabled={crosshairEnabled} drawingColor={drawingColor} drawingLineWidth={drawingLineWidth} drawingText={drawingText} fibonacciLevels={drawingMode === "fibonacci-extension" ? fibonacciDefaults["fibonacci-extension"] : fibonacciDefaults.fibonacci} drawings={drawings} selectedDrawingIndex={selectedDrawing} onDrawingSelect={selectDrawing} onDrawingsChange={setDrawings} onDrawingDoubleClick={openFibonacciSettings} onRendered={onRendered} onDrawComplete={completeDrawing} /></div>)}{loading && <div className="chart-loading">正在加载本地行情…</div>}</div>
-        <div className="range-toolbar">{ranges.map(([label, value]) => <button className={range === value ? "active" : ""} key={value} onClick={() => void changeBars(period, value)}>{label}</button>)}<b>{bars[0]?.time || "—"} 至 {bars.at(-1)?.time || "—"}　<CalendarDays /></b></div>
+        <div className="range-toolbar">{ranges.map(([label, value]) => <button className={range === value ? "active" : ""} key={value} onClick={() => void changeBars(period, value)}>{label}</button>)}<b>{visibleBars[0]?.time || "—"} 至 {visibleBars.at(-1)?.time || "—"}　<CalendarDays /></b></div>
       </section>
     </main>
 
@@ -613,14 +693,18 @@ export function MarketClient() {
       onPointerUp={finishRightResize}
       onPointerCancel={finishRightResize}
     />}
-    <aside className={`market-rightbar ${rightOpen ? "open" : ""}`} aria-hidden={rightCollapsed}>
-      <div className="rightbar-mobile-head"><b>股票面板</b><button onClick={() => setRightOpen(false)} aria-label="关闭"><X /></button></div>
+    <aside
+      className={`market-rightbar ${rightOpen ? "open" : ""}`}
+      aria-hidden={rightCollapsed || (rightOverlayMode && !rightOpen)}
+      inert={rightCollapsed || (rightOverlayMode && !rightOpen)}
+    >
+      <div className="rightbar-mobile-head"><b>股票面板</b><button ref={rightCloseRef} onClick={() => setRightOpen(false)} aria-label="关闭"><X /></button></div>
       <div className="right-tabs">{tabs.map(tab => <button className={rightTab === tab ? "active" : ""} onClick={() => setRightTab(tab)} key={tab}>{tab}</button>)}</div>
       {rightTab === "自选" ? <>
         <div className="watch-header"><span>名称/代码</span><span>最新价</span><span>涨跌幅</span></div>
         <div className="watch-list">{watchlist.length ? watchlist.map(item => <button key={item.code} className={item.code === stock?.code ? "active" : ""} onClick={() => void loadStock(item.code, "D", "6M")}><span><b>{item.name}</b><em>{item.code}</em></span><strong>{fmtNumber(item.close)}</strong><i className={item.pct_chg >= 0 ? "up" : "down"}>{signed(item.pct_chg)}%</i></button>) : <PanelEmpty title="暂无自选" text="添加后会保存在本项目的本地数据库中。" />}</div>
         <button className={`add-watch ${watched ? "remove" : ""}`} onClick={() => void toggleWatchlist()} disabled={!stock}>{watched ? <X /> : <Plus />}{watched ? "移出自选" : "添加自选"}</button>
-      </> : rightTab === "详情" ? <DetailPanel stock={stock} /> : rightTab === "模板" ? <TemplateWorkspace activeCode={templatePendingCode || stock?.code || null} templateId={templateId} templates={templates} pool={templatePool} poolLoading={poolLoading || templateLoading} onTemplate={changeTemplate} onChoose={chooseTemplateStock}><TemplateComparisonPanel stock={stock} template={template} candidate={activeTemplateStock} loading={templateLoading} error={templateError} onRetry={() => void loadTemplates(templateId)} /></TemplateWorkspace> : <UnavailablePanel tab={rightTab} />}
+      </> : rightTab === "详情" ? <DetailPanel stock={stock} /> : <TemplateWorkspace activeCode={templatePendingCode || stock?.code || null} templateId={templateId} templates={templates} pool={templatePool} poolLoading={poolLoading} onTemplate={changeTemplate} onChoose={chooseTemplateStock}><TemplateComparisonPanel key={`${templateId}:${templatePendingCode || stock?.code || "none"}:${activeTemplateStock?.ts_code || "pending"}`} stock={stock} template={template} candidate={activeTemplateStock} loading={templateLoading} error={templateError} onRetry={() => void loadTemplates(templateId)} returnHref={templateReturnHref} returnLabel={templateReturnLabel} /></TemplateWorkspace>}
     </aside>
 
     <footer className="market-statusbar"><span><i className={stock ? "connected" : ""} />{stock ? "已连接" : "未连接"}</span><span><Clock3 />{clock}</span><span className="status-center">本地数据　{status}</span><span><CircleDot />zer0share 日线快照</span><span>CN</span></footer>
@@ -742,12 +826,37 @@ function TemplateWorkspace({ activeCode, templateId, templates, pool, poolLoadin
   </div>;
 }
 
-function TemplateComparisonPanel({ stock, template, candidate, loading, error, onRetry }: { stock: Stock | null; template: TemplateDefinition | null; candidate: TemplateStock | null; loading: boolean; error: string; onRetry: () => void }) {
+function TemplateComparisonPanel({ stock, template, candidate, loading, error, onRetry, returnHref, returnLabel }: { stock: Stock | null; template: TemplateDefinition | null; candidate: TemplateStock | null; loading: boolean; error: string; onRetry: () => void; returnHref: string; returnLabel: string }) {
+  const [candidateBars, setCandidateBars] = useState<Bar[]>(() => candidate?.bars || []);
+  const [candidateKlineState, setCandidateKlineState] = useState<"idle" | "loading" | "ready" | "error">(() => {
+    if (!candidate) return "idle";
+    if (candidate.bars.length) return "ready";
+    return candidate.start_date && candidate.end_date ? "loading" : "error";
+  });
+  const [candidateRetry, setCandidateRetry] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    if (!candidate || candidate.bars.length || !candidate.start_date || !candidate.end_date) {
+      return () => { active = false; };
+    }
+    void api.barsWindow(candidate.code, candidate.start_date, candidate.end_date, candidate.window_length || template?.window_length || 240)
+      .then(result => {
+        if (!active) return;
+        setCandidateBars(result.items);
+        setCandidateKlineState("ready");
+      })
+      .catch(() => {
+        if (active) setCandidateKlineState("error");
+      });
+    return () => { active = false; };
+  }, [candidate, candidateRetry, template?.window_length]);
+
   if (!stock) return <PanelEmpty title="尚未选择股票" text="从模板股票列表中打开一只股票。" />;
-  if (loading) return <PanelEmpty title="正在读取模板" text="正在准备模板与候选窗口曲线。" />;
+  if (loading) return <PanelEmpty title="正在读取模板主 K 线" text="Top100 排名和候选缩略图会分别呈现。" />;
   if (error) return <div className="panel-error"><p>{error}</p><button onClick={onRetry}>重试</button></div>;
   if (!template) return <PanelEmpty title="模板不可用" text="请重新选择一个模板。" />;
-  if (!candidate) return <div className="template-not-ranked"><CircleDot /><h3>未进入这个模板的当前列表</h3><p>{stock.name} 不在当前返回的相似股票范围内，因此不显示推测分数。</p><Link href="/templates">回到模板库</Link></div>;
+  if (!candidate) return <div className="template-not-ranked"><CircleDot /><h3>未进入这个模板的 Top100</h3><p>{stock.name} 不在当前 Top100，因此不显示推测分数。</p><Link href={returnHref}>{returnLabel}</Link></div>;
   return <div className="template-comparison-panel">
     <div className="template-comparison-head"><div><small>{template.kind === "custom" ? "自定义模板" : "冻结模板"}</small><h3>{template.name}</h3></div><strong>{candidate.score.toFixed(3)}</strong></div>
     <div className="template-kline-pair">
@@ -756,8 +865,12 @@ function TemplateComparisonPanel({ stock, template, candidate, loading, error, o
         <CandlestickPreview bars={template.bars} height={132} label={`${template.name}模板真实前复权 K 线`} />
       </figure>
       <figure>
-        <figcaption><strong>候选真实 K 线</strong><small>{candidate.start_date ? `${formatDate(candidate.start_date)}—${formatDate(candidate.end_date)}` : "候选窗口"}</small></figcaption>
-        <CandlestickPreview bars={candidate.bars} height={132} label={`${stock.name}候选窗口真实前复权 K 线`} />
+        <figcaption><strong>候选真实 K 线</strong><small>{candidateKlineState === "loading" ? "正在加载缩略图" : candidate.start_date ? `${formatDate(candidate.start_date)}—${formatDate(candidate.end_date)}` : "候选窗口"}</small></figcaption>
+        {candidateBars.length
+          ? <CandlestickPreview bars={candidateBars} height={132} label={`${stock.name}候选窗口真实前复权 K 线`} />
+          : candidateKlineState === "error"
+            ? <button className="candidate-kline-retry" onClick={() => { setCandidateKlineState("loading"); setCandidateRetry(value => value + 1); }}>重试候选 K 线</button>
+            : <div className="candidate-kline-loading">排名已就绪，正在加载候选缩略图…</div>}
       </figure>
     </div>
     <dl className="template-comparison-facts">
@@ -768,14 +881,12 @@ function TemplateComparisonPanel({ stock, template, candidate, loading, error, o
     </dl>
     <p className="template-description">{template.description || template.cue || "两张图都来自本机前复权日线。"}</p>
     <p className="template-stage-note">阶段提示：相似度只比较各自选中窗口的 log-close 形状。请结合两张真实 K 线与起止位置判断更接近起涨、加速或末端；这里不使用未来表现作验证。</p>
-    <Link className="pattern-link" href={`/templates?template=${encodeURIComponent(template.id)}`}>回到模板库查看完整列表</Link>
+    <Link className="pattern-link" href={returnHref}>{returnLabel}</Link>
   </div>;
 }
-function UnavailablePanel({ tab }: { tab: RightTab }) { return <PanelEmpty title={`${tab} · 暂不可用`} text={`${tab}能力尚未实现，本版本只保留禁用入口。`} />; }
 function PanelEmpty({ title, text }: { title: string; text: string }) { return <div className="right-placeholder"><CircleDot /><h3>{title}</h3><p>{text}</p></div>; }
 function QuoteFact({ label, value }: { label: string; value: string }) { return <span><small>{label}</small><b>{value}</b></span>; }
 function DrawingButton({ label, hint, active, onClick, children }: { label: string; hint?: string; active: boolean; onClick: () => void; children: React.ReactNode }) { return <button title={hint || label} aria-label={label} aria-pressed={active} className={active ? "active" : ""} onClick={onClick}>{children}</button>; }
-function DisabledButton({ title, label, children }: { title: string; label?: string; children: React.ReactNode }) { return <button disabled title={title} aria-label={label || title}>{children}</button>; }
 function periodLabel(value: string) { return ({ D: "日K", W: "周K", M: "月K", Q: "季K", Y: "年K" } as Record<string, string>)[value] || value; }
 function signed(value?: number) { if (value == null || !Number.isFinite(value)) return "—"; return `${value >= 0 ? "+" : ""}${fmtNumber(value)}`; }
 function formatFibonacciLevel(value: number) { return `${Number(value.toFixed(4))}（${Number((value * 100).toFixed(2))}%）`; }

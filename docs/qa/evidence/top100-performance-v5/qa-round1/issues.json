@@ -1,0 +1,66 @@
+{
+  "round": 1,
+  "mode": "independent-review-only",
+  "branch": "codex/top100-performance-ux-v5",
+  "headAtReview": "9c1109c",
+  "frontend": "http://localhost:3106",
+  "backend": "http://127.0.0.1:8882/api",
+  "result": "ISSUES_FOUND",
+  "issues": [
+    {
+      "id": "QA-R1-001",
+      "severity": "P1",
+      "route": "/market?code=301234&template=fresh_breakout&from=breadth&industry=801080&window=20",
+      "viewport": "390x844",
+      "title": "移动端模板上下文加载后自动打开抽屉并遮住主行情",
+      "evidence": [
+        "market-390x844-viewport.png",
+        "browser-results.json#interactions.mobile"
+      ],
+      "observed": "进入页面约 150ms 时模板抽屉已经打开；模板 Top100 就绪后抽屉仍打开且 backdrop 可见，主股票和主 K 线被覆盖。Escape 可以关闭。",
+      "expected": "移动端应先稳定展示当前股票和主 K 线，模板上下文渐进就绪但不主动遮挡主内容；用户点击“打开右侧面板”后再显示抽屉。"
+    },
+    {
+      "id": "QA-R1-002",
+      "severity": "P2",
+      "route": "/templates",
+      "viewport": "all",
+      "title": "候选区标题缺少 Top100 数量口径",
+      "evidence": [
+        "templates-1900x956-viewport.png",
+        "templates-390x844.png",
+        "browser-results.json#interactions.templates"
+      ],
+      "observed": "页面实际渲染 100 条可进入行情的候选，但标题显示“Top 股票”，页面正文没有 Top100 字样。",
+      "expected": "候选区明确显示“Top100 股票”或“Top100 · 100只”，让固定取前 100 的口径可扫读。"
+    }
+  ],
+  "verified": {
+    "httpAndRuntimeErrors": "四尺寸、四页面均为 HTTP 200，未捕获 console error、pageerror 或 >=400 响应。",
+    "breadth": "Top100 合计 100；默认 10 日；20 日日期为 2026-07-01；切换不改变面积；红扩张、绿收缩、文字箭头同时编码；其他行业为中性色，20只/13行业；点击后才请求明细，并显示具体行业、当前股票、进入/保留/退出和时间序列。",
+    "templates": "冻结模板为真实 K 线；候选链接 100 条；桌面首屏 8 条迷你 K 线请求，移动端滚动首条进入可视区后缩略图加载；整行链接保留 template 上下文。",
+    "newTemplate": "选择 000001 后显示 3292 根真实前复权历史总览和焦点 K 线；滚轮缩放、焦点背景平移、总览平移、整段键盘移动均改变对应范围；双边界和整段 slider 可聚焦；移动端边界命中宽 43.75px；19 日无效时保存按钮禁用。",
+    "market": "URL 的 from/industry/window 在键盘切股后仍保留；Top100 列表 100 条；主 K 线和候选真实 K 线可见；顶部紧凑/展开可切换；无保存模板入口；返回链接精确保留 template/industry/window；Escape 可关闭移动抽屉。"
+  },
+  "observedTimingsMs": {
+    "note": "本地服务已启动且后端缓存已预热；浏览器上下文为新建。不是冷启动指标。",
+    "breadthTreemapActionable": 265,
+    "marketShellDomContentLoaded": 73,
+    "marketStockVisible": 330,
+    "marketMainKlineVisible": 332,
+    "marketTemplateTop100Visible": 443,
+    "marketSettled": 1740,
+    "newTemplateSelectedInteractionRun": 2612
+  },
+  "automationNotes": [
+    "browser-results.json 中 otherComponentCount=0 是 QA locator 假判定：构成项为卡片而非 li；截图和正文确认 13 个具体行业，不能列为产品问题。",
+    "browser-results.json 中 invalidRangeShowsInlineHint=false 是 QA 文案正则与实际“还差…最少需要 20 日”不一致；role=alert 与保存禁用已验证，不能列为产品问题。"
+  ],
+  "externalResidual": {
+    "path": "C:\\Users\\hp\\.codex\\worktrees\\b7b3\\%E6%89%8B%E5%8A%A8%E8%B7%9F%E8%B8%AA%E5%B8%82%E5%9C%BA",
+    "reason": "首轮 QA 脚本最初未解码 file URL，误把 16 张截图和 1 份 browser-results.json 写到工作区父目录的 URL 编码同级目录。",
+    "files": 17,
+    "bytes": 3151225,
+    "action": "依据数据保护规则未删除、未移动；后续证据均已写入正确工作区。"
+  }
+}
