@@ -9,7 +9,7 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "vinext build && node --test tests/rendered-html.test.mjs",
+    "test": "vinext build && node --test tests/rendered-html.test.mjs tests/industry-b-health.test.mjs",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"

@@ -75,6 +75,76 @@ test("all four frozen templates expose independent one-year timelines", async ({
   ).toEqual(new Set(templateKeys));
 });
 
+test("industry B core identity and weakening risk remain visually distinct", async ({
+  page,
+}) => {
+  await page.goto("/template-breadth-v3");
+
+  const monitor = page.getByRole("region", {
+    name: /行业 B 健康监测 2026-07-29/,
+  });
+  await expect(monitor).toContainText("核心看占比，风险看平滑走弱");
+  await expect(monitor).toContainText("电子");
+  await expect(monitor).toContainText("B 49只 · 池占比 49.0% · 第1名");
+  await expect(monitor).toContainText("机械设备");
+  await expect(monitor).toContainText("B 11只 · 池占比 11.0% · 第2名");
+  await expect(monitor).toContainText("金色：当前核心行业，非风险");
+
+  const map = page.getByRole("group", {
+    name: /Top100 行业矩形树图/,
+  });
+  const machinery = map.locator('[data-industry-code="801890.SI"]');
+  await expect(machinery).toHaveAttribute("data-b-core", "核心 Top2");
+  await expect(machinery).toHaveAttribute("data-b-status", "stable");
+
+  const buildingMaterialsRisk = monitor.locator(
+    '[data-b-industry-code="801710.SI"]',
+  );
+  await expect(buildingMaterialsRisk).toHaveAttribute(
+    "data-b-status",
+    "cooling",
+  );
+  await expect(buildingMaterialsRisk).toContainText(
+    "B走弱状态已持续1个交易日",
+  );
+
+  const groupedOther = map.locator('[data-industry-code="other"]');
+  await expect(groupedOther).toHaveAttribute("data-b-status", "cooling");
+  await expect(groupedOther).toHaveAttribute("title", /建筑材料已确认降温/);
+
+  const lightManufacturing = map.locator(
+    '[data-industry-code="801140.SI"]',
+  );
+  await expect(lightManufacturing).toHaveAttribute(
+    "data-b-status",
+    "weakening",
+  );
+  await expect(lightManufacturing).toHaveAttribute(
+    "title",
+    /B走弱｜B走弱状态已持续2个交易日/,
+  );
+});
+
+test("industry B monitor stays readable without horizontal overflow on mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/template-breadth-v3");
+  const monitor = page.getByRole("region", {
+    name: /行业 B 健康监测 2026-07-29/,
+  });
+  await expect(monitor.getByText("核心 Top1", { exact: true })).toBeVisible();
+  await expect(monitor.getByText("核心 Top2", { exact: true })).toBeVisible();
+  await expect(
+    monitor.locator('[data-b-industry-code="801710.SI"]'),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
 test("timeline click, drag and keyboard movement keep the whole view in sync", async ({
   page,
 }) => {
