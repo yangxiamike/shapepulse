@@ -1,0 +1,194 @@
+{
+  "generatedAt": "2026-07-30T02:37:38.758Z",
+  "branch": "codex/top100-performance-ux-v5",
+  "baseUrl": "http://localhost:3106",
+  "smoke": [
+    {
+      "size": "1900x956",
+      "route": "breadth",
+      "status": 200,
+      "errors": [],
+      "screenshot": "breadth-1900x956-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1900x956",
+      "route": "templates",
+      "status": 200,
+      "errors": [],
+      "screenshot": "templates-1900x956-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1900x956",
+      "route": "new-template",
+      "status": 200,
+      "errors": [],
+      "screenshot": "new-template-1900x956-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1900x956",
+      "route": "market",
+      "status": 200,
+      "errors": [],
+      "screenshot": "market-1900x956-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1440x900",
+      "route": "breadth",
+      "status": 200,
+      "errors": [],
+      "screenshot": "breadth-1440x900-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1440x900",
+      "route": "templates",
+      "status": 200,
+      "errors": [],
+      "screenshot": "templates-1440x900-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1440x900",
+      "route": "new-template",
+      "status": 200,
+      "errors": [],
+      "screenshot": "new-template-1440x900-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1440x900",
+      "route": "market",
+      "status": 200,
+      "errors": [],
+      "screenshot": "market-1440x900-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1024x768",
+      "route": "breadth",
+      "status": 200,
+      "errors": [],
+      "screenshot": "breadth-1024x768-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1024x768",
+      "route": "templates",
+      "status": 200,
+      "errors": [],
+      "screenshot": "templates-1024x768-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1024x768",
+      "route": "new-template",
+      "status": 200,
+      "errors": [],
+      "screenshot": "new-template-1024x768-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "1024x768",
+      "route": "market",
+      "status": 200,
+      "errors": [],
+      "screenshot": "market-1024x768-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "390x844",
+      "route": "breadth",
+      "status": 200,
+      "errors": [],
+      "screenshot": "breadth-390x844-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "390x844",
+      "route": "templates",
+      "status": 200,
+      "errors": [],
+      "screenshot": "templates-390x844-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "390x844",
+      "route": "new-template",
+      "status": 200,
+      "errors": [],
+      "screenshot": "new-template-390x844-viewport.png",
+      "horizontalOverflow": false
+    },
+    {
+      "size": "390x844",
+      "route": "market",
+      "status": 200,
+      "errors": [],
+      "screenshot": "market-390x844-viewport.png",
+      "horizontalOverflow": false
+    }
+  ],
+  "closure": {
+    "p1": {
+      "initiallyOpen": false,
+      "mainChartVisible": true,
+      "openedAfterClick": true,
+      "closedAfterButton": true,
+      "focusReturned": true,
+      "errors": []
+    },
+    "p2": {
+      "exactHeading": true,
+      "headingText": "Top100 股票",
+      "errors": []
+    }
+  },
+  "regressions": {
+    "breadth": {
+      "total": 100,
+      "default10": true,
+      "switched20": true,
+      "geometryStable10to20": true,
+      "otherNeutral": true,
+      "otherExpanded": true,
+      "rapidTemplateNames": [
+        "刚突破平台蓄势后向上突破，尾段仍保持力度",
+        "健康上涨持续抬高，回撤受控，不靠末端拔线",
+        "回调转强先走强、再回吐，随后恢复向上",
+        "抛物线上升前段较缓，随后斜率放大并加速"
+      ],
+      "rapidFinalActive": [
+        {
+          "text": "刚突破平台蓄势后向上突破，尾段仍保持力度",
+          "pressed": "true"
+        }
+      ],
+      "errors": []
+    },
+    "newTemplate": {
+      "focusCandleGroups": 124,
+      "hasOverview": true,
+      "zoomChanged": true,
+      "panChanged": true,
+      "boundarySliderCount": 3,
+      "has20to240Hint": true,
+      "hasActualTradingDays": true,
+      "errors": []
+    },
+    "market": {
+      "keyboardChangedStock": true,
+      "returnHref": "/template-breadth-v3?template=fresh_breakout&industry=801080&window=20",
+      "preservedReturnContext": true,
+      "hasSaveTemplateEntry": false,
+      "rapidRequestedFinal": "fresh_breakout",
+      "rapidFinalValue": "fresh_breakout",
+      "staleResponseDidNotOverride": true,
+      "errors": []
+    }
+  },
+  "errorCount": 0
+}

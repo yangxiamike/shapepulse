@@ -1,0 +1,193 @@
+{
+  "captured_at": "2026-07-17T06:32:17.636Z",
+  "results": [
+    {
+      "scenario": "responsive",
+      "viewport": "1600x1000",
+      "overflow": false,
+      "result": "pass"
+    },
+    {
+      "scenario": "responsive",
+      "viewport": "1280x900",
+      "overflow": false,
+      "result": "pass"
+    },
+    {
+      "scenario": "responsive",
+      "viewport": "1024x800",
+      "overflow": false,
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "突破启动",
+      "sample": 1,
+      "code": "002728",
+      "rank": "1",
+      "reason": "近20日快速抬升",
+      "pct": "+0.79%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "突破启动",
+      "sample": 2,
+      "code": "600129",
+      "rank": "2",
+      "reason": "近20日快速抬升",
+      "pct": "-9.57%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "突破启动",
+      "sample": 3,
+      "code": "600267",
+      "rank": "3",
+      "reason": "近20日快速抬升",
+      "pct": "+0.08%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "突破启动",
+      "sample": 4,
+      "code": "603233",
+      "rank": "4",
+      "reason": "近20日快速抬升",
+      "pct": "+0.00%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "突破启动",
+      "sample": 5,
+      "code": "600671",
+      "rank": "5",
+      "reason": "近20日快速抬升",
+      "pct": "+2.38%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "上升趋势回调",
+      "sample": 1,
+      "code": "600060",
+      "rank": "1",
+      "reason": "中期上升趋势保持",
+      "pct": "-2.82%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "上升趋势回调",
+      "sample": 2,
+      "code": "002718",
+      "rank": "2",
+      "reason": "中期上升趋势保持",
+      "pct": "-0.44%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "上升趋势回调",
+      "sample": 3,
+      "code": "002668",
+      "rank": "3",
+      "reason": "高点后浅回撤",
+      "pct": "-3.26%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "上升趋势回调",
+      "sample": 4,
+      "code": "603995",
+      "rank": "4",
+      "reason": "中期上升趋势保持",
+      "pct": "-0.81%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "上升趋势回调",
+      "sample": 5,
+      "code": "603268",
+      "rank": "5",
+      "reason": "中期上升趋势保持",
+      "pct": "-3.04%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "区间下沿反弹",
+      "sample": 1,
+      "code": "603318",
+      "rank": "1",
+      "reason": "位于80日区间下沿",
+      "pct": "-4.86%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "区间下沿反弹",
+      "sample": 2,
+      "code": "001210",
+      "rank": "2",
+      "reason": "位于80日区间下沿",
+      "pct": "-0.48%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "区间下沿反弹",
+      "sample": 3,
+      "code": "002898",
+      "rank": "3",
+      "reason": "位于80日区间下沿",
+      "pct": "-2.63%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "区间下沿反弹",
+      "sample": 4,
+      "code": "000690",
+      "rank": "4",
+      "reason": "位于80日区间下沿",
+      "pct": "-0.64%",
+      "result": "pass"
+    },
+    {
+      "scenario": "shape-sample",
+      "category": "区间下沿反弹",
+      "sample": 5,
+      "code": "600527",
+      "rank": "5",
+      "reason": "位于80日区间下沿",
+      "pct": "-1.41%",
+      "result": "pass"
+    },
+    {
+      "scenario": "interactions",
+      "periods": [
+        110,
+        27,
+        6,
+        2,
+        1
+      ],
+      "drawings": [
+        "line",
+        "horizontal",
+        "text",
+        "measure",
+        "clear"
+      ],
+      "state_persistence": true,
+      "mobile_pattern_panel": true,
+      "result": "pass"
+    }
+  ]
+}

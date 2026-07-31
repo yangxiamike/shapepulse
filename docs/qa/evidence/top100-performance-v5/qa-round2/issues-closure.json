@@ -1,0 +1,103 @@
+{
+  "generated_at": "2026-07-30",
+  "branch": "codex/top100-performance-ux-v5",
+  "status": "PASS",
+  "qa_scope": "read-only product review; evidence files only",
+  "round1_issues": [
+    {
+      "id": "P1",
+      "title": "390x844 market drawer obscures main content",
+      "status": "CLOSED",
+      "evidence": {
+        "initially_open": false,
+        "main_chart_visible": true,
+        "opened_after_click": true,
+        "closed_after_button": true,
+        "focus_returned_to_open_button": true,
+        "errors": 0,
+        "screenshots": [
+          "p1-market-mobile-default-closed.png",
+          "p1-market-mobile-open.png"
+        ]
+      }
+    },
+    {
+      "id": "P2",
+      "title": "Template candidate heading does not explicitly say Top100",
+      "status": "CLOSED",
+      "evidence": {
+        "heading": "Top100 股票",
+        "exact_heading_count": 1,
+        "errors": 0,
+        "screenshot": "p2-templates-top100-heading.png"
+      }
+    }
+  ],
+  "smoke": {
+    "viewports": [
+      "1900x956",
+      "1440x900",
+      "1024x768",
+      "390x844"
+    ],
+    "routes": [
+      "/template-breadth-v3",
+      "/templates",
+      "/templates/new",
+      "/market"
+    ],
+    "route_viewport_combinations": 16,
+    "http_200": 16,
+    "horizontal_overflow_failures": 0,
+    "console_page_http_errors": 0
+  },
+  "regressions": {
+    "breadth": {
+      "top100_total": 100,
+      "default_10_days": true,
+      "switch_20_days": true,
+      "geometry_stable_between_10_and_20": true,
+      "other_neutral": true,
+      "other_expandable": true,
+      "rapid_switch_final_selection_correct": true
+    },
+    "new_template": {
+      "visible_candle_groups": 124,
+      "full_history_overview_visible": true,
+      "zoom_changes_viewport": true,
+      "pan_changes_viewport": true,
+      "boundary_and_window_sliders": 3,
+      "has_20_to_240_hint": true,
+      "has_actual_trading_day_copy": true
+    },
+    "market": {
+      "keyboard_stock_switch": true,
+      "return_context_preserved": true,
+      "return_href": "/template-breadth-v3?template=fresh_breakout&industry=801080&window=20",
+      "save_template_entry_absent": true,
+      "rapid_switch_final_selection_correct": true
+    }
+  },
+  "probe_notes": [
+    {
+      "early_value": "focusBars=0",
+      "classification": "QA locator miss, not a product failure",
+      "resolution": "Final probe counts 124 rendered candle groups; templates.spec.ts also covers this behavior."
+    },
+    {
+      "early_value": "selectedProbe=0",
+      "classification": "Meaningless early QA probe, not a product failure",
+      "resolution": "Final probe reads aria-pressed and confirms the last selected breadth template remains active."
+    },
+    {
+      "early_value": "preservedReturnContext=false",
+      "classification": "QA path matched the global plain link, not a product failure",
+      "resolution": "Final probe matches the contextual link and confirms template, industry and window parameters; top100-remediation.spec.ts also covers the path."
+    }
+  ],
+  "residual_risks": [
+    "Absolute browser timing remains dependent on local machine state, first compilation and disk cache.",
+    "Independent QA did not create a persisted custom template; save lifecycle remains covered by targeted E2E to avoid mutating local data."
+  ],
+  "blocking_issues": []
+}

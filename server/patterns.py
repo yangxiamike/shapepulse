@@ -27,7 +27,13 @@ def _linear_fit(values: np.ndarray) -> tuple[float, float]:
         return 0.0, 0.0
     normalized = values / values[0]
     x = np.arange(len(values), dtype=float)
-    slope, intercept = np.polyfit(x, normalized, 1)
+    x_centered = x - x.mean()
+    y_centered = normalized - normalized.mean()
+    denominator = float(np.dot(x_centered, x_centered))
+    if denominator == 0:
+        return 0.0, 0.0
+    slope = float(np.dot(x_centered, y_centered) / denominator)
+    intercept = float(normalized.mean() - slope * x.mean())
     predicted = slope * x + intercept
     residual = float(np.square(normalized - predicted).sum())
     total = float(np.square(normalized - normalized.mean()).sum())
@@ -198,41 +204,84 @@ def _range_bounce(
     }
 
 
-def score_stock(frame: pd.DataFrame, thresholds: dict) -> dict[str, Any] | None:
-    frame = frame.sort_values("trade_date").drop_duplicates("trade_date").tail(
-        int(thresholds["screen"]["lookback_bars"])
-    )
+def score_stock(
+    frame: pd.DataFrame, thresholds: dict, assume_sorted: bool = False
+) -> dict[str, Any]:
+    if not assume_sorted:
+        frame = frame.sort_values("trade_date").drop_duplicates("trade_date")
+    frame = frame.tail(int(thresholds["screen"]["lookback_bars"]))
     if len(frame) < int(thresholds["screen"]["minimum_bars"]):
-        return None
-    close = frame["close"].astype(float).to_numpy()
-    high = frame["high"].astype(float).to_numpy()
-    low = frame["low"].astype(float).to_numpy()
-    volume = frame["vol"].fillna(0).astype(float).to_numpy()
+        return {
+            "status": "not_calculated",
+            "matches": [],
+            "history_bars": len(frame),
+            "warning": "可用交易日不足，尚未完成形态计算",
+        }
+    matrix = frame[["close", "high", "low", "vol"]].to_numpy(dtype=float)
+    close, high, low, volume = matrix.T
+    volume = np.nan_to_num(volume, nan=0.0)
     candidates = {
         "breakout": _breakout(close, volume, thresholds["breakout"]),
         "pullback": _pullback(close, high, thresholds["pullback"]),
         "range_bounce": _range_bounce(close, high, low, thresholds["range_bounce"]),
     }
-    eligible = {
-        category: details
-        for category, details in candidates.items()
-        if details is not None and details["score"] >= thresholds[category]["minimum_score"]
-    }
-    if not eligible:
-        return None
-    category, details = max(eligible.items(), key=lambda item: item[1]["score"])
-    metrics = {
-        key: round(float(value), 6) if isinstance(value, (float, np.floating)) else value
-        for key, value in details["metrics"].items()
-    }
-    return {
-        "category": category,
-        "category_label": thresholds[category]["label"],
-        "score": round(float(details["score"]), 2),
-        "reasons": details["reasons"][:4],
-        "metrics": metrics,
+    matches = []
+    for category in CATEGORY_ORDER:
+        details = candidates[category]
+        if details is None or details["score"] < thresholds[category]["minimum_score"]:
+            continue
+        metrics = {
+            key: round(float(value), 6) if isinstance(value, (float, np.floating)) else value
+            for key, value in details["metrics"].items()
+        }
+        matches.append(
+            {
+                "category": category,
+                "category_label": thresholds[category]["label"],
+                "score": round(float(details["score"]), 2),
+                "reasons": details["reasons"][:4],
+                "metrics": metrics,
+                "minimum_score": float(thresholds[category]["minimum_score"]),
+            }
+        )
+    base = {
+        "status": "matched" if matches else "no_match",
+        "matches": matches,
         "history_bars": len(frame),
         "trade_date": str(frame.iloc[-1]["trade_date"]),
         "close": round(float(close[-1]), 3),
         "pct_chg": round(float(frame.iloc[-1].get("pct_chg", 0.0)), 3),
     }
+    if not matches:
+        return base
+    primary = max(matches, key=lambda item: item["score"])
+    return {**base, **primary}
+
+
+def score_category_arrays(
+    category: str,
+    close: np.ndarray,
+    high: np.ndarray,
+    low: np.ndarray,
+    volume: np.ndarray,
+    thresholds: dict,
+) -> float | None:
+    """Run one existing pattern rule on prepared arrays without repeated DataFrame work."""
+    lookback = int(thresholds["screen"]["lookback_bars"])
+    close = close[-lookback:]
+    high = high[-lookback:]
+    low = low[-lookback:]
+    volume = np.nan_to_num(volume[-lookback:], nan=0.0)
+    if len(close) < int(thresholds["screen"]["minimum_bars"]):
+        return None
+    if category == "breakout":
+        details = _breakout(close, volume, thresholds[category])
+    elif category == "pullback":
+        details = _pullback(close, high, thresholds[category])
+    elif category == "range_bounce":
+        details = _range_bounce(close, high, low, thresholds[category])
+    else:
+        raise ValueError(f"unsupported category: {category}")
+    if details is None or details["score"] < thresholds[category]["minimum_score"]:
+        return None
+    return round(float(details["score"]), 2)

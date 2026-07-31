@@ -1,0 +1,82 @@
+{
+  "captured_at": "2026-07-17T06:33:37.559Z",
+  "results": [
+    {
+      "gate": "G1-G2",
+      "unlocked_overlay": true,
+      "native_chart": {
+        "crosshair": true,
+        "wheel_zoom": true,
+        "drag_pan": true
+      },
+      "drawing_kinds": [
+        "trend",
+        "segment",
+        "ray",
+        "horizontal",
+        "vertical",
+        "fibonacci",
+        "fibonacci-extension",
+        "curve",
+        "freehand",
+        "text",
+        "measure"
+      ],
+      "unique_canvas_signatures": 11,
+      "style": {
+        "color": "#16a34a",
+        "line_width": 5
+      },
+      "endpoint_cursor": "nwse-resize",
+      "move_cursor": "grab",
+      "curve_control": true,
+      "result": "pass"
+    },
+    {
+      "gate": "G3-G5",
+      "keyboard_code": "002668",
+      "wheel_scroll_only": true,
+      "wheel_feedback_ms": 162.6,
+      "collapse_feedback_ms": 7.9,
+      "rightbar_resize": {
+        "before": 360,
+        "after": 435,
+        "feedback_ms": 34.5
+      },
+      "context": {
+        "period": "D",
+        "range": "6M",
+        "layout": 2,
+        "category": "pullback"
+      },
+      "result": "pass"
+    },
+    {
+      "gate": "G4-G6",
+      "top_k": 50,
+      "complete_code_count": 50,
+      "first_view_count": 9,
+      "readability": {
+        "row_height": 52,
+        "font_size": 14
+      },
+      "board_resize_feedback_ms": 51.5,
+      "controls_fully_interactable": true,
+      "viewports": [
+        {
+          "width": 1600,
+          "height": 1000
+        },
+        {
+          "width": 1366,
+          "height": 900
+        },
+        {
+          "width": 1024,
+          "height": 800
+        }
+      ],
+      "result": "pass"
+    }
+  ]
+}

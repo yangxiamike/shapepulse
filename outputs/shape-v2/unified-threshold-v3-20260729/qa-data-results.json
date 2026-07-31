@@ -1,0 +1,22 @@
+{
+  "pass": true,
+  "branch": "codex/unified-threshold-app-v3",
+  "asOf": "20260729",
+  "candidateThresholds": [
+    0.7,
+    0.75,
+    0.8
+  ],
+  "templateCount": 4,
+  "selectedThreshold": null,
+  "marketRows": 4824,
+  "industryRows": 152004,
+  "top30Rows": 120,
+  "leakageAudit": {
+    "networkUsed": false,
+    "sealedFinalRead": false,
+    "futureReturnUsed": false,
+    "icUsed": false,
+    "strategyPerformanceUsed": false
+  }
+}

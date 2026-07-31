@@ -1,0 +1,358 @@
+{
+  "captured_at": "2026-07-17T06:33:18.967Z",
+  "results": [
+    {
+      "gate": "G2-G3",
+      "top_k": 50,
+      "complete_codes": [
+        "002728",
+        "600129",
+        "600267",
+        "603233",
+        "600671",
+        "603456",
+        "600812",
+        "002864",
+        "603893",
+        "000739",
+        "600557",
+        "002603",
+        "002821",
+        "605296",
+        "603318",
+        "603669",
+        "000779",
+        "000938",
+        "001210",
+        "000989",
+        "603367",
+        "002541",
+        "600488",
+        "002558",
+        "600428",
+        "603127",
+        "600521",
+        "002898",
+        "002303",
+        "000690",
+        "600285",
+        "600060",
+        "002317",
+        "600527",
+        "600882",
+        "603087",
+        "002737",
+        "002422",
+        "002739",
+        "600771",
+        "600436",
+        "001215",
+        "600982",
+        "603788",
+        "002718",
+        "600351",
+        "601588",
+        "603585",
+        "600863",
+        "000402"
+      ],
+      "multi_pattern": {
+        "code": "603893",
+        "count": 2,
+        "categories": [
+          "breakout",
+          "pullback"
+        ]
+      },
+      "ordinary_screen_does_not_save_snapshot": true,
+      "result": "pass"
+    },
+    {
+      "gate": "G9",
+      "pattern_pools": {
+        "breakout": {
+          "total": 158,
+          "source": "current_calculation"
+        },
+        "pullback": {
+          "total": 151,
+          "source": "current_calculation"
+        },
+        "range_bounce": {
+          "total": 2444,
+          "source": "current_calculation"
+        }
+      },
+      "board_chart": {
+        "label": "日 K · 近 3 个月",
+        "default": {
+          "bars": 66,
+          "from": 2709,
+          "to": 2782,
+          "right_padding": 8,
+          "right_gap_px": 99.1
+        },
+        "after_switch": {
+          "bars": 66,
+          "from": 3078,
+          "to": 3151,
+          "right_padding": 8,
+          "right_gap_px": 99.1
+        },
+        "panned_then_reset": true
+      },
+      "result": "pass"
+    },
+    {
+      "gate": "G2-G4",
+      "font_pixels": {
+        "small": "13px",
+        "standard": "14px",
+        "large": "16px"
+      },
+      "persisted_across_routes": true,
+      "market_chart_font_pixels": 14,
+      "geometry": [
+        {
+          "viewport": [
+            1920,
+            1080
+          ],
+          "font": "standard",
+          "zoom_equivalent": null,
+          "table_scroll": {
+            "client_width": 1288,
+            "scroll_width": 1288,
+            "scroll_left": 0,
+            "last_header_visible": true
+          }
+        },
+        {
+          "viewport": [
+            1600,
+            1000
+          ],
+          "font": "large",
+          "zoom_equivalent": null,
+          "table_scroll": {
+            "client_width": 968,
+            "scroll_width": 1080,
+            "scroll_left": 112,
+            "last_header_visible": true
+          }
+        },
+        {
+          "viewport": [
+            1366,
+            900
+          ],
+          "font": "standard",
+          "zoom_equivalent": null,
+          "table_scroll": {
+            "client_width": 798,
+            "scroll_width": 1080,
+            "scroll_left": 282,
+            "last_header_visible": true
+          }
+        },
+        {
+          "viewport": [
+            1024,
+            800
+          ],
+          "font": "large",
+          "zoom_equivalent": null,
+          "table_scroll": {
+            "client_width": 908,
+            "scroll_width": 1080,
+            "scroll_left": 172,
+            "last_header_visible": true
+          }
+        },
+        {
+          "viewport": [
+            1280,
+            800
+          ],
+          "font": "large",
+          "zoom_equivalent": "1600px at 125%",
+          "table_scroll": {
+            "client_width": 712,
+            "scroll_width": 1080,
+            "scroll_left": 368,
+            "last_header_visible": true
+          }
+        }
+      ],
+      "result": "pass"
+    },
+    {
+      "gate": "G5-G6",
+      "tools": [
+        {
+          "label": "趋势线",
+          "kind": "trend"
+        },
+        {
+          "label": "线段",
+          "kind": "segment"
+        },
+        {
+          "label": "射线",
+          "kind": "ray"
+        },
+        {
+          "label": "水平线",
+          "kind": "horizontal"
+        },
+        {
+          "label": "垂直线",
+          "kind": "vertical"
+        },
+        {
+          "label": "斐波那契回撤",
+          "kind": "fibonacci"
+        },
+        {
+          "label": "斐波那契扩展",
+          "kind": "fibonacci-extension"
+        },
+        {
+          "label": "矩形",
+          "kind": "rectangle"
+        },
+        {
+          "label": "曲线",
+          "kind": "curve"
+        },
+        {
+          "label": "自由绘制",
+          "kind": "freehand"
+        },
+        {
+          "label": "文本",
+          "kind": "text"
+        },
+        {
+          "label": "测量",
+          "kind": "measure"
+        }
+      ],
+      "unique_signatures": 12,
+      "first_click_keeps_zero_drawings": true,
+      "drag_compatible": true,
+      "rectangle_geometry": {
+        "min_x": 254,
+        "max_x": 695,
+        "min_y": 154,
+        "max_y": 355,
+        "pixels": 85542,
+        "canvas_width": 1032,
+        "canvas_height": 543
+      },
+      "rectangle_moved_geometry": {
+        "min_x": 309,
+        "max_x": 750,
+        "min_y": 179,
+        "max_y": 380,
+        "pixels": 85542,
+        "canvas_width": 1032,
+        "canvas_height": 543
+      },
+      "line_geometry": {
+        "趋势线": {
+          "min_x": 0,
+          "max_x": 1031,
+          "min_y": 6,
+          "max_y": 467,
+          "pixels": 7331,
+          "canvas_width": 1032,
+          "canvas_height": 543
+        },
+        "线段": {
+          "min_x": 254,
+          "max_x": 695,
+          "min_y": 154,
+          "max_y": 355,
+          "pixels": 3288,
+          "canvas_width": 1032,
+          "canvas_height": 543
+        },
+        "射线": {
+          "min_x": 254,
+          "max_x": 1031,
+          "min_y": 6,
+          "max_y": 355,
+          "pixels": 5630,
+          "canvas_width": 1032,
+          "canvas_height": 543
+        }
+      },
+      "result": "pass"
+    },
+    {
+      "gate": "G7-G8",
+      "fibonacci": {
+        "default_levels": 7,
+        "toggle_immediate": true,
+        "validation": true,
+        "custom_add_delete": true,
+        "inherited_default": true,
+        "escape_close": true,
+        "outside_close": true
+      },
+      "divider": {
+        "free_before": {
+          "candidate_width": 970,
+          "candidate_height": 664,
+          "detail_width": 440,
+          "detail_height": 664,
+          "workspace_width": 1422,
+          "workspace_height": 664
+        },
+        "free_after": {
+          "candidate_width": 898,
+          "candidate_height": 764,
+          "detail_width": 512,
+          "detail_height": 764,
+          "workspace_width": 1422,
+          "workspace_height": 764
+        },
+        "ratio_before": {
+          "candidate_width": 898,
+          "candidate_height": 764,
+          "detail_width": 512,
+          "detail_height": 764,
+          "workspace_width": 1422,
+          "workspace_height": 764
+        },
+        "ratio_after": {
+          "candidate_width": 956,
+          "candidate_height": 764,
+          "detail_width": 454,
+          "detail_height": 764,
+          "workspace_width": 1422,
+          "workspace_height": 764
+        },
+        "stacked_before": {
+          "candidate_width": 910,
+          "candidate_height": 664,
+          "detail_width": 910,
+          "detail_height": 720,
+          "workspace_width": 910,
+          "workspace_height": 1396
+        },
+        "stacked_after": {
+          "candidate_width": 910,
+          "candidate_height": 744,
+          "detail_width": 910,
+          "detail_height": 720,
+          "workspace_width": 910,
+          "workspace_height": 1476
+        },
+        "ratio_stacked_hidden": true
+      },
+      "result": "pass"
+    }
+  ]
+}

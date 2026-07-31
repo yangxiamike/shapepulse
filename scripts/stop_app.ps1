@@ -6,7 +6,14 @@ if (-not (Test-Path -LiteralPath $ProcessFile)) {
     exit 0
 }
 $state = Get-Content -LiteralPath $ProcessFile -Raw | ConvertFrom-Json
-foreach ($id in @($state.backend, $state.frontend)) {
-    if ($id) { Stop-Process -Id $id -ErrorAction SilentlyContinue }
+function Stop-ProcessTree([int]$ProcessId) {
+    $children = Get-CimInstance Win32_Process -Filter "ParentProcessId=$ProcessId" -ErrorAction SilentlyContinue
+    foreach ($child in $children) {
+        Stop-ProcessTree -ProcessId $child.ProcessId
+    }
+    Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
+}
+foreach ($processId in @($state.backend, $state.frontend)) {
+    if ($processId) { Stop-ProcessTree -ProcessId $processId }
 }
 Write-Host "Local market workbench has stopped."

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { BoardClient } from "./components/BoardClient";
+import { TemplateLibraryClient } from "./components/TemplateLibraryClient";
 
 export const metadata: Metadata = {
-  title: "综合选股看板 | 手动跟踪市场",
-  description: "基于本地 A 股数据库的形态筛选与人工复核看板。",
+  title: "模板库 | 手动跟踪市场",
+  description: "浏览冻结四模板，保存自定义 K 线窗口，并查看相似股票。",
 };
 
 export default function Home() {
-  return <BoardClient />;
+  return <TemplateLibraryClient />;
 }

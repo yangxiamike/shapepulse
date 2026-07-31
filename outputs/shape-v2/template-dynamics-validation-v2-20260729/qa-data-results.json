@@ -1,0 +1,30 @@
+{
+  "pass": true,
+  "branch": "codex/template-dynamics-validation-v2",
+  "asOf": "20260728",
+  "templateCount": 4,
+  "thresholdRows": 4,
+  "weeklyAsOfs": 86,
+  "monthlyAsOfs": 20,
+  "distributionRows": 424,
+  "stabilityRows": 1664,
+  "jaccardRows": 636,
+  "transitionRows": 72,
+  "industryRows": 13356,
+  "capRows": 3816,
+  "scoreRangeValid": true,
+  "scoreTolerance": 1e-09,
+  "leakageAudit": {
+    "source": "本机 zer0share（C:\\Users\\hp\\Documents\\zer0share）",
+    "dailyRange": "2024-01-02 至 2026-07-28",
+    "historyRange": "2024-12-06 至 2026-07-28",
+    "networkUsed": false,
+    "sealedFinalRead": false,
+    "futureReturnUsed": false,
+    "icUsed": false,
+    "strategyPerformanceUsed": false,
+    "industryPointInTime": "申万成员按 in_date/out_date 还原",
+    "marketCapPointInTime": "daily_basic 按截面 trade_date 读取 total_mv",
+    "historicalInterpretation": "固定模板可能晚于历史截面，只能作事后描述，不能作预测或模型评价"
+  }
+}

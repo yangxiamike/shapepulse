@@ -1,0 +1,103 @@
+{
+  "recorded_at": "2026-07-30T01:29:50+08:00",
+  "branch": "codex/top100-performance-ux-v5",
+  "base_commit": "9c1109cc2924bcdc3a3528adcdec4b2c3a33cbcb",
+  "source_boundary": "C:\\Users\\hp\\Documents\\zer0share and repository non-sealed artifacts only",
+  "method": {
+    "backend": "fresh local backend process on 127.0.0.1:8885",
+    "frontend": "local vinext development server on localhost:3106",
+    "client": "curl.exe without Accept-Encoding compression",
+    "timing": "curl time_total, milliseconds",
+    "payload": "curl size_download, uncompressed bytes",
+    "sequence": "cold request followed immediately by same-process warm request"
+  },
+  "measurements": [
+    {
+      "name": "template_manifest",
+      "cold_ms": 2.4,
+      "warm_ms": 2.1,
+      "payload_bytes": 1329,
+      "http_status": 200
+    },
+    {
+      "name": "parabolic_template_detail_80_real_bars",
+      "cold_ms": 82.5,
+      "warm_ms": 72.3,
+      "payload_bytes": 11782,
+      "http_status": 200,
+      "source": "pre-generated local frozen template definition"
+    },
+    {
+      "name": "frozen_template_top100_metadata",
+      "cold_ms": 76.7,
+      "warm_ms": 73.3,
+      "payload_bytes": 21610,
+      "http_status": 200,
+      "source": "precomputed public/template-rankings; no candidate bars"
+    },
+    {
+      "name": "market_daily_visible_170",
+      "cold_ms": 281.5,
+      "warm_ms": 17.9,
+      "payload_bytes": 33357,
+      "http_status": 200,
+      "observation": "110 visible six-month bars plus 60 MA warm-up bars"
+    },
+    {
+      "name": "selected_candidate_window_50",
+      "cold_ms": 70.3,
+      "warm_ms": 15.6,
+      "payload_bytes": 9750,
+      "http_status": 200,
+      "observation": "candidate K-line is requested only when selected or visible"
+    },
+    {
+      "name": "breadth_manifest",
+      "cold_ms": 1.8,
+      "warm_ms": 1.4,
+      "payload_bytes": 60564,
+      "http_status": 200,
+      "observation": "first paint summary only; no stock lists or K-line bars"
+    },
+    {
+      "name": "breadth_template_detail",
+      "cold_ms": 1.7,
+      "warm_ms": 1.7,
+      "payload_bytes": 381109,
+      "http_status": 200,
+      "observation": "loaded only after an industry is opened"
+    }
+  ],
+  "baseline_comparison": [
+    {
+      "chain": "frozen Top100",
+      "before_cold_ms": 7096.6,
+      "after_cold_ms": 76.7,
+      "before_payload_bytes": 576714,
+      "after_payload_bytes": 21610,
+      "cold_time_reduction_pct": 98.92,
+      "payload_reduction_pct": 96.25
+    },
+    {
+      "chain": "default market K-line",
+      "before_cold_ms": 1565.2,
+      "after_cold_ms": 281.5,
+      "before_payload_bytes": 633987,
+      "after_payload_bytes": 33357,
+      "cold_time_reduction_pct": 82.02,
+      "payload_reduction_pct": 94.74
+    },
+    {
+      "chain": "breadth first-paint data",
+      "before_payload_bytes": 2167319,
+      "after_payload_bytes": 60564,
+      "payload_reduction_pct": 97.21
+    }
+  ],
+  "target_assessment": {
+    "framework_and_cached_content_about_100ms": "met for measured API/static-data chains",
+    "common_switch_150_to_300ms_operable": "met; warm API chains are 1.4-73.3ms before rendering",
+    "main_kline_300_to_500ms": "met in measured cold API chain at 281.5ms; browser paint remains device-dependent",
+    "previously_seen_content_near_instant": "met in API/client cache paths; K-line warm API is 17.9ms"
+  }
+}

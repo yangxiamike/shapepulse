@@ -1,0 +1,6 @@
+﻿{
+    "backend":  55316,
+    "frontend":  57124,
+    "api":  "http://127.0.0.1:8878/api",
+    "web":  "http://localhost:3103"
+}

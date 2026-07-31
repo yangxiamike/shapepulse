@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "algorithm": "qfq_log_close_independent_z_single_window_pearson",
+  "templates": [
+    {
+      "key": "fresh_breakout",
+      "label": "刚突破",
+      "source_ts_code": "603986.SH",
+      "start_date": "20250619",
+      "end_date": "20250827",
+      "window_bars": 50
+    },
+    {
+      "key": "healthy_uptrend",
+      "label": "健康上涨",
+      "source_ts_code": "601009.SH",
+      "start_date": "20240306",
+      "end_date": "20240703",
+      "window_bars": 80
+    },
+    {
+      "key": "pullback_strengthening",
+      "label": "回调转强",
+      "source_ts_code": "603391.SH",
+      "start_date": "20250805",
+      "end_date": "20251028",
+      "window_bars": 55
+    },
+    {
+      "key": "parabolic_uptrend",
+      "label": "抛物线上升",
+      "source_ts_code": "001309.SZ",
+      "start_date": "20260115",
+      "end_date": "20260520",
+      "window_bars": 80
+    }
+  ]
+}

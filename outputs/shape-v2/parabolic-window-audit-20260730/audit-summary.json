@@ -1,0 +1,228 @@
+{
+  "pass": true,
+  "asOf": "20260729",
+  "source": {
+    "ts_code": "001309.SZ",
+    "name": "德明利",
+    "original_start": "20251031",
+    "original_end": "20260630",
+    "original_bars": 160
+  },
+  "selected": {
+    "key": "selected_80",
+    "label": "选定 80 根",
+    "start": "20260115",
+    "end": "20260520",
+    "bars": 80
+  },
+  "selectionRule": "在原160根内枚举连续80根；要求二次项>0、前半段log斜率>0、后半段log斜率>前半段；再按窗口内二次拟合R^2、二次项、起始日排序。",
+  "templateShapeMetrics": [
+    {
+      "key": "original_160",
+      "label": "原 160 根",
+      "start_date": "20251031",
+      "end_date": "20260630",
+      "bars": 160,
+      "return_pct": 313.553277,
+      "quadratic_coefficient": 0.4575959098,
+      "quadratic_fit_r2": 0.9253958426,
+      "first_half_log_slope_bp_per_bar": 10.724611,
+      "second_half_log_slope_bp_per_bar": 136.760516,
+      "slope_delta_bp_per_bar": 126.035905,
+      "max_drawdown_pct": -34.510153,
+      "positive_bar_share": 0.55974843
+    },
+    {
+      "key": "mechanical_first_80",
+      "label": "原窗口前 80 根",
+      "start_date": "20251031",
+      "end_date": "20260303",
+      "bars": 80,
+      "return_pct": 0.201542,
+      "quadratic_coefficient": 0.1125511419,
+      "quadratic_fit_r2": 0.1589378962,
+      "first_half_log_slope_bp_per_bar": -69.921184,
+      "second_half_log_slope_bp_per_bar": -0.091517,
+      "slope_delta_bp_per_bar": 69.829667,
+      "max_drawdown_pct": -34.510153,
+      "positive_bar_share": 0.4556962
+    },
+    {
+      "key": "mechanical_last_80",
+      "label": "原窗口末 80 根",
+      "start_date": "20260304",
+      "end_date": "20260630",
+      "bars": 80,
+      "return_pct": 275.201335,
+      "quadratic_coefficient": -0.1850139531,
+      "quadratic_fit_r2": 0.9187387125,
+      "first_half_log_slope_bp_per_bar": 179.837876,
+      "second_half_log_slope_bp_per_bar": 70.65352,
+      "slope_delta_bp_per_bar": -109.184356,
+      "max_drawdown_pct": -19.990749,
+      "positive_bar_share": 0.65822785
+    },
+    {
+      "key": "selected_80",
+      "label": "选定加速阶段 80 根",
+      "start_date": "20260115",
+      "end_date": "20260520",
+      "bars": 80,
+      "return_pct": 174.267253,
+      "quadratic_coefficient": 0.3252379119,
+      "quadratic_fit_r2": 0.9446444398,
+      "first_half_log_slope_bp_per_bar": 43.174771,
+      "second_half_log_slope_bp_per_bar": 198.739216,
+      "slope_delta_bp_per_bar": 155.564444,
+      "max_drawdown_pct": -20.394027,
+      "positive_bar_share": 0.58227848
+    }
+  ],
+  "latestCrossWindow": {
+    "trade_date": "20260729",
+    "eligible_80": 5471,
+    "eligible_160": 5422,
+    "all_eligible_rank_spearman": 0.6597959514,
+    "top30_overlap_count": 1,
+    "top30_overlap_share": 0.0333333333,
+    "top30_jaccard": 0.0169491525,
+    "top30_common_rank_spearman": null,
+    "top100_overlap_count": 29,
+    "top100_overlap_share": 0.29,
+    "top100_jaccard": 0.1695906433,
+    "top100_common_rank_spearman": -0.3295566502
+  },
+  "crossWindowDailySummary": {
+    "top30_overlap_count": 0.4666666667,
+    "top30_overlap_share": 0.0155555556,
+    "top30_jaccard": 0.0080080388,
+    "top100_overlap_count": 13.7833333333,
+    "top100_overlap_share": 0.1378333333,
+    "top100_jaccard": 0.0753151313,
+    "all_eligible_rank_spearman": 0.7410106083
+  },
+  "temporalStability": [
+    {
+      "variant": "original_160",
+      "lag_trading_days": 1,
+      "observations": 69,
+      "overlap_mean": 95.3333333333,
+      "overlap_median": 95.0,
+      "overlap_min": 91,
+      "jaccard_mean": 0.9113253334,
+      "jaccard_median": 0.9047619048,
+      "jaccard_min": 0.8348623853,
+      "common_rank_spearman_mean": 0.9656651012,
+      "common_rank_spearman_median": 0.9674272116
+    },
+    {
+      "variant": "original_160",
+      "lag_trading_days": 5,
+      "observations": 65,
+      "overlap_mean": 78.6307692308,
+      "overlap_median": 80.0,
+      "overlap_min": 70,
+      "jaccard_mean": 0.6494620608,
+      "jaccard_median": 0.6666666667,
+      "jaccard_min": 0.5384615385,
+      "common_rank_spearman_mean": 0.6191526426,
+      "common_rank_spearman_median": 0.6352758238
+    },
+    {
+      "variant": "original_160",
+      "lag_trading_days": 10,
+      "observations": 60,
+      "overlap_mean": 61.5666666667,
+      "overlap_median": 63.0,
+      "overlap_min": 49,
+      "jaccard_mean": 0.44629361,
+      "jaccard_median": 0.4598540146,
+      "jaccard_min": 0.3245033113,
+      "common_rank_spearman_mean": 0.3072771341,
+      "common_rank_spearman_median": 0.3132200461
+    },
+    {
+      "variant": "selected_80",
+      "lag_trading_days": 1,
+      "observations": 69,
+      "overlap_mean": 92.3188405797,
+      "overlap_median": 92.0,
+      "overlap_min": 86,
+      "jaccard_mean": 0.8581893845,
+      "jaccard_median": 0.8518518519,
+      "jaccard_min": 0.7543859649,
+      "common_rank_spearman_mean": 0.9240513078,
+      "common_rank_spearman_median": 0.9300207039
+    },
+    {
+      "variant": "selected_80",
+      "lag_trading_days": 5,
+      "observations": 65,
+      "overlap_mean": 66.6615384615,
+      "overlap_median": 68.0,
+      "overlap_min": 54,
+      "jaccard_mean": 0.5039757493,
+      "jaccard_median": 0.5151515152,
+      "jaccard_min": 0.3698630137,
+      "common_rank_spearman_mean": 0.4143629294,
+      "common_rank_spearman_median": 0.4421116922
+    },
+    {
+      "variant": "selected_80",
+      "lag_trading_days": 10,
+      "observations": 60,
+      "overlap_mean": 42.5166666667,
+      "overlap_median": 41.0,
+      "overlap_min": 27,
+      "jaccard_mean": 0.2744365268,
+      "jaccard_median": 0.2578616352,
+      "jaccard_min": 0.1560693642,
+      "common_rank_spearman_mean": 0.1102575851,
+      "common_rank_spearman_median": 0.154070954
+    }
+  ],
+  "latestCandidateShapeSummary": [
+    {
+      "variant": "original_160",
+      "rows": 100,
+      "score_median": 0.8952307477,
+      "score_min": 0.8730650781,
+      "return_pct_median": 121.1494415,
+      "quadratic_coefficient_median": 0.1356230682,
+      "quadratic_fit_r2_median": 0.8338695545,
+      "positive_acceleration_share": 0.94,
+      "positive_both_halves_and_acceleration_share": 0.88,
+      "max_drawdown_pct_median": -42.8160525
+    },
+    {
+      "variant": "selected_80",
+      "rows": 100,
+      "score_median": 0.782049681,
+      "score_min": 0.7140541224,
+      "return_pct_median": 55.903043,
+      "quadratic_coefficient_median": -0.051169848,
+      "quadratic_fit_r2_median": 0.7746754982,
+      "positive_acceleration_share": 0.43,
+      "positive_both_halves_and_acceleration_share": 0.33,
+      "max_drawdown_pct_median": -32.811168
+    }
+  ],
+  "latestCandidateRows": 200,
+  "leakageAudit": {
+    "data_source": "C:\\Users\\hp\\Documents\\zer0share",
+    "local_interfaces": [
+      "daily",
+      "adj_factor",
+      "stock_basic"
+    ],
+    "network_used": false,
+    "sealed_final_read": false,
+    "future_return_used": false,
+    "ic_used": false,
+    "strategy_performance_used": false,
+    "post_window_return_used_for_selection": false,
+    "selection_uses_only_in_window_bars": true,
+    "algorithm": "前复权 log-close；窗口内独立 z；单窗口 Pearson",
+    "cross_template_ranking_used": false
+  }
+}

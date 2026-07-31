@@ -1,0 +1,220 @@
+{
+  "captured_at": "2026-07-17T09:42:24.797Z",
+  "results": [
+    {
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "real_industries": 31,
+      "sample_nodes": 24,
+      "default_visible": 12,
+      "active_rows": [
+        "医药生物↑ 持续增强+20.70",
+        "传媒↑ 持续增强+1.60",
+        "计算机↑ 正在增强+1.00",
+        "农林牧渔↑ 正在增强+0.60",
+        "通信↓ 正在走弱-0.90",
+        "建筑装饰↓ 正在走弱-1.00",
+        "纺织服饰↓ 正在走弱-1.20",
+        "非银金融↓ 正在走弱-1.70",
+        "有色金属↓ 正在走弱-2.50",
+        "机械设备↓ 正在走弱-2.60",
+        "电子⇣ 高位退潮-5.30",
+        "基础化工↓ 正在走弱-5.40"
+      ],
+      "latest_on_left": true,
+      "ranking_rows": 15,
+      "keyboard_preview": true,
+      "trend_hover_focus": true,
+      "trend_leave_restores_all": true,
+      "trend_keyboard_focus_blur": true,
+      "minimum_audited_font_px": 13,
+      "audited_font_px": {
+        "heatIndustry": 16,
+        "heatStatus": 14,
+        "heatSlope": 15,
+        "heatCell": 14,
+        "heatAxis": 13,
+        "trendLegend": 14,
+        "trendSelector": 15,
+        "rankingBody": 15,
+        "rankingStatus": 14,
+        "rankingButton": 14
+      },
+      "accessible_info_tooltip": true,
+      "info_tooltip_count": 5,
+      "info_tooltips": [
+        {
+          "label": "固定统计口径",
+          "left": 12,
+          "top": 102.6229476928711,
+          "right": 432,
+          "bottom": 227.81045532226562,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "below"
+        },
+        {
+          "label": "轮动分析口径",
+          "left": 12,
+          "top": 306.1351013183594,
+          "right": 432,
+          "bottom": 407.0257263183594,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "above"
+        },
+        {
+          "label": "热力图阅读说明",
+          "left": 1139,
+          "top": 373.875,
+          "right": 1559,
+          "bottom": 499.0625,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "above"
+        },
+        {
+          "label": "趋势图交互说明",
+          "left": 1139,
+          "top": 375.171875,
+          "right": 1559,
+          "bottom": 476.0625,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "above"
+        },
+        {
+          "label": "排名口径说明",
+          "left": 1139,
+          "top": 374.2906494140625,
+          "right": 1559,
+          "bottom": 475.1812744140625,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "above"
+        }
+      ],
+      "page_overflow": false,
+      "heatmap_internal_scroll": false,
+      "console_errors": [],
+      "result": "pass"
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 800
+      },
+      "real_industries": 31,
+      "sample_nodes": 24,
+      "default_visible": 12,
+      "active_rows": [
+        "医药生物↑ 持续增强+20.70",
+        "传媒↑ 持续增强+1.60",
+        "计算机↑ 正在增强+1.00",
+        "农林牧渔↑ 正在增强+0.60",
+        "通信↓ 正在走弱-0.90",
+        "建筑装饰↓ 正在走弱-1.00",
+        "纺织服饰↓ 正在走弱-1.20",
+        "非银金融↓ 正在走弱-1.70",
+        "有色金属↓ 正在走弱-2.50",
+        "机械设备↓ 正在走弱-2.60",
+        "电子⇣ 高位退潮-5.30",
+        "基础化工↓ 正在走弱-5.40"
+      ],
+      "latest_on_left": true,
+      "ranking_rows": 15,
+      "keyboard_preview": true,
+      "trend_hover_focus": true,
+      "trend_leave_restores_all": true,
+      "trend_keyboard_focus_blur": true,
+      "minimum_audited_font_px": 13,
+      "audited_font_px": {
+        "heatIndustry": 16,
+        "heatStatus": 14,
+        "heatSlope": 15,
+        "heatCell": 14,
+        "heatAxis": 13,
+        "trendLegend": 14,
+        "trendSelector": 15,
+        "rankingBody": 15,
+        "rankingStatus": 14,
+        "rankingButton": 14
+      },
+      "accessible_info_tooltip": true,
+      "info_tooltip_count": 5,
+      "info_tooltips": [
+        {
+          "label": "固定统计口径",
+          "left": 12,
+          "top": 96.6204605102539,
+          "right": 432,
+          "bottom": 221.80795288085938,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "below"
+        },
+        {
+          "label": "轮动分析口径",
+          "left": 12,
+          "top": 467.046875,
+          "right": 432,
+          "bottom": 567.9375,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "above"
+        },
+        {
+          "label": "热力图阅读说明",
+          "left": 573,
+          "top": 251.203125,
+          "right": 993,
+          "bottom": 376.390625,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "above"
+        },
+        {
+          "label": "趋势图交互说明",
+          "left": 573,
+          "top": 274.619873046875,
+          "right": 993,
+          "bottom": 375.510498046875,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "above"
+        },
+        {
+          "label": "排名口径说明",
+          "left": 573,
+          "top": 274.6196594238281,
+          "right": 993,
+          "bottom": 375.5102844238281,
+          "fontSize": 15,
+          "topmost": true,
+          "contentComplete": true,
+          "placement": "above"
+        }
+      ],
+      "page_overflow": false,
+      "heatmap_internal_scroll": true,
+      "console_errors": [],
+      "result": "pass"
+    },
+    {
+      "scenario": "selector-detail-trend-linkage",
+      "industry": "美容护理",
+      "result": "pass"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+$ vinext dev "--" "--port" "3102"
+[2mDefault inspector port 9229 not available, using 9234 instead
+[22m
+Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.
+Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.

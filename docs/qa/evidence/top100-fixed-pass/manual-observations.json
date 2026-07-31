@@ -1,0 +1,17 @@
+{
+  "over240": {
+    "passed": true,
+    "evidence": "desktop-1440-new-template-over240.png",
+    "observed_text": "549 个交易日；超出 309 个交易日，最多允许 240 日",
+    "note": "browser-results.json 中 over240=false 是首轮 QA 正则写成“超过”而页面实际使用“超出”造成的采集假阴性；截图与页面状态均证明产品提示正确。运行脚本中的正则已修正。"
+  },
+  "under20": {
+    "passed": true,
+    "evidence": "desktop-1440-new-template-under20.png"
+  },
+  "mobile_slider_hit_target": {
+    "passed": false,
+    "observed_width_px": 9.01,
+    "note": "SVG handle 在 390px 视口缩放后实际横向命中宽度约 9px；键盘方向键工作，但触摸命中仍偏小。"
+  }
+}

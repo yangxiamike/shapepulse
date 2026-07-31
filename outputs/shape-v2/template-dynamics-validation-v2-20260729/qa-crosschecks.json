@@ -1,0 +1,36 @@
+{
+  "pass": true,
+  "checks": {
+    "fourIndependentThresholds": true,
+    "thresholdsNotUnified": true,
+    "distributionRowsComplete": true,
+    "latestQualifiedCountsReconcile": true,
+    "distributionScoreTolerance": true,
+    "topKCombinationsComplete": true,
+    "stabilityRatesValid": true,
+    "sixJaccardPairsComplete": true,
+    "jaccardRatesValid": true,
+    "transitionRowRatesSum": true,
+    "wilsonContainsObservedRate": true,
+    "capRatesValid": true,
+    "leakageFlagsAllFalse": true
+  },
+  "evidence": {
+    "latestAsOf": "20260728",
+    "thresholdRows": 4,
+    "distributionRows": 424,
+    "qualifiedMembershipRows": 17945,
+    "stabilityRows": 1664,
+    "jaccardRows": 636,
+    "transitionRows": 72,
+    "industryRows": 13356,
+    "capRows": 3816,
+    "leakageFlags": {
+      "networkUsed": false,
+      "sealedFinalRead": false,
+      "futureReturnUsed": false,
+      "icUsed": false,
+      "strategyPerformanceUsed": false
+    }
+  }
+}

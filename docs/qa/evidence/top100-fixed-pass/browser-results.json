@@ -1,0 +1,1019 @@
+{
+  "startedAt": "2026-07-29T15:42:39.703Z",
+  "baseURL": "http://localhost:3103",
+  "apiURL": "http://127.0.0.1:8878",
+  "http": [
+    {
+      "url": "http://localhost:3103/templates",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "url": "http://localhost:3103/templates/new",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "url": "http://localhost:3103/template-breadth-v3",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "url": "http://localhost:3103/market?code=301234&template=fresh_breakout",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "url": "http://127.0.0.1:8878/api/health",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8"
+    },
+    {
+      "url": "http://127.0.0.1:8878/api/templates",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8"
+    },
+    {
+      "url": "http://127.0.0.1:8878/api/templates/fresh_breakout",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8"
+    },
+    {
+      "url": "http://127.0.0.1:8878/api/templates/fresh_breakout/stocks?limit=3",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8"
+    },
+    {
+      "url": "http://127.0.0.1:8878/api/bars/301234?period=1d&limit=80",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8"
+    }
+  ],
+  "pages": [
+    {
+      "size": "desktop-1440",
+      "route": "/template-breadth-v3",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      },
+      "mapBlocks": 26,
+      "mapGeometry": [
+        {
+          "text": "医药生物21 只4.2% · 21/502",
+          "width": 284.796875,
+          "height": 399,
+          "area": 113633.953125,
+          "ratio": 1.4009985186810776
+        },
+        {
+          "text": "交通运输11 只8.6% · 11/128",
+          "width": 284.796875,
+          "height": 209,
+          "area": 59522.546875,
+          "ratio": 1.3626644736842106
+        },
+        {
+          "text": "机械设备7 只1.2% · 7/600",
+          "width": 249.1875,
+          "height": 152,
+          "area": 37876.5,
+          "ratio": 1.639391447368421
+        },
+        {
+          "text": "纺织服饰5 只4.6% · 5/108",
+          "width": 178,
+          "height": 152,
+          "area": 27056,
+          "ratio": 1.1710526315789473
+        },
+        {
+          "text": "传媒5 只3.8% · 5/130",
+          "width": 178,
+          "height": 152,
+          "area": 27056,
+          "ratio": 1.1710526315789473
+        },
+        {
+          "text": "公用事业5 只3.8% · 5/133",
+          "width": 232.765625,
+          "height": 116.234375,
+          "area": 27055.366943359375,
+          "ratio": 2.002554106734776
+        },
+        {
+          "text": "银行4 只9.5% · 4/42",
+          "width": 186.203125,
+          "height": 116.234375,
+          "area": 21643.203857421875,
+          "ratio": 1.6019626293856701
+        },
+        {
+          "text": "家用电器4 只3.9% · 4/103",
+          "width": 186.203125,
+          "height": 116.234375,
+          "area": 21643.203857421875,
+          "ratio": 1.6019626293856701
+        },
+        {
+          "text": "食品饮料4 只3.2% · 4/126",
+          "width": 191.109375,
+          "height": 113.25,
+          "area": 21643.13671875,
+          "ratio": 1.6875
+        },
+        {
+          "text": "汽车4 只1.3% · 4/316",
+          "width": 191.109375,
+          "height": 113.25,
+          "area": 21643.13671875,
+          "ratio": 1.6875
+        },
+        {
+          "text": "基础化工4 只0.9% · 4/442",
+          "width": 191.109375,
+          "height": 113.25,
+          "area": 21643.13671875,
+          "ratio": 1.6875
+        },
+        {
+          "text": "钢铁3 只6.8% · 3/44",
+          "width": 155.28125,
+          "height": 104.53125,
+          "area": 16231.7431640625,
+          "ratio": 1.4855007473841555
+        },
+        {
+          "text": "轻工制造3 只1.8% · 3/168",
+          "width": 155.28125,
+          "height": 104.53125,
+          "area": 16231.7431640625,
+          "ratio": 1.4855007473841555
+        },
+        {
+          "text": "社会服务2 只",
+          "width": 103.515625,
+          "height": 104.53125,
+          "area": 10820.61767578125,
+          "ratio": 1.009811320754717
+        },
+        {
+          "text": "房地产2 只2.0% · 2/99",
+          "width": 138.015625,
+          "height": 78.40625,
+          "area": 10821.28759765625,
+          "ratio": 1.760263053009167
+        },
+        {
+          "text": "农林牧渔2 只1.8% · 2/114",
+          "width": 138.015625,
+          "height": 78.40625,
+          "area": 10821.28759765625,
+          "ratio": 1.760263053009167
+        },
+        {
+          "text": "环保2 只1.5% · 2/135",
+          "width": 138.015625,
+          "height": 78.40625,
+          "area": 10821.28759765625,
+          "ratio": 1.760263053009167
+        },
+        {
+          "text": "有色金属2 只1.4% · 2/147",
+          "width": 138.015625,
+          "height": 78.40625,
+          "area": 10821.28759765625,
+          "ratio": 1.760263053009167
+        },
+        {
+          "text": "计算机2 只0.6% · 2/356",
+          "width": 138.015625,
+          "height": 78.40625,
+          "area": 10821.28759765625,
+          "ratio": 1.760263053009167
+        },
+        {
+          "text": "电力设备2 只",
+          "width": 103.515625,
+          "height": 104.53125,
+          "area": 10820.61767578125,
+          "ratio": 1.009811320754717
+        },
+        {
+          "text": "石油石化1 只",
+          "width": 103.515625,
+          "height": 52.265625,
+          "area": 5410.308837890625,
+          "ratio": 1.9805680119581466
+        },
+        {
+          "text": "建筑材料1 只",
+          "width": 86.265625,
+          "height": 62.71875,
+          "area": 5410.47216796875,
+          "ratio": 1.3754359740906825
+        },
+        {
+          "text": "商贸零售1 只",
+          "width": 86.265625,
+          "height": 62.71875,
+          "area": 5410.47216796875,
+          "ratio": 1.3754359740906825
+        },
+        {
+          "text": "通信1 只",
+          "width": 115.015625,
+          "height": 47.03125,
+          "area": 5409.32861328125,
+          "ratio": 2.445514950166113
+        },
+        {
+          "text": "国防军工1 只",
+          "width": 115.015625,
+          "height": 47.03125,
+          "area": 5409.32861328125,
+          "ratio": 2.445514950166113
+        },
+        {
+          "text": "建筑装饰1 只",
+          "width": 57.5,
+          "height": 94.078125,
+          "area": 5409.4921875,
+          "ratio": 1.6361413043478261
+        }
+      ],
+      "summary": {
+        "currentTemplate": "当前模板\n刚突破\n冻结定义 · 本模板独立 Pearson 排名",
+        "widest": "最宽行业\n医药生物 21 只\n面积最大的行业块",
+        "entrants": "5日新进入最多\n医药生物 10 只\n相对 5 个交易日前",
+        "exits": "5日退出最多\n医药生物 35 只\n退出不计入当前面积",
+        "dateUnitDenominatorPresent": true,
+        "nonColorPresent": true
+      },
+      "focusBefore": {
+        "outline": "rgb(18, 35, 30) none 3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "outline": "rgb(16, 23, 21) solid 3px",
+        "filter": "saturate(1.15)"
+      },
+      "focus": {
+        "outline": "rgb(16, 23, 21) solid 3px",
+        "boxShadow": "none"
+      },
+      "drilldown": {
+        "heading": "已选行业\n医药生物\n\n2026-07-29：当前 Top100 21 只；行业当日可选 502 只；入选率 4.2%。",
+        "stockLinks": 77,
+        "transitions": 3,
+        "series": 1
+      }
+    },
+    {
+      "size": "desktop-1440",
+      "route": "/templates",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      },
+      "candidateLinks": 100,
+      "templateRealKline": 101,
+      "firstMiniBox": {
+        "x": 1002.1875,
+        "y": 682.1875,
+        "width": 372.8125,
+        "height": 56
+      },
+      "firstCandidateHref": "/market?code=301234&template=fresh_breakout"
+    },
+    {
+      "size": "desktop-1440",
+      "route": "/templates/new",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      },
+      "fullChart": 1,
+      "sliderCount": 2,
+      "sliderBoxes": [
+        {
+          "label": "模板窗口开始边界",
+          "now": "3233",
+          "width": 32.7467041015625,
+          "height": 440.0333251953125
+        },
+        {
+          "label": "模板窗口结束边界",
+          "now": "3292",
+          "width": 32.7467041015625,
+          "height": 440.0333251953125
+        }
+      ],
+      "preview": 1,
+      "initialValidation": "60 个交易日\n窗口有效：60 个实际交易日\n2013-01-04\n2026-07-29\n\n拖动左、右边界调整起止日；拖动框内可整体平移。键盘方向键移动 1 日，Shift ",
+      "keyboardBoundary": {
+        "before": 3233,
+        "after": 3232,
+        "moved": true,
+        "focus": {
+          "outline": "rgb(9, 12, 14) none 3px",
+          "fill": "rgb(0, 95, 70)"
+        }
+      },
+      "returnHref": "/templates"
+    },
+    {
+      "size": "desktop-1440",
+      "route": "/market?code=301234&template=fresh_breakout",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440
+      },
+      "templateContext": {
+        "url": "http://localhost:3103/market?code=301234&template=fresh_breakout",
+        "poolButtons": 200,
+        "backHref": "/templates?template=fresh_breakout",
+        "saveEntryCount": 0,
+        "realPair": 2,
+        "stageNote": 1
+      },
+      "keyboardSwitch": {
+        "activeBefore": "1\n五洲医疗\n301234\n0.879",
+        "activeAfter": "2\n伟星股份\n002003\n0.798",
+        "changed": true
+      },
+      "closedResponsivePanelBeforeCompact": false,
+      "compact": {
+        "pressed": "true",
+        "expandedHeight": 689,
+        "compactHeight": 793,
+        "gained": true
+      }
+    },
+    {
+      "size": "narrow-1024",
+      "route": "/template-breadth-v3",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 1024,
+        "clientWidth": 1024
+      },
+      "mapBlocks": 26,
+      "mapGeometry": [
+        {
+          "text": "医药生物21 只4.2% · 21/502",
+          "width": 183.03125,
+          "height": 399,
+          "area": 73029.46875,
+          "ratio": 2.1799556086733825
+        },
+        {
+          "text": "交通运输11 只8.6% · 11/128",
+          "width": 183.03125,
+          "height": 209,
+          "area": 38253.53125,
+          "ratio": 1.141881509305105
+        },
+        {
+          "text": "机械设备7 只1.2% · 7/600",
+          "width": 160.15625,
+          "height": 152,
+          "area": 24343.75,
+          "ratio": 1.0536595394736843
+        },
+        {
+          "text": "纺织服饰5 只4.6% · 5/108",
+          "width": 114.390625,
+          "height": 152,
+          "area": 17387.375,
+          "ratio": 1.3287802212812456
+        },
+        {
+          "text": "传媒5 只3.8% · 5/130",
+          "width": 114.390625,
+          "height": 152,
+          "area": 17387.375,
+          "ratio": 1.3287802212812456
+        },
+        {
+          "text": "公用事业5 只3.8% · 5/133",
+          "width": 149.59375,
+          "height": 116.234375,
+          "area": 17387.93603515625,
+          "ratio": 1.2870009409866918
+        },
+        {
+          "text": "银行4 只9.5% · 4/42",
+          "width": 119.671875,
+          "height": 116.234375,
+          "area": 13909.985595703125,
+          "ratio": 1.0295738674553032
+        },
+        {
+          "text": "家用电器4 只3.9% · 4/103",
+          "width": 119.671875,
+          "height": 116.234375,
+          "area": 13909.985595703125,
+          "ratio": 1.0295738674553032
+        },
+        {
+          "text": "食品饮料4 只3.2% · 4/126",
+          "width": 122.828125,
+          "height": 113.25,
+          "area": 13910.28515625,
+          "ratio": 1.0845750551876379
+        },
+        {
+          "text": "汽车4 只1.3% · 4/316",
+          "width": 122.828125,
+          "height": 113.25,
+          "area": 13910.28515625,
+          "ratio": 1.0845750551876379
+        },
+        {
+          "text": "基础化工4 只0.9% · 4/442",
+          "width": 122.828125,
+          "height": 113.25,
+          "area": 13910.28515625,
+          "ratio": 1.0845750551876379
+        },
+        {
+          "text": "钢铁3 只6.8% · 3/44",
+          "width": 99.796875,
+          "height": 104.53125,
+          "area": 10431.89208984375,
+          "ratio": 1.0474401127289807
+        },
+        {
+          "text": "轻工制造3 只1.8% · 3/168",
+          "width": 99.796875,
+          "height": 104.53125,
+          "area": 10431.89208984375,
+          "ratio": 1.0474401127289807
+        },
+        {
+          "text": "社会服务2 只",
+          "width": 66.53125,
+          "height": 104.53125,
+          "area": 6954.5947265625,
+          "ratio": 1.5711601690934711
+        },
+        {
+          "text": "房地产2 只2.0% · 2/99",
+          "width": 88.703125,
+          "height": 78.40625,
+          "area": 6954.87939453125,
+          "ratio": 1.131327222000797
+        },
+        {
+          "text": "农林牧渔2 只1.8% · 2/114",
+          "width": 88.703125,
+          "height": 78.40625,
+          "area": 6954.87939453125,
+          "ratio": 1.131327222000797
+        },
+        {
+          "text": "环保2 只1.5% · 2/135",
+          "width": 88.703125,
+          "height": 78.40625,
+          "area": 6954.87939453125,
+          "ratio": 1.131327222000797
+        },
+        {
+          "text": "有色金属2 只1.4% · 2/147",
+          "width": 88.703125,
+          "height": 78.40625,
+          "area": 6954.87939453125,
+          "ratio": 1.131327222000797
+        },
+        {
+          "text": "计算机2 只0.6% · 2/356",
+          "width": 88.703125,
+          "height": 78.40625,
+          "area": 6954.87939453125,
+          "ratio": 1.131327222000797
+        },
+        {
+          "text": "电力设备2 只",
+          "width": 66.53125,
+          "height": 104.53125,
+          "area": 6954.5947265625,
+          "ratio": 1.5711601690934711
+        },
+        {
+          "text": "石油石化1 只",
+          "width": 66.53125,
+          "height": 52.265625,
+          "area": 3477.29736328125,
+          "ratio": 1.2729446935724962
+        },
+        {
+          "text": "建筑材料1 只",
+          "width": 55.4375,
+          "height": 62.71875,
+          "area": 3476.970703125,
+          "ratio": 1.1313416009019166
+        },
+        {
+          "text": "商贸零售1 只",
+          "width": 55.4375,
+          "height": 62.71875,
+          "area": 3476.970703125,
+          "ratio": 1.1313416009019166
+        },
+        {
+          "text": "通信1 只",
+          "width": 73.921875,
+          "height": 47.03125,
+          "area": 3476.63818359375,
+          "ratio": 1.5717607973421928
+        },
+        {
+          "text": "国防军工1 只",
+          "width": 73.921875,
+          "height": 47.03125,
+          "area": 3476.63818359375,
+          "ratio": 1.5717607973421928
+        },
+        {
+          "text": "建筑装饰1 只",
+          "width": 36.953125,
+          "height": 94.078125,
+          "area": 3476.480712890625,
+          "ratio": 2.545877378435518
+        }
+      ],
+      "summary": {
+        "currentTemplate": "当前模板\n刚突破\n冻结定义 · 本模板独立 Pearson 排名",
+        "widest": "最宽行业\n医药生物 21 只\n面积最大的行业块",
+        "entrants": "5日新进入最多\n医药生物 10 只\n相对 5 个交易日前",
+        "exits": "5日退出最多\n医药生物 35 只\n退出不计入当前面积",
+        "dateUnitDenominatorPresent": true,
+        "nonColorPresent": true
+      },
+      "focusBefore": {
+        "outline": "rgb(18, 35, 30) none 3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "outline": "rgb(16, 23, 21) solid 3px",
+        "filter": "saturate(1.15)"
+      },
+      "focus": {
+        "outline": "rgb(16, 23, 21) solid 3px",
+        "boxShadow": "none"
+      },
+      "drilldown": {
+        "heading": "已选行业\n医药生物\n\n2026-07-29：当前 Top100 21 只；行业当日可选 502 只；入选率 4.2%。",
+        "stockLinks": 77,
+        "transitions": 3,
+        "series": 1
+      }
+    },
+    {
+      "size": "narrow-1024",
+      "route": "/templates",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 1024,
+        "clientWidth": 1024
+      },
+      "candidateLinks": 100,
+      "templateRealKline": 101,
+      "firstMiniBox": {
+        "x": 705.109375,
+        "y": 834.328125,
+        "width": 263.890625,
+        "height": 56
+      },
+      "firstCandidateHref": "/market?code=301234&template=fresh_breakout"
+    },
+    {
+      "size": "narrow-1024",
+      "route": "/templates/new",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 1024,
+        "clientWidth": 1024
+      },
+      "fullChart": 1,
+      "sliderCount": 2,
+      "sliderBoxes": [
+        {
+          "label": "模板窗口开始边界",
+          "now": "3233",
+          "width": 23.6800537109375,
+          "height": 318.1999816894531
+        },
+        {
+          "label": "模板窗口结束边界",
+          "now": "3292",
+          "width": 23.67999267578125,
+          "height": 318.1999816894531
+        }
+      ],
+      "preview": 1,
+      "initialValidation": "60 个交易日\n窗口有效：60 个实际交易日\n2013-01-04\n2026-07-29\n\n拖动左、右边界调整起止日；拖动框内可整体平移。键盘方向键移动 1 日，Shift ",
+      "keyboardBoundary": {
+        "before": 3233,
+        "after": 3232,
+        "moved": true,
+        "focus": {
+          "outline": "rgb(9, 12, 14) none 3px",
+          "fill": "rgb(0, 95, 70)"
+        }
+      },
+      "returnHref": "/templates"
+    },
+    {
+      "size": "narrow-1024",
+      "route": "/market?code=301234&template=fresh_breakout",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 1024,
+        "clientWidth": 1024
+      },
+      "templateContext": {
+        "url": "http://localhost:3103/market?code=301234&template=fresh_breakout",
+        "poolButtons": 200,
+        "backHref": "/templates?template=fresh_breakout",
+        "saveEntryCount": 0,
+        "realPair": 2,
+        "stageNote": 1
+      },
+      "keyboardSwitch": {
+        "activeBefore": "1\n五洲医疗\n301234\n0.879",
+        "activeAfter": "2\n伟星股份\n002003\n0.798",
+        "changed": true
+      },
+      "closedResponsivePanelBeforeCompact": true,
+      "compact": {
+        "pressed": "true",
+        "expandedHeight": 589,
+        "compactHeight": 693,
+        "gained": true
+      }
+    },
+    {
+      "size": "mobile-390",
+      "route": "/template-breadth-v3",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "mapBlocks": 26,
+      "mapGeometry": [
+        {
+          "text": "医药生物21 只4.2% · 21/502",
+          "width": 114.546875,
+          "height": 326.8125,
+          "area": 37435.3505859375,
+          "ratio": 2.8530896194243622
+        },
+        {
+          "text": "交通运输11 只8.6% · 11/128",
+          "width": 114.546875,
+          "height": 171.1875,
+          "area": 19608.9931640625,
+          "ratio": 1.4944755149365707
+        },
+        {
+          "text": "机械设备7 只1.2% · 7/600",
+          "width": 100.234375,
+          "height": 124.5,
+          "area": 12479.1796875,
+          "ratio": 1.2420888542478565
+        },
+        {
+          "text": "纺织服饰5 只4.6% · 5/108",
+          "width": 71.59375,
+          "height": 124.5,
+          "area": 8913.421875,
+          "ratio": 1.738978611959843
+        },
+        {
+          "text": "传媒5 只3.8% · 5/130",
+          "width": 71.59375,
+          "height": 124.5,
+          "area": 8913.421875,
+          "ratio": 1.738978611959843
+        },
+        {
+          "text": "公用事业5 只3.8% · 5/133",
+          "width": 93.625,
+          "height": 95.203125,
+          "area": 8913.392578125,
+          "ratio": 1.0168558077436582
+        },
+        {
+          "text": "银行4 只9.5% · 4/42",
+          "width": 74.890625,
+          "height": 95.203125,
+          "area": 7129.821533203125,
+          "ratio": 1.271228875443355
+        },
+        {
+          "text": "家用电器4 只3.9% · 4/103",
+          "width": 74.890625,
+          "height": 95.203125,
+          "area": 7129.821533203125,
+          "ratio": 1.271228875443355
+        },
+        {
+          "text": "食品饮料4 只3.2% · 4/126",
+          "width": 76.875,
+          "height": 92.75,
+          "area": 7130.15625,
+          "ratio": 1.2065040650406504
+        },
+        {
+          "text": "汽车4 只1.3% · 4/316",
+          "width": 76.875,
+          "height": 92.75,
+          "area": 7130.15625,
+          "ratio": 1.2065040650406504
+        },
+        {
+          "text": "基础化工4 只0.9% · 4/442",
+          "width": 76.875,
+          "height": 92.75,
+          "area": 7130.15625,
+          "ratio": 1.2065040650406504
+        },
+        {
+          "text": "钢铁3 只6.8% · 3/44",
+          "width": 62.453125,
+          "height": 85.625,
+          "area": 5347.548828125,
+          "ratio": 1.3710282712034025
+        },
+        {
+          "text": "轻工制造3 只1.8% · 3/168",
+          "width": 62.453125,
+          "height": 85.625,
+          "area": 5347.548828125,
+          "ratio": 1.3710282712034025
+        },
+        {
+          "text": "社会服务2 只",
+          "width": 41.640625,
+          "height": 85.625,
+          "area": 3565.478515625,
+          "ratio": 2.0562851782363976
+        },
+        {
+          "text": "房地产2 只2.0% · 2/99",
+          "width": 55.515625,
+          "height": 64.21875,
+          "area": 3565.14404296875,
+          "ratio": 1.1567689276667605
+        },
+        {
+          "text": "农林牧渔2 只1.8% · 2/114",
+          "width": 55.515625,
+          "height": 64.21875,
+          "area": 3565.14404296875,
+          "ratio": 1.1567689276667605
+        },
+        {
+          "text": "环保2 只1.5% · 2/135",
+          "width": 55.515625,
+          "height": 64.21875,
+          "area": 3565.14404296875,
+          "ratio": 1.1567689276667605
+        },
+        {
+          "text": "有色金属2 只1.4% · 2/147",
+          "width": 55.515625,
+          "height": 64.21875,
+          "area": 3565.14404296875,
+          "ratio": 1.1567689276667605
+        },
+        {
+          "text": "计算机2 只0.6% · 2/356",
+          "width": 55.515625,
+          "height": 64.21875,
+          "area": 3565.14404296875,
+          "ratio": 1.1567689276667605
+        },
+        {
+          "text": "电力设备2 只",
+          "width": 41.640625,
+          "height": 85.625,
+          "area": 3565.478515625,
+          "ratio": 2.0562851782363976
+        },
+        {
+          "text": "石油石化1 只",
+          "width": 41.640625,
+          "height": 42.8125,
+          "area": 1782.7392578125,
+          "ratio": 1.0281425891181988
+        },
+        {
+          "text": "建筑材料1 只",
+          "width": 34.6875,
+          "height": 51.375,
+          "area": 1782.0703125,
+          "ratio": 1.481081081081081
+        },
+        {
+          "text": "商贸零售1 只",
+          "width": 34.6875,
+          "height": 51.375,
+          "area": 1782.0703125,
+          "ratio": 1.481081081081081
+        },
+        {
+          "text": "通信1 只",
+          "width": 46.265625,
+          "height": 38.53125,
+          "area": 1782.67236328125,
+          "ratio": 1.2007299270072993
+        },
+        {
+          "text": "国防军工1 只",
+          "width": 46.265625,
+          "height": 38.53125,
+          "area": 1782.67236328125,
+          "ratio": 1.2007299270072993
+        },
+        {
+          "text": "建筑装饰1 只",
+          "width": 23.125,
+          "height": 77.0625,
+          "area": 1782.0703125,
+          "ratio": 3.3324324324324324
+        }
+      ],
+      "summary": {
+        "currentTemplate": "当前模板\n刚突破\n冻结定义 · 本模板独立 Pearson 排名",
+        "widest": "最宽行业\n医药生物 21 只\n面积最大的行业块",
+        "entrants": "5日新进入最多\n医药生物 10 只\n相对 5 个交易日前",
+        "exits": "5日退出最多\n医药生物 35 只\n退出不计入当前面积",
+        "dateUnitDenominatorPresent": true,
+        "nonColorPresent": true
+      },
+      "focusBefore": {
+        "outline": "rgb(18, 35, 30) none 3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "outline": "rgb(16, 23, 21) solid 3px",
+        "filter": "saturate(1.15)"
+      },
+      "focus": {
+        "outline": "rgb(16, 23, 21) solid 3px",
+        "boxShadow": "none"
+      },
+      "drilldown": {
+        "heading": "已选行业\n医药生物\n\n2026-07-29：当前 Top100 21 只；行业当日可选 502 只；入选率 4.2%。",
+        "stockLinks": 77,
+        "transitions": 3,
+        "series": 1
+      }
+    },
+    {
+      "size": "mobile-390",
+      "route": "/templates",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "candidateLinks": 100,
+      "templateRealKline": 101,
+      "firstMiniBox": {
+        "x": 61,
+        "y": 1648.4375,
+        "width": 308,
+        "height": 46
+      },
+      "firstCandidateHref": "/market?code=301234&template=fresh_breakout"
+    },
+    {
+      "size": "mobile-390",
+      "route": "/templates/new",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "fullChart": 1,
+      "sliderCount": 2,
+      "sliderBoxes": [
+        {
+          "label": "模板窗口开始边界",
+          "now": "3233",
+          "width": 9.013336181640625,
+          "height": 121.11669921875
+        },
+        {
+          "label": "模板窗口结束边界",
+          "now": "3292",
+          "width": 9.013336181640625,
+          "height": 121.11669921875
+        }
+      ],
+      "preview": 1,
+      "initialValidation": "60 个交易日\n窗口有效：60 个实际交易日\n2013-01-04\n2026-07-29\n\n拖动左、右边界调整起止日；拖动框内可整体平移。键盘方向键移动 1 日，Shift ",
+      "keyboardBoundary": {
+        "before": 3233,
+        "after": 3232,
+        "moved": true,
+        "focus": {
+          "outline": "rgb(9, 12, 14) none 3px",
+          "fill": "rgb(0, 95, 70)"
+        }
+      },
+      "returnHref": "/templates"
+    },
+    {
+      "size": "mobile-390",
+      "route": "/market?code=301234&template=fresh_breakout",
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "externalRequests": [],
+      "status": 200,
+      "overflow": {
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "templateContext": {
+        "url": "http://localhost:3103/market?code=301234&template=fresh_breakout",
+        "poolButtons": 200,
+        "backHref": "/templates?template=fresh_breakout",
+        "saveEntryCount": 0,
+        "realPair": 2,
+        "stageNote": 1
+      },
+      "keyboardSwitch": {
+        "activeBefore": "1\n五洲医疗\n301234\n0.879",
+        "activeAfter": "2\n伟星股份\n002003\n0.798",
+        "changed": true
+      },
+      "closedResponsivePanelBeforeCompact": true,
+      "compact": {
+        "pressed": "true",
+        "expandedHeight": 690,
+        "compactHeight": 790,
+        "gained": true
+      }
+    }
+  ],
+  "checks": {
+    "over240": false,
+    "under20": true
+  },
+  "finishedAt": "2026-07-29T15:43:18.404Z"
+}

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "A1",
+    "decision": "支持",
+    "evidence": "四模板冻结阈值跨度 0.150；统一90分会混淆各模板自身尾部。",
+    "stability": "校准期前12个月冻结；另列26周滚动历史参照。",
+    "outlierAudit": "4/4 个模板当前最高分未同时越过两类5000路径自然极值。",
+    "product": "首页保留每模板冻结阈值与真实合格数"
+  },
+  {
+    "id": "A2",
+    "decision": "支持",
+    "evidence": "真实合格数量最大变异系数 1.42，固定Top1%不能代表动态供应。",
+    "stability": "周频与月末均复算，不补足TopK。",
+    "outlierAudit": "零或不足TopK均原样保留。",
+    "product": "首页保留"
+  },
+  {
+    "id": "A3",
+    "decision": "支持",
+    "evidence": "4/4 个模板的当前最高分未同时战胜随机与普通上涨的5000路径最大值。",
+    "stability": "长度匹配、固定随机种子、每模板独立对照。",
+    "outlierAudit": "对照只审计自然极值，不参与排序。",
+    "product": "阈值专页警示"
+  },
+  {
+    "id": "B1",
+    "decision": "支持",
+    "evidence": "最高分、P99、宽度与合格数共同显示供给位置；合格数最大CV 1.42。",
+    "stability": "周频/月频与历史高中低位置一致展示。",
+    "outlierAudit": "同时列中位数、P95/P99，避免只看最大值。",
+    "product": "首页简卡＋专页时间序列"
+  },
+  {
+    "id": "C1",
+    "decision": "不支持",
+    "evidence": "月末Top30变动中25–35名边界占比中位数 20.0%；全截面百分位相关 0.56，Top100换手 95.0%。",
+    "stability": "Top5/10/30/100、周频/月频分别统计。",
+    "outlierAudit": "若全截面相关也低，则明确归为整体失稳。",
+    "product": "专页保留换手拆解"
+  },
+  {
+    "id": "D1",
+    "decision": "较弱",
+    "evidence": "六组Top30 Jaccard中位数跨度 3.4%；非空状态迁移相对随机最大lift 239.37。",
+    "stability": "周频/月频、Top30与真实合格集合并列。",
+    "outlierAudit": "多标签保留；原始Pearson不跨模板比较。",
+    "product": "专页保留，禁止预测措辞"
+  },
+  {
+    "id": "E1",
+    "decision": "支持",
+    "evidence": "电子在4模板中有 4 个处于走弱象限；去Top1/Top3结果另列。",
+    "stability": "使用时点申万成员、合格率与Wilson区间。",
+    "outlierAudit": "同时审计Top3超过阈值程度占比。",
+    "product": "行业专页，不用绝对数量下结论"
+  },
+  {
+    "id": "E2/E3",
+    "decision": "支持",
+    "evidence": "行业使用合格率/超额占比；市值同时使用固定亿元层级与截面五分位。",
+    "stability": "周频/月频、成员与daily_basic均按时点读取。",
+    "outlierAudit": "小行业标记n<30并给95% Wilson区间。",
+    "product": "专页保留双口径"
+  },
+  {
+    "id": "F1",
+    "decision": "支持",
+    "evidence": "窗口±10%扰动Top30 Jaccard中位数 53.8%；去电子/每行业去Top1/Top3后合格率最大变化 0.07pp。",
+    "stability": "TopK、频率、去龙头、去电子、随机基线、连续2–3期均有证据。",
+    "outlierAudit": "多重比较只作探索性验证，不挑选显著结果。",
+    "product": "仅跨稳健性成立的指标进入产品"
+  }
+]

@@ -1,0 +1,38 @@
+{
+  "url": "local ephemeral server",
+  "httpStatus": 200,
+  "checkedAt": "2026-07-29T09:04:43.844Z",
+  "consoleErrors": [],
+  "pageErrors": [],
+  "desktop": {
+    "viewport": 1440,
+    "scrollWidth": 1440,
+    "title": "四模板动态供给、阈值与状态迁移验证 V2",
+    "reviewLabel": "statistical validation review / not for model evaluation",
+    "templateTabs": 4,
+    "conclusionCards": 9,
+    "transitionCells": 49,
+    "noHorizontalOverflow": true
+  },
+  "mobile": {
+    "viewport": 390,
+    "scrollWidth": 390,
+    "title": "四模板动态供给、阈值与状态迁移验证 V2",
+    "reviewLabel": "statistical validation review / not for model evaluation",
+    "templateTabs": 4,
+    "conclusionCards": 9,
+    "transitionCells": 49,
+    "noHorizontalOverflow": true,
+    "activeTemplate": "抛物线上升动态分布"
+  },
+  "interactions": {
+    "templateTabs": [
+      "刚突破 · 50根",
+      "健康上涨 · 80根",
+      "回调转强 · 55根",
+      "抛物线上升 · 160根"
+    ],
+    "monthlyJaccardSwitch": true
+  },
+  "pass": true
+}

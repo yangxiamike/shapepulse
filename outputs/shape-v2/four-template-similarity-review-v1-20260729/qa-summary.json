@@ -1,0 +1,48 @@
+{
+  "status": "passed_after_algorithm_correction",
+  "generatedAt": "2026-07-29",
+  "branch": "codex/four-template-market-retrieval-review-v1",
+  "algorithm": {
+    "input": "qfq log-close",
+    "normalization": "independent z-normalization per window",
+    "ranking": "Pearson correlation descending",
+    "displayScore": "100 * Pearson r",
+    "distance": "1 - Pearson r"
+  },
+  "correction": {
+    "invalidPrototypeAlgorithm": "first-close-normalized path RMSE",
+    "invalidPrototypeRetained": false,
+    "reason": "display normalization was mistakenly treated as the established ranking formula"
+  },
+  "dataChecks": {
+    "latestTradeDate": "20260728",
+    "categoryEligibleCounts": {
+      "fresh_breakout": 5497,
+      "healthy_uptrend": 5472,
+      "pullback_strengthening": 5493,
+      "parabolic_uptrend": 5419
+    },
+    "topKPerCategory": 30,
+    "uniqueCodesPerCategory": 30,
+    "allWindowsEndOnLatestTradeDate": true,
+    "pearsonDescending": true,
+    "networkUsed": false,
+    "sealedFinalRead": false
+  },
+  "browserChecks": {
+    "desktop": {
+      "viewport": "1440x1200",
+      "horizontalOverflowPx": 0,
+      "scriptErrors": 0
+    },
+    "mobile": {
+      "viewport": "390x844",
+      "horizontalOverflowPx": 0,
+      "scriptErrors": 0
+    },
+    "categoryTabsWorking": 4,
+    "resultCardsPerCategory": 30,
+    "defaultOpenCardsPerCategory": 10,
+    "chartsPerCategoryIncludingTemplate": 62
+  }
+}

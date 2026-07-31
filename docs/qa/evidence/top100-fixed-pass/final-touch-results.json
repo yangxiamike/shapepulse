@@ -1,0 +1,26 @@
+{
+  "baseURL": "http://localhost:3103",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "console": [],
+  "pageErrors": [],
+  "requestFailures": [],
+  "httpStatus": 200,
+  "renderedHandleBox": {
+    "x": 348.44775390625,
+    "y": 538.0191650390625,
+    "width": 9.013336181640625,
+    "height": 121.961669921875
+  },
+  "captureRadiusPx": 22,
+  "effectiveHitWidthPx": 44,
+  "testedOffsetPx": -18,
+  "draggedScreenDistancePx": -14,
+  "before": 3233,
+  "after": 2904,
+  "moved": true,
+  "directionCorrect": true,
+  "bodyValidation": "389 个交易日\n超出 149 个交易日，最多允许 240 日\n2013-01-04\n2026-07-29\n\n拖动左、右边界调整起止日；拖动框内可整体平移。键盘方向键移动 1 "
+}

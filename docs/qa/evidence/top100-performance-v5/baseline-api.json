@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-07-30",
+  "branch": "codex/top100-performance-ux-v5",
+  "commit": "9c1109cc2924bcdc3a3528adcdec4b2c3a33cbcb",
+  "environment": {
+    "backend": "http://127.0.0.1:8879",
+    "frontend": "http://localhost:3104",
+    "frontend_mode": "vinext dev",
+    "data_source": "C:\\Users\\hp\\Documents\\zer0share",
+    "request_order": "Each endpoint was requested twice in order; run 1 is the coldest observed request for that endpoint in a fresh backend/frontend session, run 2 is the immediate repeat."
+  },
+  "results": [
+    {
+      "name": "templates-list",
+      "uri": "/api/templates",
+      "runs": [
+        { "run": 1, "status": 200, "elapsed_ms": 28.3, "payload_bytes": 1330 },
+        { "run": 2, "status": 200, "elapsed_ms": 10.3, "payload_bytes": 1330 }
+      ]
+    },
+    {
+      "name": "template-detail-parabolic",
+      "uri": "/api/templates/parabolic_uptrend",
+      "runs": [
+        { "run": 1, "status": 200, "elapsed_ms": 1657.0, "payload_bytes": 24152 },
+        { "run": 2, "status": 200, "elapsed_ms": 87.6, "payload_bytes": 24152 }
+      ]
+    },
+    {
+      "name": "template-candidates-200",
+      "uri": "/api/templates/parabolic_uptrend/stocks?limit=200",
+      "runs": [
+        { "run": 1, "status": 200, "elapsed_ms": 8875.7, "payload_bytes": 4094972 },
+        { "run": 2, "status": 200, "elapsed_ms": 2387.1, "payload_bytes": 4094972 }
+      ]
+    },
+    {
+      "name": "bars-full-10000",
+      "uri": "/api/bars/001309.SZ?period=1d&adjust=qfq&limit=10000",
+      "runs": [
+        {
+          "run": 1,
+          "status": 200,
+          "elapsed_ms": 1230.8,
+          "payload_bytes": 191881,
+          "server_timing": "query;dur=546.7, adjust;dur=335.8, aggregate;dur=0.0, serialize;dur=22.7, total;dur=1140.8"
+        },
+        {
+          "run": 2,
+          "status": 200,
+          "elapsed_ms": 110.2,
+          "payload_bytes": 191873,
+          "server_timing": "total;dur=24.8, query;dur=0.0, adjust;dur=0.0, aggregate;dur=0.0, serialize;dur=0.0"
+        }
+      ]
+    },
+    {
+      "name": "breadth-static",
+      "uri": "/template-breadth-v3.json",
+      "runs": [
+        { "run": 1, "status": 200, "elapsed_ms": 855.1, "payload_bytes": 2201081, "content_length": 2167319 },
+        { "run": 2, "status": 200, "elapsed_ms": 855.7, "payload_bytes": 2201081, "content_length": 2167319 }
+      ]
+    },
+    {
+      "name": "templates-page",
+      "uri": "/templates",
+      "runs": [
+        { "run": 1, "status": 200, "elapsed_ms": 684.1, "payload_bytes": 14513 },
+        { "run": 2, "status": 200, "elapsed_ms": 32.9, "payload_bytes": 14511 }
+      ]
+    },
+    {
+      "name": "market-page",
+      "uri": "/market?code=001309&template=parabolic_uptrend",
+      "runs": [
+        { "run": 1, "status": 200, "elapsed_ms": 392.5, "payload_bytes": 34119 },
+        { "run": 2, "status": 200, "elapsed_ms": 53.7, "payload_bytes": 34119 }
+      ]
+    },
+    {
+      "name": "breadth-page",
+      "uri": "/template-breadth-v3",
+      "runs": [
+        { "run": 1, "status": 200, "elapsed_ms": 99.9, "payload_bytes": 14192 },
+        { "run": 2, "status": 200, "elapsed_ms": 30.0, "payload_bytes": 14175 }
+      ]
+    }
+  ],
+  "baseline_findings": [
+    "The 200-candidate template request blocks on a cold all-market calculation and returns about 4.09 MB.",
+    "The breadth first-view JSON is about 2.17 MB and shows no useful warm improvement in this dev-server measurement.",
+    "The full-history 10000-bar request costs about 1.23 s cold and about 192 KB for the sampled stock.",
+    "Framework HTML is already near-instant when warm, but cold template and market routes are materially slower."
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "desktop": {
+    "viewport": "1440x1200",
+    "normalizedChartsInActiveCategory": 31,
+    "candlestickVolumeChartsInActiveCategory": 31,
+    "horizontalOverflow": false,
+    "browserErrors": []
+  },
+  "mobile": {
+    "viewport": "390x844",
+    "candlestickVolumeChartVisible": true,
+    "horizontalOverflow": false,
+    "browserErrors": []
+  },
+  "dataAndRankingChanged": false,
+  "status": "PASS"
+}

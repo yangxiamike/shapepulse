@@ -1,0 +1,87 @@
+{
+  "pass": true,
+  "asOf": "20260729",
+  "topK": 100,
+  "defaultChangeWindow": 10,
+  "comparisonTradingDays": [
+    10,
+    20
+  ],
+  "initialPayloadBytes": 60564,
+  "initialPayloadHasStockLists": false,
+  "initialPayloadHasKlineBars": false,
+  "parabolicFrozenWindow": {
+    "source_ts_code": "001309.SZ",
+    "start_date": "20260115",
+    "end_date": "20260520",
+    "window_bars": 80
+  },
+  "templates": [
+    {
+      "template": "fresh_breakout",
+      "latestTop100": 100,
+      "industryDenominatorsExact": true,
+      "comparisonDatesAreTradingDayOffsets": true,
+      "stockListsExact": true,
+      "tenAndTwentyDayIdentities": true,
+      "treemapTotal": 100,
+      "otherTop100Count": 20,
+      "otherIndustryCount": 13,
+      "detailBytes": 381109,
+      "rankingBytes": 18072,
+      "templateDefinitionBytes": 7486
+    },
+    {
+      "template": "healthy_uptrend",
+      "latestTop100": 100,
+      "industryDenominatorsExact": true,
+      "comparisonDatesAreTradingDayOffsets": true,
+      "stockListsExact": true,
+      "tenAndTwentyDayIdentities": true,
+      "treemapTotal": 100,
+      "otherTop100Count": 14,
+      "otherIndustryCount": 12,
+      "detailBytes": 347878,
+      "rankingBytes": 17870,
+      "templateDefinitionBytes": 10991
+    },
+    {
+      "template": "pullback_strengthening",
+      "latestTop100": 100,
+      "industryDenominatorsExact": true,
+      "comparisonDatesAreTradingDayOffsets": true,
+      "stockListsExact": true,
+      "tenAndTwentyDayIdentities": true,
+      "treemapTotal": 100,
+      "otherTop100Count": 16,
+      "otherIndustryCount": 13,
+      "detailBytes": 370811,
+      "rankingBytes": 17961,
+      "templateDefinitionBytes": 7919
+    },
+    {
+      "template": "parabolic_uptrend",
+      "latestTop100": 100,
+      "industryDenominatorsExact": true,
+      "comparisonDatesAreTradingDayOffsets": true,
+      "stockListsExact": true,
+      "tenAndTwentyDayIdentities": true,
+      "treemapTotal": 100,
+      "otherTop100Count": 22,
+      "otherIndustryCount": 15,
+      "detailBytes": 375228,
+      "rankingBytes": 17910,
+      "templateDefinitionBytes": 11312
+    }
+  ],
+  "leakageAudit": {
+    "dataSource": "C:\\Users\\hp\\Documents\\zer0share",
+    "networkUsed": false,
+    "sealedFinalRead": false,
+    "futureReturnUsed": false,
+    "icUsed": false,
+    "strategyPerformanceUsed": false,
+    "algorithm": "前复权 log-close；窗口内独立 z；单窗口 Pearson",
+    "crossTemplateRankingUsed": false
+  }
+}
