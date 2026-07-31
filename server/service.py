@@ -571,9 +571,17 @@ class MarketService:
             else self._template_record(resolved_template_id)
         )
         snapshots = self.repository.snapshots()
-        as_of = snapshots.daily_kline
-        if as_of is None:
+        available_dates = [
+            value
+            for value in (snapshots.daily_kline, snapshots.adj_factor)
+            if value
+        ]
+        if not available_dates:
             raise FileNotFoundError("daily_kline data not found")
+        # Similarity ranking uses forward-adjusted prices, so it must stop at the
+        # latest date shared by both daily bars and adjustment factors. Daily
+        # data can arrive one session earlier than factors during a sync.
+        as_of = min(available_dates)
         ranking_started = time.perf_counter()
         ranking_cache_hit = False
         ranking_source = "computed"

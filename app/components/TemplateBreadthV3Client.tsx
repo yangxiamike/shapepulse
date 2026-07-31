@@ -356,7 +356,7 @@ export function TemplateBreadthV3Client() {
     setError("");
     try {
       const response = await fetch("/template-breadth-v3.json", {
-        cache: "force-cache",
+        cache: "no-store",
       });
       if (!response.ok) throw new Error(`数据摘要返回 ${response.status}`);
       const payload = (await response.json()) as Payload;
@@ -387,7 +387,7 @@ export function TemplateBreadthV3Client() {
   useEffect(() => {
     const controller = new AbortController();
     void fetch("/industry-b-health.json", {
-      cache: "force-cache",
+      cache: "no-store",
       signal: controller.signal,
     })
       .then(async response => {
@@ -435,6 +435,9 @@ export function TemplateBreadthV3Client() {
   );
   const loadTimeline = useCallback(async (item: TemplateData) => {
     const templateKey = item.key;
+    const timelineUrl =
+      item.timeline_url ||
+      `/template-breadth-v3-timelines/${encodeURIComponent(templateKey)}.json`;
     const sequence = ++timelineLoadSequence.current;
     setTimelineError("");
     const cached = timelineCache.current.get(templateKey);
@@ -449,19 +452,13 @@ export function TemplateBreadthV3Client() {
       }
       return;
     }
-    if (!item.timeline_url) {
-      setTimeline(null);
-      setTimelineError("该模板缺少历史时间轴地址");
-      setTimelineLoading(false);
-      return;
-    }
     setTimelineLoading(true);
     try {
       let pending = timelineRequests.current.get(templateKey);
       if (!pending) {
         const controller = new AbortController();
         const timeout = window.setTimeout(() => controller.abort(), 10000);
-        pending = fetch(item.timeline_url, {
+        pending = fetch(timelineUrl, {
           cache: "no-store",
           signal: controller.signal,
         })
@@ -672,7 +669,7 @@ export function TemplateBreadthV3Client() {
       try {
         let pending = detailRequests.current.get(templateKey);
         if (!pending) {
-          pending = fetch(template.detail_url, { cache: "force-cache" })
+          pending = fetch(template.detail_url, { cache: "no-store" })
             .then(async response => {
               if (!response.ok) {
                 throw new Error(`行业明细返回 ${response.status}`);

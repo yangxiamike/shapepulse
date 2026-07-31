@@ -75,6 +75,25 @@ test("all four frozen templates expose independent one-year timelines", async ({
   ).toEqual(new Set(templateKeys));
 });
 
+test("timeline still loads when an older cached manifest lacks timeline_url", async ({
+  page,
+}) => {
+  await page.route("**/template-breadth-v3.json", async route => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    for (const template of payload.templates) {
+      delete template.timeline_url;
+    }
+    await route.fulfill({ response, json: payload });
+  });
+
+  await page.goto("/template-breadth-v3");
+  await expect(
+    page.getByRole("slider", { name: "选择行业空间历史交易日" }),
+  ).toHaveAttribute("aria-valuetext", /2026-07-30/);
+  await expect(page.getByText("该模板缺少历史时间轴地址")).toHaveCount(0);
+});
+
 test("fresh breakout hides B while trend templates keep only useful heatmap markers", async ({
   page,
 }) => {

@@ -318,6 +318,46 @@ class MarketTemplateServiceTests(unittest.TestCase):
             target.write_text(json.dumps(payload), encoding="utf-8")
             self.assertIsNone(service._precomputed_template_scores(template, as_of))
 
+    def test_ranking_stops_at_latest_date_shared_with_adjustment_factors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = self.make_service(Path(directory) / "state.sqlite3")
+            service.repository.snapshots = lambda: SimpleNamespace(
+                daily_kline="20260730",
+                adj_factor="20260729",
+            )
+            observed_as_of = []
+
+            def precomputed(_template, as_of):
+                observed_as_of.append(as_of)
+                return (
+                    pd.DataFrame(
+                        [
+                            {
+                                "ts_code": "000001.SZ",
+                                "code": "000001",
+                                "name": "平安银行",
+                                "industry": "银行",
+                                "score": 1.0,
+                                "start_date": "20260520",
+                                "end_date": as_of,
+                                "window_bars": 50,
+                            }
+                        ]
+                    ),
+                    1,
+                    "precomputed_test",
+                )
+
+            service._precomputed_template_scores = precomputed
+            actual = service.template_stocks(
+                "fresh_breakout",
+                limit=1,
+                include_bars=False,
+            )
+            self.assertEqual(observed_as_of, ["20260729"])
+            self.assertEqual(actual["as_of"], "20260729")
+            self.assertEqual(len(actual["items"]), 1)
+
     def test_custom_service_crud_and_within_template_topk(self):
         with tempfile.TemporaryDirectory() as directory:
             service = self.make_service(Path(directory) / "state.sqlite3")
