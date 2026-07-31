@@ -75,58 +75,41 @@ test("all four frozen templates expose independent one-year timelines", async ({
   ).toEqual(new Set(templateKeys));
 });
 
-test("industry B core identity and weakening risk remain visually distinct", async ({
+test("fresh breakout hides B while trend templates keep only useful heatmap markers", async ({
   page,
 }) => {
   await page.goto("/template-breadth-v3");
-
-  const monitor = page.getByRole("region", {
-    name: /行业 B 健康监测 2026-07-30/,
-  });
-  await expect(monitor).toContainText("核心看占比，风险看平滑走弱");
-  await expect(monitor).toContainText("电子");
-  await expect(monitor).toContainText("B 45只 · 池占比 45.0% · 第1名");
-  await expect(monitor).toContainText("机械设备");
-  await expect(monitor).toContainText("B 11只 · 池占比 11.0% · 第2名");
-  await expect(monitor).toContainText("金色：当前核心行业，非风险");
 
   const map = page.getByRole("group", {
     name: /Top100 行业矩形树图/,
   });
-  const machinery = map.locator('[data-industry-code="801890.SI"]');
-  await expect(machinery).toHaveAttribute("data-b-core", "核心 Top2");
-  await expect(machinery).toHaveAttribute("data-b-status", "stable");
+  await expect(map.getByText(/B Top1/)).toHaveCount(0);
+  await expect(page.getByText("B关注：走弱状态持续满3个交易日")).toHaveCount(0);
+  await expect(page.getByText(/行业 B 健康监测/)).toHaveCount(0);
 
-  const buildingMaterialsRisk = monitor.locator(
-    '[data-b-industry-code="801710.SI"]',
+  const tabs = page.getByRole("navigation", { name: "冻结四模板切换" });
+  await tabs.getByRole("button").nth(1).click();
+  const top1 = map.locator('[data-b-core="Top1"]');
+  await expect(top1).toContainText("B Top1 · 45只");
+  await expect(page.getByText("B关注：走弱状态持续满3个交易日")).toBeVisible();
+  await expect(map.locator('[data-industry-code="801890.SI"]')).not.toHaveAttribute(
+    "data-b-core",
+    /.+/,
   );
-  await expect(buildingMaterialsRisk).toHaveAttribute(
+  await expect(map.locator('[data-industry-code="other"]')).toHaveAttribute(
     "data-b-status",
-    "weakening",
+    "hidden",
   );
-  await expect(buildingMaterialsRisk).toContainText(
-    "B走弱状态已持续2个交易日",
-  );
-
-  const groupedOther = map.locator('[data-industry-code="other"]');
-  await expect(groupedOther).toHaveAttribute("data-b-status", "weakening");
-  await expect(groupedOther).toHaveAttribute("title", /B走弱/);
-
 });
 
-test("industry B monitor stays readable without horizontal overflow on mobile", async ({
+test("inline B markers stay readable without horizontal overflow on mobile", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/template-breadth-v3");
-  const monitor = page.getByRole("region", {
-    name: /行业 B 健康监测 2026-07-30/,
-  });
-  await expect(monitor.getByText("核心 Top1", { exact: true })).toBeVisible();
-  await expect(monitor.getByText("核心 Top2", { exact: true })).toBeVisible();
-  await expect(
-    monitor.locator('[data-b-industry-code="801710.SI"]'),
-  ).toBeVisible();
+  const tabs = page.getByRole("navigation", { name: "冻结四模板切换" });
+  await tabs.getByRole("button").nth(1).click();
+  await expect(page.getByText("B Top1 · 45只")).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   bChangeText,
   bDurationText,
+  bHeatmapMarker,
   bVisualState,
 } from "../app/lib/industry-b-health.mjs";
 
@@ -22,6 +23,8 @@ test("core identity and B risk are independent visual dimensions", () => {
     bVisualState({ pool_rank: 2, smooth5_weak: true }).tone,
     "warning",
   );
+  assert.equal(bVisualState({ pool_rank: 2 }).core, false);
+  assert.equal(bVisualState({ pool_rank: 2 }).coreLabel, "");
   assert.equal(
     bVisualState({
       pool_rank: 1,
@@ -83,4 +86,39 @@ test("generated B health interface keeps the frozen Top100 and rank rules", asyn
   assert.equal(buildingMaterials.status, "weakening");
   assert.equal(buildingMaterials.formal_cooling, false);
   assert.equal(buildingMaterials.weak_duration, 2);
+});
+
+test("heatmap only shows Top1 or B weakness lasting at least three days", () => {
+  assert.deepEqual(
+    bHeatmapMarker({ pool_rank: 1, b_count: 45, weak_duration: 0 }),
+    {
+      visible: true,
+      top1: true,
+      attention: false,
+      tone: "stable",
+      label: "B Top1 · 45只",
+    },
+  );
+  assert.equal(
+    bHeatmapMarker({
+      pool_rank: 7,
+      smooth3_weak: true,
+      weak_duration: 2,
+    }).visible,
+    false,
+  );
+  assert.deepEqual(
+    bHeatmapMarker({
+      pool_rank: 7,
+      smooth3_weak: true,
+      weak_duration: 3,
+    }),
+    {
+      visible: true,
+      top1: false,
+      attention: true,
+      tone: "warning",
+      label: "B走弱 · 已持续3日",
+    },
+  );
 });

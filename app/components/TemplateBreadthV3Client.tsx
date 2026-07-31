@@ -20,11 +20,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { AppSidebar } from "./AppSidebar";
-import {
-  bChangeText,
-  bDurationText,
-  bVisualState,
-} from "../lib/industry-b-health.mjs";
+import { bHeatmapMarker } from "../lib/industry-b-health.mjs";
 import styles from "./TemplateBreadthV3Client.module.css";
 
 type ChangeWindow = 10 | 20;
@@ -354,7 +350,6 @@ export function TemplateBreadthV3Client() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [bHealth, setBHealth] = useState<BHealthPayload | null>(null);
-  const [bHealthError, setBHealthError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -405,7 +400,7 @@ export function TemplateBreadthV3Client() {
       })
       .catch(reason => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
-        setBHealthError(
+        console.error(
           reason instanceof Error ? reason.message : "行业 B 健康数据读取失败",
         );
       });
@@ -450,19 +445,26 @@ export function TemplateBreadthV3Client() {
       ) {
         setTimeline(cached);
         setTimelineIndex(Math.max(0, cached.snapshots.length - 1));
+        setTimelineLoading(false);
       }
       return;
     }
     if (!item.timeline_url) {
       setTimeline(null);
       setTimelineError("该模板缺少历史时间轴地址");
+      setTimelineLoading(false);
       return;
     }
     setTimelineLoading(true);
     try {
       let pending = timelineRequests.current.get(templateKey);
       if (!pending) {
-        pending = fetch(item.timeline_url, { cache: "force-cache" })
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 10000);
+        pending = fetch(item.timeline_url, {
+          cache: "no-store",
+          signal: controller.signal,
+        })
           .then(async response => {
             if (!response.ok) {
               throw new Error(`历史时间轴返回 ${response.status}`);
@@ -477,7 +479,16 @@ export function TemplateBreadthV3Client() {
             timelineCache.current.set(templateKey, payload);
             return payload;
           })
-          .finally(() => timelineRequests.current.delete(templateKey));
+          .catch(reason => {
+            if (reason instanceof DOMException && reason.name === "AbortError") {
+              throw new Error("历史时间轴读取超时，请重试");
+            }
+            throw reason;
+          })
+          .finally(() => {
+            window.clearTimeout(timeout);
+            timelineRequests.current.delete(templateKey);
+          });
         timelineRequests.current.set(templateKey, pending);
       }
       const payload = await pending;
@@ -622,25 +633,7 @@ export function TemplateBreadthV3Client() {
       ),
     [bSnapshot],
   );
-  const coreBIndustries = useMemo(
-    () =>
-      [...(bSnapshot?.industries || [])]
-        .filter(item => item.pool_rank <= 2)
-        .sort((a, b) => a.pool_rank - b.pool_rank),
-    [bSnapshot],
-  );
-  const bRiskIndustries = useMemo(
-    () =>
-      [...(bSnapshot?.industries || [])]
-        .filter(item => item.status !== "stable")
-        .sort(
-          (a, b) =>
-            Number(b.formal_cooling) - Number(a.formal_cooling) ||
-            a.pool_rank - b.pool_rank,
-        ),
-    [bSnapshot],
-  );
-  const focusB = focusItem ? bRows.get(focusItem.industry_code) : null;
+  const showIndustryB = template?.key !== "fresh_breakout";
 
   const selectIndustry = useCallback(
     async (item: Industry) => {
@@ -869,86 +862,6 @@ export function TemplateBreadthV3Client() {
               </article>
             </section>
 
-            <section
-              className={styles.bOverview}
-              aria-label={`行业 B 健康监测 ${date(viewDate)}`}
-            >
-              <div className={styles.bOverviewHead}>
-                <div>
-                  <span>行业 B 健康监测</span>
-                  <strong>核心看占比，风险看平滑走弱</strong>
-                </div>
-                <small>
-                  B 为三趋势模板综合后每日独立 Top100；用于状态识别，不预测未来涨跌。
-                </small>
-              </div>
-              {bSnapshot ? (
-                <div className={styles.bCoreGrid}>
-                  {coreBIndustries.map(item => {
-                    const visual = bVisualState(item);
-                    const duration = bDurationText(item);
-                    return (
-                      <article
-                        key={item.industry_code}
-                        className={styles[`bTone_${visual.tone}`]}
-                        data-b-status={visual.status}
-                      >
-                        <div>
-                          <span className={styles.coreBadge}>
-                            {visual.coreLabel}
-                          </span>
-                          <span className={styles.bStatus}>{visual.label}</span>
-                        </div>
-                        <strong>{item.industry}</strong>
-                        <p>
-                          B {item.b_count}只 · 池占比{" "}
-                          {(item.pool_share * 100).toFixed(1)}% · 第
-                          {item.pool_rank}名
-                        </p>
-                        <small>
-                          3日均变化 {bChangeText(item.change_3d_count)} ·
-                          5日均变化 {bChangeText(item.change_5d_count)}
-                        </small>
-                        {duration ? <em>{duration}</em> : null}
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className={styles.bUnavailable}>
-                  {bHealthError || "正在读取行业 B 健康状态…"}
-                </p>
-              )}
-              {bRiskIndustries.length ? (
-                <div className={styles.bRiskStrip} aria-label="当前 B 走弱行业">
-                  <strong>当前走弱</strong>
-                  <div>
-                    {bRiskIndustries.map(item => {
-                      const visual = bVisualState(item);
-                      return (
-                        <span
-                          key={item.industry_code}
-                          className={styles[`bRisk_${visual.tone}`]}
-                          data-b-industry-code={item.industry_code}
-                          data-b-status={visual.status}
-                        >
-                          {item.industry} · B {item.b_count}只 · {visual.label}
-                          {bDurationText(item)
-                            ? ` · ${bDurationText(item)}`
-                            : ""}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-              <div className={styles.bRuleLegend}>
-                <span><i className={styles.bGold} />金色：当前核心行业，非风险</span>
-                <span><i className={styles.bOrange} />橙色：3日或5日平滑走弱</span>
-                <span><i className={styles.bRed} />红色：正式5日对15日降温成立</span>
-              </div>
-            </section>
-
             <div className={styles.workspace}>
               <section className={styles.mapCard}>
                 <div className={styles.sectionHead}>
@@ -980,6 +893,11 @@ export function TemplateBreadthV3Client() {
                     <i className={styles.legendNeutral} />灰 — 持平 /
                     其他行业
                   </span>
+                  {showIndustryB ? (
+                    <span className={styles.bAttentionLegend}>
+                      B关注：走弱状态持续满3个交易日
+                    </span>
+                  ) : null}
                 </div>
                 <div
                   ref={mapRef}
@@ -993,37 +911,12 @@ export function TemplateBreadthV3Client() {
                 >
                   {rects.map(rect => {
                     const industry = rect.item;
-                    const bRow = bRows.get(industry.industry_code);
-                    const groupedBRows =
-                      industry.industry_code === "other"
-                        ? (industry.component_industry_codes || [])
-                            .map(code => bRows.get(code))
-                            .filter((item): item is BHealthRow => Boolean(item))
-                        : [];
-                    const groupedCooling = groupedBRows.filter(
-                      item => item.formal_cooling,
-                    );
-                    const groupedWeakening = groupedBRows.filter(
-                      item =>
-                        !item.formal_cooling &&
-                        (item.smooth3_weak || item.smooth5_weak),
-                    );
-                    const bVisual = bRow
-                      ? bVisualState(bRow)
-                      : groupedCooling.length
-                        ? { ...bVisualState(groupedCooling[0]), core: false, coreLabel: "" }
-                        : groupedWeakening.length
-                          ? { ...bVisualState(groupedWeakening[0]), core: false, coreLabel: "" }
-                          : bVisualState(null);
-                    const bDuration = bDurationText(bRow);
-                    const groupedBLabel = groupedCooling.length
-                      ? `含${groupedCooling.length}个已确认降温行业`
-                      : groupedWeakening.length
-                        ? `含${groupedWeakening.length}个B走弱行业`
-                        : "";
-                    const groupedBTitle = [...groupedCooling, ...groupedWeakening]
-                      .map(item => `${item.industry}${bVisualState(item).label}`)
-                      .join("、");
+                    const bRow =
+                      showIndustryB && industry.industry_code !== "other"
+                        ? bRows.get(industry.industry_code)
+                        : undefined;
+                    const bMarker = bHeatmapMarker(bRow, 3);
+                    const bInlineLabel = bMarker.label;
                     const change = changeFor(industry, changeWindow);
                     const direction =
                       industry.neutral || industry.industry_code === "other"
@@ -1051,9 +944,6 @@ export function TemplateBreadthV3Client() {
                           industry.industry_code === selectedIndustry
                             ? styles.selected
                             : "",
-                          bVisual.core ? styles.bCore : "",
-                          bVisual.tone === "warning" ? styles.bWarning : "",
-                          bVisual.tone === "danger" ? styles.bDanger : "",
                         ].join(" ")}
                         style={{
                           left: `${rect.x}px`,
@@ -1065,11 +955,15 @@ export function TemplateBreadthV3Client() {
                         data-industry-code={industry.industry_code}
                         data-count={industry.top100_count}
                         data-b-status={
-                          bRow || groupedBLabel ? bVisual.status : "unavailable"
+                          bMarker.attention
+                            ? bMarker.tone === "danger"
+                              ? "cooling"
+                              : "weakening"
+                            : "hidden"
                         }
-                        data-b-core={bVisual.core ? bVisual.coreLabel : undefined}
-                        title={`${industry.industry}｜当日 ${industry.top100_count}只｜${otherText}${bRow ? `｜B ${bRow.b_count}只｜B池占比 ${(bRow.pool_share * 100).toFixed(1)}%｜第${bRow.pool_rank}名｜${bVisual.label}${bDuration ? `｜${bDuration}` : ""}` : groupedBTitle ? `｜${groupedBTitle}` : ""}｜${date(viewDate)} vs ${date(change.comparison_date)}`}
-                        aria-label={`${industry.industry}，当日 Top100 ${industry.top100_count}只，${otherText}${bRow ? `，B ${bRow.b_count}只，B池占比 ${(bRow.pool_share * 100).toFixed(1)}%，第${bRow.pool_rank}名，${bVisual.coreLabel ? `${bVisual.coreLabel}，` : ""}${bVisual.label}${bDuration ? `，${bDuration}` : ""}` : groupedBTitle ? `，${groupedBTitle}` : ""}，点击查看行业统计`}
+                        data-b-core={bMarker.top1 ? "Top1" : undefined}
+                        title={`${industry.industry}｜当日 ${industry.top100_count}只｜${otherText}${bInlineLabel ? `｜${bInlineLabel}` : ""}｜${date(viewDate)} vs ${date(change.comparison_date)}`}
+                        aria-label={`${industry.industry}，当日 Top100 ${industry.top100_count}只，${otherText}${bInlineLabel ? `，${bInlineLabel}` : ""}，点击查看行业统计`}
                         aria-pressed={
                           industry.industry_code === selectedIndustry
                         }
@@ -1088,10 +982,18 @@ export function TemplateBreadthV3Client() {
                         {enoughForThreeLines ? (
                           <small>{otherText}</small>
                         ) : null}
-                        {(bRow && (bVisual.core || bVisual.tone !== "stable")) ||
-                        groupedBLabel ? (
-                          <span className={styles.mapBTag}>
-                            {groupedBLabel || bVisual.coreLabel || bVisual.label}
+                        {bInlineLabel ? (
+                          <span
+                            className={[
+                              styles.mapBInfo,
+                              bMarker.attention
+                                ? bMarker.tone === "danger"
+                                  ? styles.mapBCooling
+                                  : styles.mapBWeakening
+                                : styles.mapBTop,
+                            ].join(" ")}
+                          >
+                            {bInlineLabel}
                           </span>
                         ) : null}
                         {industry.industry_code === selectedIndustry ? (
@@ -1117,23 +1019,6 @@ export function TemplateBreadthV3Client() {
                     <strong>{focusItem.industry}</strong>
                     <span>{date(viewDate)} · {focusItem.top100_count}只</span>
                     <span>{changeLabel(focusItem, changeWindow)}</span>
-                    {focusB ? (
-                      <>
-                        <span className={styles.focusB}>
-                          B {focusB.b_count}只 · 池占比{" "}
-                          {(focusB.pool_share * 100).toFixed(1)}% · 第
-                          {focusB.pool_rank}名
-                        </span>
-                        <span>
-                          3日 {bChangeText(focusB.change_3d_count)} · 5日{" "}
-                          {bChangeText(focusB.change_5d_count)} ·{" "}
-                          {bVisualState(focusB).label}
-                        </span>
-                        {bDurationText(focusB) ? (
-                          <span>{bDurationText(focusB)}</span>
-                        ) : null}
-                      </>
-                    ) : null}
                     {focusItem.industry_code === "other" ? (
                       <span>
                         合计 {focusItem.top100_count}只 ·{" "}
