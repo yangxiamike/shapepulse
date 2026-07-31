@@ -356,7 +356,7 @@ export function TemplateBreadthV3Client() {
     setError("");
     try {
       const response = await fetch("/template-breadth-v3.json", {
-        cache: "no-store",
+        cache: "default",
       });
       if (!response.ok) throw new Error(`数据摘要返回 ${response.status}`);
       const payload = (await response.json()) as Payload;
@@ -387,7 +387,7 @@ export function TemplateBreadthV3Client() {
   useEffect(() => {
     const controller = new AbortController();
     void fetch("/industry-b-health.json", {
-      cache: "no-store",
+      cache: "default",
       signal: controller.signal,
     })
       .then(async response => {
@@ -459,7 +459,7 @@ export function TemplateBreadthV3Client() {
         const controller = new AbortController();
         const timeout = window.setTimeout(() => controller.abort(), 10000);
         pending = fetch(timelineUrl, {
-          cache: "no-store",
+          cache: "default",
           signal: controller.signal,
         })
           .then(async response => {
@@ -669,7 +669,7 @@ export function TemplateBreadthV3Client() {
       try {
         let pending = detailRequests.current.get(templateKey);
         if (!pending) {
-          pending = fetch(template.detail_url, { cache: "no-store" })
+          pending = fetch(template.detail_url, { cache: "default" })
             .then(async response => {
               if (!response.ok) {
                 throw new Error(`行业明细返回 ${response.status}`);
