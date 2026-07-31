@@ -209,7 +209,7 @@ ShapePulse 当前使用的数据口径：
 ### 第三步：安装 ShapePulse
 
 ```powershell
-git clone https://github.com/yangxiamike/manual-market-tracker.git shapepulse
+git clone https://github.com/yangxiamike/shapepulse.git
 Set-Location .\shapepulse
 pnpm install --frozen-lockfile
 ```
