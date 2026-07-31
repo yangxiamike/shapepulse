@@ -50,7 +50,19 @@ test("generated B health interface keeps the frozen Top100 and rank rules", asyn
     ),
   );
   assert.equal(payload.version, "industry-b-health/1");
-  assert.equal(payload.snapshots.length, 52);
+  const timeline = JSON.parse(
+    await readFile(
+      new URL(
+        "../public/template-breadth-v3-timelines/healthy_uptrend.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(
+    payload.snapshots.map(snapshot => snapshot.date),
+    timeline.snapshots.map(snapshot => snapshot.date),
+  );
   assert.match(payload.definition.b_pool, /不是三个模板各自 Top100 的并集/);
 
   for (const snapshot of payload.snapshots) {
@@ -63,10 +75,12 @@ test("generated B health interface keeps the frozen Top100 and rank rules", asyn
   }
 
   const latest = payload.snapshots.at(-1);
+  assert.equal(payload.as_of, "20260730");
+  assert.equal(latest.date, "20260730");
   const buildingMaterials = latest.industries.find(
     row => row.industry_code === "801710.SI",
   );
-  assert.equal(buildingMaterials.status, "cooling");
-  assert.equal(buildingMaterials.formal_cooling, true);
-  assert.ok(buildingMaterials.weak_duration >= 1);
+  assert.equal(buildingMaterials.status, "weakening");
+  assert.equal(buildingMaterials.formal_cooling, false);
+  assert.equal(buildingMaterials.weak_duration, 2);
 });

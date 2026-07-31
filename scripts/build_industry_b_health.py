@@ -26,7 +26,102 @@ def rounded(value: object, digits: int = 4) -> float | None:
     return None if pd.isna(value) else round(float(value), digits)
 
 
-def build_payload(source: Path) -> dict:
+def derive_health_fields(frame: pd.DataFrame) -> pd.DataFrame:
+    frame = frame.sort_values(["industry_code", "trade_date"]).reset_index(drop=True)
+    grouped = frame.groupby("industry_code", sort=False, group_keys=False)
+    frame["b_rank_pct"] = frame.groupby("trade_date")["b_breadth"].rank(
+        pct=True, method="average"
+    )
+    prior_rank = grouped["b_rank_pct"].transform(lambda values: values.shift(1))
+    prior_breadth = grouped["b_breadth"].transform(lambda values: values.shift(1))
+    high_days = prior_rank.groupby(frame["industry_code"]).transform(
+        lambda values: values.ge(0.75).rolling(20, min_periods=20).sum()
+    )
+    median20 = prior_rank.groupby(frame["industry_code"]).transform(
+        lambda values: values.rolling(20, min_periods=20).median()
+    )
+    median5 = prior_rank.groupby(frame["industry_code"]).transform(
+        lambda values: values.rolling(5, min_periods=5).median()
+    )
+    average_breadth20 = prior_breadth.groupby(frame["industry_code"]).transform(
+        lambda values: values.rolling(20, min_periods=20).mean()
+    )
+    frame["mainline_confirmed"] = (
+        high_days.ge(12)
+        & median20.ge(0.75)
+        & median5.ge(0.75)
+        & average_breadth20.gt(0)
+    )
+    previous_count = grouped["b_count"].shift(1)
+    previous_breadth = grouped["b_breadth"].shift(1)
+    frame["b_cond_raw"] = frame["b_count"].le(
+        previous_count - 1
+    ) & frame["b_breadth"].lt(previous_breadth)
+    for window in (3, 5):
+        recent_count = grouped["b_count"].transform(
+            lambda values, window=window: values.rolling(
+                window, min_periods=window
+            ).mean()
+        )
+        previous_count_mean = grouped["b_count"].transform(
+            lambda values, window=window: values.shift(window)
+            .rolling(window, min_periods=window)
+            .mean()
+        )
+        recent_breadth = grouped["b_breadth"].transform(
+            lambda values, window=window: values.rolling(
+                window, min_periods=window
+            ).mean()
+        )
+        previous_breadth_mean = grouped["b_breadth"].transform(
+            lambda values, window=window: values.shift(window)
+            .rolling(window, min_periods=window)
+            .mean()
+        )
+        recent_rank = grouped["b_rank_pct"].transform(
+            lambda values, window=window: values.rolling(
+                window, min_periods=window
+            ).mean()
+        )
+        previous_rank = grouped["b_rank_pct"].transform(
+            lambda values, window=window: values.shift(window)
+            .rolling(window, min_periods=window)
+            .mean()
+        )
+        frame[f"b_delta_rank_{window}"] = recent_rank - previous_rank
+        frame[f"b_base_smooth{window}"] = recent_count.lt(
+            previous_count_mean
+        ) & recent_breadth.lt(previous_breadth_mean)
+        frame[f"b_cond_smooth{window}"] = frame[
+            f"b_base_smooth{window}"
+        ] & frame[f"b_delta_rank_{window}"].le(-0.10)
+    recent5_rank = grouped["b_rank_pct"].transform(
+        lambda values: values.rolling(5, min_periods=5).mean()
+    )
+    previous15_rank = grouped["b_rank_pct"].transform(
+        lambda values: values.shift(5).rolling(15, min_periods=15).mean()
+    )
+    recent5_breadth = grouped["b_breadth"].transform(
+        lambda values: values.rolling(5, min_periods=5).mean()
+    )
+    previous15_breadth = grouped["b_breadth"].transform(
+        lambda values: values.shift(5).rolling(15, min_periods=15).mean()
+    )
+    frame["b_delta_rank_formal"] = recent5_rank - previous15_rank
+    frame["b_delta_breadth_formal"] = recent5_breadth - previous15_breadth
+    frame["b_cond_formal"] = (
+        frame["b_delta_rank_formal"].le(-0.15)
+        & frame["b_delta_breadth_formal"].lt(0)
+        & frame["mainline_confirmed"]
+    )
+    return frame
+
+
+def build_payload(
+    source: Path,
+    latest: Path | None = None,
+    timeline: Path | None = None,
+) -> dict:
     actual_hash = sha256(source)
     if actual_hash != EXPECTED_SOURCE_SHA256:
         raise RuntimeError(
@@ -35,11 +130,33 @@ def build_payload(source: Path) -> dict:
 
     frame = pd.read_parquet(source)
     frame["trade_date"] = pd.to_datetime(frame["trade_date"])
+    latest_hash = None
+    if latest is not None:
+        latest_hash = sha256(latest)
+        latest_frame = pd.read_csv(latest)
+        latest_frame["trade_date"] = pd.to_datetime(
+            latest_frame["trade_date"].astype(str)
+        )
+        if latest_frame["trade_date"].nunique() != 1:
+            raise RuntimeError("latest B extension must contain exactly one date")
+        if latest_frame["trade_date"].iloc[0] <= frame["trade_date"].max():
+            raise RuntimeError("latest B extension date must follow the audited source")
+        if len(latest_frame) != 31 or int(latest_frame["b_count"].sum()) != 100:
+            raise RuntimeError("latest B extension must contain 31 industries and Top100")
+        frame = pd.concat([frame, latest_frame], ignore_index=True, sort=False)
+        frame = derive_health_fields(frame)
     frame = frame.sort_values(["industry_code", "trade_date"]).reset_index(drop=True)
     window_dates = sorted(frame["trade_date"].unique())[-DISPLAY_TRADING_DAYS:]
-    display_dates = window_dates[::5]
-    if display_dates[-1] != window_dates[-1]:
-        display_dates.append(window_dates[-1])
+    if timeline is not None:
+        timeline_payload = json.loads(timeline.read_text(encoding="utf-8"))
+        display_dates = [
+            pd.Timestamp(snapshot["date"])
+            for snapshot in timeline_payload["snapshots"]
+        ]
+    else:
+        display_dates = window_dates[::5]
+        if display_dates[-1] != window_dates[-1]:
+            display_dates.append(window_dates[-1])
 
     grouped = frame.groupby("industry_code", sort=False)
     for window in (3, 5):
@@ -140,6 +257,7 @@ def build_payload(source: Path) -> dict:
         "source": {
             "kind": "frozen_audited_daily_b_panel",
             "sha256": actual_hash,
+            "latest_extension_sha256": latest_hash,
             "data_window": [
                 snapshots[0]["date"],
                 snapshots[-1]["date"],
@@ -152,13 +270,19 @@ def build_payload(source: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path)
+    parser.add_argument("--latest", type=Path)
+    parser.add_argument("--timeline", type=Path)
     parser.add_argument(
         "--output",
         type=Path,
         default=Path("public/industry-b-health.json"),
     )
     args = parser.parse_args()
-    payload = build_payload(args.source.resolve())
+    payload = build_payload(
+        args.source.resolve(),
+        args.latest.resolve() if args.latest else None,
+        args.timeline.resolve() if args.timeline else None,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),

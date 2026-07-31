@@ -38,8 +38,8 @@ test("all four frozen templates expose independent one-year timelines", async ({
   const slider = page.getByRole("slider", {
     name: "选择行业空间历史交易日",
   });
-  await expect(slider).toHaveAttribute("max", "51");
-  await expect(slider).toHaveAttribute("aria-valuetext", /2026-07-29/);
+  await expect(slider).toHaveAttribute("max", "50");
+  await expect(slider).toHaveAttribute("aria-valuetext", /2026-07-30/);
 
   for (const key of templateKeys) {
     const manifest = await page.evaluate(async templateKey => {
@@ -49,7 +49,7 @@ test("all four frozen templates expose independent one-year timelines", async ({
         (item: { key: string }) => item.key === templateKey,
       );
     }, key);
-    expect(manifest.timeline.sampled_points).toBe(52);
+    expect(manifest.timeline.sampled_points).toBe(51);
     expect(manifest.timeline.history_trading_days).toBe(252);
     expect(manifest.timeline.trading_day_step).toBe(5);
     expect(manifest.timeline.latest_always_included).toBe(true);
@@ -59,8 +59,8 @@ test("all four frozen templates expose independent one-year timelines", async ({
   const tabs = page.getByRole("navigation", { name: "冻结四模板切换" });
   for (let index = 1; index < templateKeys.length; index += 1) {
     await tabs.getByRole("button").nth(index).click();
-    await expect(slider).toHaveAttribute("max", "51");
-    await expect(slider).toHaveAttribute("aria-valuetext", /2026-07-29/);
+    await expect(slider).toHaveAttribute("max", "50");
+    await expect(slider).toHaveAttribute("aria-valuetext", /2026-07-30/);
     await expect(
       page.getByRole("group", { name: /Top100 行业矩形树图/ }),
     ).toHaveAttribute("data-total", "100");
@@ -81,11 +81,11 @@ test("industry B core identity and weakening risk remain visually distinct", asy
   await page.goto("/template-breadth-v3");
 
   const monitor = page.getByRole("region", {
-    name: /行业 B 健康监测 2026-07-29/,
+    name: /行业 B 健康监测 2026-07-30/,
   });
   await expect(monitor).toContainText("核心看占比，风险看平滑走弱");
   await expect(monitor).toContainText("电子");
-  await expect(monitor).toContainText("B 49只 · 池占比 49.0% · 第1名");
+  await expect(monitor).toContainText("B 45只 · 池占比 45.0% · 第1名");
   await expect(monitor).toContainText("机械设备");
   await expect(monitor).toContainText("B 11只 · 池占比 11.0% · 第2名");
   await expect(monitor).toContainText("金色：当前核心行业，非风险");
@@ -102,27 +102,16 @@ test("industry B core identity and weakening risk remain visually distinct", asy
   );
   await expect(buildingMaterialsRisk).toHaveAttribute(
     "data-b-status",
-    "cooling",
+    "weakening",
   );
   await expect(buildingMaterialsRisk).toContainText(
-    "B走弱状态已持续1个交易日",
+    "B走弱状态已持续2个交易日",
   );
 
   const groupedOther = map.locator('[data-industry-code="other"]');
-  await expect(groupedOther).toHaveAttribute("data-b-status", "cooling");
-  await expect(groupedOther).toHaveAttribute("title", /建筑材料已确认降温/);
+  await expect(groupedOther).toHaveAttribute("data-b-status", "weakening");
+  await expect(groupedOther).toHaveAttribute("title", /B走弱/);
 
-  const lightManufacturing = map.locator(
-    '[data-industry-code="801140.SI"]',
-  );
-  await expect(lightManufacturing).toHaveAttribute(
-    "data-b-status",
-    "weakening",
-  );
-  await expect(lightManufacturing).toHaveAttribute(
-    "title",
-    /B走弱｜B走弱状态已持续2个交易日/,
-  );
 });
 
 test("industry B monitor stays readable without horizontal overflow on mobile", async ({
@@ -131,7 +120,7 @@ test("industry B monitor stays readable without horizontal overflow on mobile", 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/template-breadth-v3");
   const monitor = page.getByRole("region", {
-    name: /行业 B 健康监测 2026-07-29/,
+    name: /行业 B 健康监测 2026-07-30/,
   });
   await expect(monitor.getByText("核心 Top1", { exact: true })).toBeVisible();
   await expect(monitor.getByText("核心 Top2", { exact: true })).toBeVisible();
@@ -154,7 +143,7 @@ test("timeline click, drag and keyboard movement keep the whole view in sync", a
   const slider = page.getByRole("slider", {
     name: "选择行业空间历史交易日",
   });
-  await expect(slider).toHaveAttribute("aria-valuetext", /2026-07-29/);
+  await expect(slider).toHaveAttribute("aria-valuetext", /2026-07-30/);
   await slider.focus();
   await page.keyboard.press("ArrowLeft");
   await expect(slider).toHaveAttribute("aria-valuetext", /2026-07-28/);
@@ -196,8 +185,8 @@ test("timeline click, drag and keyboard movement keep the whole view in sync", a
   expect(clickedIndex).toBeLessThan(36);
 
   await slider.fill("0");
-  await expect(slider).toHaveAttribute("aria-valuetext", /2025-07-16/);
-  await expect(page.getByText(/2025-07-16 vs 2025-07-02/)).toBeVisible();
+  await expect(slider).toHaveAttribute("aria-valuetext", /2025-07-23/);
+  await expect(page.getByText(/2025-07-23 vs 2025-07-09/)).toBeVisible();
   const firstOrder = await map
     .getByRole("button")
     .evaluateAll(elements =>
@@ -245,10 +234,10 @@ test("historical industry selection never reuses the latest stock list", async (
     page.getByText("历史日期仅显示行业统计。"),
   ).toBeVisible();
   await expect(
-    page.getByText(/这里不会用最新股票清单代替 2025-07-16/),
+    page.getByText(/这里不会用最新股票清单代替 2025-07-23/),
   ).toBeVisible();
   await expect(page.getByText("最新交易日入选股票")).toHaveCount(0);
-  await expect(page.getByLabel(/其他行业 2025-07-16 行业统计/)).toBeVisible();
+  await expect(page.getByLabel(/其他行业 2025-07-23 行业统计/)).toBeVisible();
 });
 
 test("slow timeline responses cannot overwrite a newer template selection", async ({
@@ -267,7 +256,7 @@ test("slow timeline responses cannot overwrite a newer template selection", asyn
   const slider = page.getByRole("slider", {
     name: "选择行业空间历史交易日",
   });
-  await expect(slider).toHaveAttribute("aria-valuetext", /2026-07-29/);
+  await expect(slider).toHaveAttribute("aria-valuetext", /2026-07-30/);
   await page.waitForTimeout(400);
   await expect(tabs.getByRole("button").nth(1)).toHaveAttribute(
     "aria-pressed",
@@ -275,5 +264,5 @@ test("slow timeline responses cannot overwrite a newer template selection", asyn
   );
   await expect(
     page.locator('[data-industry-code="801080.SI"]'),
-  ).toHaveAttribute("data-count", "47");
+  ).toHaveAttribute("data-count", "42");
 });
